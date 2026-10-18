@@ -25,6 +25,8 @@ Ja existeixen selecció persistent de projecte, context de fitxers limitat, edic
 
 El bucle de l’agent pot inspeccionar una URL local amb Playwright quan el projecte seleccionat tingui la biblioteca i Chromium instal·lats. Abans d’obrir el navegador demana confirmació; només accepta `localhost`, `127.0.0.1` i `::1`. Retorna el títol, el codi HTTP, errors de consola/pàgina/xarxa i la ruta d’una captura local. Si Playwright falta, l’agent pot proposar instal·lar `@playwright/test` i Chromium mitjançant les confirmacions existents.
 
+Quan un model petit concatena diversos objectes JSON en una resposta, l’orquestrador ara llegeix només el primer objecte complet si comença la resposta i continua el cicle d’eines a partir del resultat real. No busca crides dins de prosa arbitrària; cada eina encara passa per validació d’esquema i pels controls de confirmació existents.
+
 La inspecció s’ha validat a l’app amb un projecte Vue/Vite local: HTTP 200, títol `Vite App`, cap error de consola, pàgina o xarxa, i captura PNG desada a les dades locals de l’aplicació. Després de la prova, la resposta s’ha canviat perquè l’orquestrador presenti directament els fets retornats per Playwright, sense demanar al model que els reescrigui.
 
 La generació es pot aturar des del compositor tancant el procés aïllat del model. Això allibera el procés local i el model es tornarà a carregar a la següent petició; si una eina confirmada ja està en curs, l’app no la talla i informa que cal esperar que acabi. Encara falten ordres arbitràries des del bucle d’eines, vista de diff dedicada, persistència SQLite, embeddings i entrenament. Aquests elements no es consideren completats ni se simulen.

@@ -37,8 +37,35 @@ function parseAction(raw: string): AgentAction | null {
   const directAction = parseCandidate(normalized);
   if (directAction) return directAction;
 
-  // Small local models often add an explanation before their JSON action.
-  // Only parse explicit fenced blocks, so arbitrary JSON in project text is not executed.
+  // Some small models concatenate several JSON actions; accept only the first
+  // complete object at the very start of the response, then let the agent loop
+  // ask the model for its next step. Never mine arbitrary prose for JSON.
+  if (normalized.startsWith('{')) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = 0; index < normalized.length; index += 1) {
+      const character = normalized[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === '\\') escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') inString = true;
+      else if (character === '{') depth += 1;
+      else if (character === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          const leadingAction = parseCandidate(normalized.slice(0, index + 1));
+          if (leadingAction) return leadingAction;
+          break;
+        }
+      }
+    }
+  }
+
+  // Explanations before JSON remain inert unless the JSON is in an explicit fence.
   for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
     const fencedAction = parseCandidate(match[1]);
     if (fencedAction) return fencedAction;

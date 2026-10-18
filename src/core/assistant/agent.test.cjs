@@ -34,6 +34,35 @@ test('executes a tool call wrapped in an explanatory Markdown response', async (
   assert.match(answer, /HelloWorld/);
 });
 
+test('starts the first tool when a small model concatenates multiple JSON actions', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-concatenated-actions-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/App.vue"}}; {"type":"tool_call","name":"search_text","arguments":{"query":"hello"}}',
+    '{"type":"final","content":"He llegit el fitxer i he comprovat la cerca."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift(),
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Llegeix el fitxer i després cerca hello', projectRoot, async (tool) => {
+    calls.push(tool);
+    return { path: 'src/App.vue', content: '<template>hello</template>' };
+  });
+
+  assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
+  assert.match(answer, /he comprovat la cerca/i);
+});
+
 test('shows a plan before requesting a package installation', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-plan-test-'));
   const projectRoot = path.join(tempRoot, 'project');
