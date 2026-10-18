@@ -395,9 +395,8 @@ export function App(): React.JSX.Element {
     </Splitter.Root>
   ) : chatPane;
 
-  return (
-    <>
-    sidebarOpen ? <Splitter.Root key="sidebar-open" h="100dvh" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'sidebar', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={sidebarSplitSize} onResize={(details) => setSidebarSplitSize(details.size)} onResizeEnd={(details) => {
+  return sidebarOpen ? (
+      <Splitter.Root key="sidebar-open" h="100dvh" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'sidebar', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={sidebarSplitSize} onResize={(details) => setSidebarSplitSize(details.size)} onResizeEnd={(details) => {
       if (details.size[0] <= 12) {
         setSidebarOpen(false);
         setSidebarSplitSize(lastExpandedSidebarSplitSizeRef.current);
@@ -425,9 +424,9 @@ export function App(): React.JSX.Element {
         </Splitter.Panel>
         <SplitterHandle id={'sidebar:main' as SplitterHandleId}/>
         <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
-      </Splitter.Root> : <Box h="100dvh" w="full" overflow="hidden" bg="bg" textStyle="interface">{mainContent}</Box>
-
-    </>
+      </Splitter.Root>
+  ) : (
+    <Box h="100dvh" w="full" overflow="hidden" bg="bg" textStyle="interface">{mainContent}</Box>
   );
 }
 
