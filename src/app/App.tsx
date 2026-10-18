@@ -331,9 +331,11 @@ export function App(): React.JSX.Element {
         <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
         <Input flex="1" minW="110px" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
         <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
-        <Button size="sm" variant="outline" onClick={usePageContext}>Afegeix pàgina al xat</Button>
+        <Button size="sm" variant="outline" onClick={usePageContext} disabled={browserUrl === 'about:blank'}>Afegeix pàgina al xat</Button>
       </Flex>
-      <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', minHeight: 0, border: 0, background: '#fff' }}/>
+      {browserUrl === 'about:blank'
+        ? <Box flex="1" minH="0" bg="bg"/>
+        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
     </Flex>
   );
 
@@ -363,13 +365,13 @@ export function App(): React.JSX.Element {
     view.addEventListener('did-navigate', updateAddress);
     view.addEventListener('did-navigate-in-page', updateAddress);
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
-  }, [browserOpen]);
+  }, [browserOpen, browserUrl]);
 
   const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : 'Edita fitxer';
   const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : null;
   const workspacePane = panelContent && (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
-      <Flex h="50px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
+      <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
         <HStack gap="2"><Text fontWeight="semibold">{panelTitle}</Text>{workspacePanel === 'terminal' && <Badge colorPalette="yellow">Cada ordre demana confirmació</Badge>}{workspacePanel === 'editor' && <Badge colorPalette="agentic">Revisa abans de desar</Badge>}</HStack>
         <IconButton icon={X} label="Tanca panell" onClick={() => { setWorkspacePanel(null); if (workspacePanel === 'editor') setEditingPath(null); }}/>
       </Flex>
@@ -407,9 +409,9 @@ export function App(): React.JSX.Element {
       localStorage.setItem(SIDEBAR_SPLIT_KEY, JSON.stringify(details.size));
     }} bg="bg" textStyle="interface">
         <Splitter.Panel id="sidebar" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" p="3" direction="column" gap="3.5">
-          <Box fontSize="md" fontWeight="bold" px="2" py="1.5" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Box>
-          <Stack gap="2">
+        <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3.5">
+          <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontSize="md" fontWeight="bold" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Flex>
+          <Stack gap="2" mt="0.5">
             <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={newChat}><IconLabel icon={MessageSquarePlus}>Nova conversa</IconLabel></Button>
             <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={selectProject}><IconLabel icon={FolderOpen}>Selecciona projecte</IconLabel></Button>
           </Stack>
