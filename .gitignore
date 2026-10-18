@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.cache/
+.DS_Store
+.idea/
+backups/
+src/app.bundle.js
+src/app.bundle.css
+models/
+*.before-*

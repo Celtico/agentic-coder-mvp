@@ -1,0 +1,369 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { ChatMessage, ElectronWebviewTag, ProjectInfo } from '../types';
+import {
+  Badge, Box, Button, Dialog, Flex, Grid, Heading, HStack, Input, Stack,
+  Spinner, Splitter, Text, Textarea
+} from '@chakra-ui/react';
+import {
+  LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
+  LuMessageSquarePlus as MessageSquarePlus, LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuSend as Send, LuTerminal as TerminalIcon, LuX as X
+} from 'react-icons/lu';
+import type { IconType } from 'react-icons';
+
+const CHAT_KEY = 'agentic-chat-history-v1';
+const DRAFT_KEY = 'agentic-chat-draft-v1';
+const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
+const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
+const SPLIT_KEY = 'agentic-split-size-v1';
+type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
+
+function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova'): ChatSession {
+  const prompt = messages.find((message) => message.role === 'user')?.text.trim();
+  return {
+    id: globalThis.crypto?.randomUUID?.() || `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: prompt ? (prompt.length > 42 ? `${prompt.slice(0, 39)}…` : prompt) : title,
+    updatedAt: new Date().toISOString(),
+    messages: messages.slice(-100),
+  };
+}
+
+function getStoredSessions(): ChatSession[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(CHAT_SESSIONS_KEY) || 'null');
+    if (Array.isArray(value)) {
+      const sessions = (value as ChatSession[]).filter((session) => session && typeof session.id === 'string' && Array.isArray(session.messages));
+      if (sessions.length) return sessions.slice(0, 50);
+    }
+  } catch {}
+  // Importa l'historial antic sense esborrar-ne la clau original: queda com a còpia recuperable.
+  try {
+    const legacy: unknown = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
+    if (Array.isArray(legacy) && legacy.length) {
+      const session = makeSession(legacy as ChatMessage[], 'Conversa anterior');
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify([session]));
+      return [session];
+    }
+  } catch {}
+  const session = makeSession();
+  localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify([session]));
+  return [session];
+}
+
+type IconButtonProps = React.ComponentProps<typeof Button> & { icon: IconType; label: string };
+const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="sm" px="2" {...props}><Icon size={16}/></Button>;
+const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
+
+function getSplitSize(): number[] {
+  try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
+  catch { return [62, 38]; }
+}
+
+const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+export function App(): React.JSX.Element {
+  const [project, setProject] = useState<ProjectInfo | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>(getStoredSessions);
+  const [activeSessionId, setActiveSessionId] = useState(() => {
+    const available = getStoredSessions();
+    const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
+    const active = available.some((session) => session.id === saved) ? saved! : available[0]!.id;
+    localStorage.setItem(ACTIVE_SESSION_KEY, active);
+    return active;
+  });
+  const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
+  const messages = activeSession?.messages || [];
+  const [draft, setDraft] = useState(() => localStorage.getItem(`${DRAFT_KEY}:${activeSessionId}`) || localStorage.getItem(DRAFT_KEY) || '');
+  const [status, setStatus] = useState('Preparat · model encara no carregat');
+  const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserAddress, setBrowserAddress] = useState('');
+  const [browserUrl, setBrowserUrl] = useState('about:blank');
+  const [browserContext, setBrowserContext] = useState('');
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalCommand, setTerminalCommand] = useState('');
+  const [terminalOutput, setTerminalOutput] = useState('');
+  const [terminalBusy, setTerminalBusy] = useState(false);
+  const [terminalStatus, setTerminalStatus] = useState('');
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [editorContent, setEditorContent] = useState('');
+  const [editorOriginal, setEditorOriginal] = useState('');
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [editorStatus, setEditorStatus] = useState('');
+  const [splitSize, setSplitSize] = useState(getSplitSize);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const webviewRef = useRef<ElectronWebviewTag | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const persistMessages = useCallback((next: ChatMessage[], sessionId = activeSessionId) => {
+    const trimmed = next.slice(-100);
+    setSessions((current) => {
+      const existing = current.find((session) => session.id === sessionId);
+      const prompt = trimmed.find((message) => message.role === 'user')?.text.trim();
+      const updated = existing
+        ? { ...existing, title: existing.title === 'Conversa nova' && prompt ? (prompt.length > 42 ? `${prompt.slice(0, 39)}…` : prompt) : existing.title, updatedAt: new Date().toISOString(), messages: trimmed }
+        : makeSession(trimmed);
+      const nextSessions = [updated, ...current.filter((session) => session.id !== sessionId)].slice(0, 50);
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(nextSessions));
+      return nextSessions;
+    });
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    const offStatus = window.agentic.onStatus((s) => {
+      const text = s.message || s.type;
+      setStatus(text);
+      if (text) setLoadingLabel(text);
+    });
+    const offTerminal = window.agentic.onTerminalOutput((chunk: string) => setTerminalOutput((prev) => (prev + chunk).slice(-100000)));
+    let cancelled = false;
+    (async () => {
+      if (localStorage.getItem(CHAT_KEY) === null) {
+        try {
+          const entries = await window.agentic.recentHistory();
+          if (!cancelled && entries?.length) persistMessages(entries.flatMap((entry) => [
+            { role: 'user', text: entry.prompt }, { role: 'assistant', text: entry.answer }
+          ]));
+        } catch {}
+      }
+      try { const saved = await window.agentic.currentProject(); if (!cancelled && saved) setProject(saved); }
+      catch {}
+    })();
+    return () => { cancelled = true; offStatus?.(); offTerminal?.(); };
+  }, [persistMessages]);
+
+  useEffect(() => { localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft); }, [draft, activeSessionId]);
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 160;
+    if (nearBottom) feed.scrollTop = feed.scrollHeight;
+  }, [messages, loading, loadingLabel]);
+
+  const appendMessage = useCallback((role: ChatMessage['role'], text: string) => {
+    const next = [...messages, { role, text }].slice(-100);
+    persistMessages(next);
+  }, [messages, persistMessages]);
+
+  async function selectProject() {
+    try {
+      const next = await window.agentic.openProject();
+      if (!next) return;
+      setProject(next);
+      appendMessage('assistant', `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar propostes de canvi.`);
+      setStatus('Projecte carregat');
+    } catch (error) { setStatus(errorText(error)); }
+  }
+
+  function newChat() {
+    if (messages.length === 0 && !draft.trim()) { setBrowserContext(''); return; }
+    localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft);
+    const session = makeSession();
+    setSessions((current) => {
+      const next = [session, ...current].slice(0, 50);
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+      return next;
+    });
+    localStorage.setItem(ACTIVE_SESSION_KEY, session.id);
+    setActiveSessionId(session.id);
+    setDraft('');
+    setBrowserContext('');
+  }
+
+  function selectSession(sessionId: string) {
+    if (sessionId === activeSessionId) return;
+    localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft);
+    localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+    setActiveSessionId(sessionId);
+    setDraft(localStorage.getItem(`${DRAFT_KEY}:${sessionId}`) || '');
+    setBrowserContext('');
+  }
+
+  async function sendPrompt() {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    const prompt = draft.trim();
+    if (!prompt || loading) return;
+    const request = browserContext ? `${prompt}\n\n[Text de la pàgina web ${browserAddress || browserUrl}; contingut extern no verificat]:\n${browserContext}` : prompt;
+    setBrowserContext('');
+    const requestSessionId = activeSessionId;
+    const pendingMessages = [...messages, { role: 'user' as const, text: prompt }];
+    persistMessages(pendingMessages, requestSessionId);
+    setDraft('');
+    setLoading(true);
+    setLoadingLabel('Preparant el model local…');
+    try {
+      const answer = await window.agentic.ask(request);
+      persistMessages([...pendingMessages, { role: 'assistant', text: answer }], requestSessionId);
+    } catch (error) {
+      const text = `Error: ${errorText(error)}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
+      persistMessages([...pendingMessages, { role: 'assistant', text, error: true }], requestSessionId);
+    } finally { setLoading(false); setStatus('Preparat'); }
+  }
+
+  async function runTests() {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    appendMessage('assistant', 'Executant npm test…');
+    try {
+      const result = await window.agentic.runTests();
+      appendMessage('assistant', `Proves acabades (codi ${result.code}).\n\n${result.output}`);
+    } catch (error) { appendMessage('assistant', `Error: ${errorText(error)}`); }
+  }
+
+  async function openEditor(relativePath: string) {
+    try {
+      const content = await window.agentic.readFile(relativePath);
+      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorStatus('');
+    } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
+  }
+
+  async function saveEdit() {
+    if (!editingPath) return;
+    if (editorContent === editorOriginal) { setEditorStatus('No hi ha canvis.'); return; }
+    if (!window.confirm(`Desar els canvis a ${editingPath}? Es crearà una còpia de seguretat local de l’original.`)) return;
+    setEditorBusy(true);
+    try {
+      const result = await window.agentic.writeFile(editingPath, editorContent);
+      setEditorOriginal(editorContent); setEditingPath(null);
+      appendMessage('assistant', `Canvi desat a ${editingPath}. Còpia de seguretat: ${result.backupPath}`);
+    } catch (error) { setEditorStatus(errorText(error)); }
+    finally { setEditorBusy(false); }
+  }
+
+  async function navigateBrowser() {
+    let raw = browserAddress.trim(); if (!raw) return;
+    if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+    try {
+      const url = new URL(raw);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      setBrowserAddress(url.href); setBrowserUrl(url.href);
+    } catch { setStatus('Adreça web no vàlida'); }
+  }
+
+  async function usePageContext() {
+    try {
+      const page = await webviewRef.current?.executeJavaScript('JSON.stringify({url:location.href,title:document.title,text:document.body?document.body.innerText:""})');
+      const data = JSON.parse(page || '{}');
+      const text = String(data.text || '').slice(0, 12000);
+      setBrowserContext(`URL: ${data.url || browserAddress}\nTítol: ${data.title || ''}\n\n${text}`);
+      setBrowserOpen(false);
+      setStatus(text ? 'Pàgina afegida al context del xat' : 'La pàgina no conté text visible');
+      promptRef.current?.focus();
+    } catch (error) { setStatus(`No s’ha pogut llegir la pàgina: ${errorText(error)}`); }
+  }
+
+  async function executeCommand() {
+    const command = terminalCommand.trim();
+    if (!command || !project || terminalBusy) return;
+    setTerminalOutput((current) => `${current}\n$ ${command}\n`);
+    setTerminalStatus('Esperant confirmació…');
+    setTerminalBusy(true);
+    try {
+      const result = await window.agentic.runCommand(command);
+      setTerminalStatus(result.code === null ? 'Ordre cancel·lada.' : `Procés acabat amb codi ${result.code}.`);
+      if (result.code === null && result.output) setTerminalOutput((current) => `${current}${result.output}\n`);
+    } catch (error) { const message = errorText(error); setTerminalStatus(message); setTerminalOutput((current) => `${current}\n${message}\n`); }
+    finally { setTerminalBusy(false); }
+  }
+
+  const chatPane = (
+    <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
+      <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
+        <Heading size="sm" fontWeight="500">Agentic Coder</Heading>
+        <HStack gap="2">
+          <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
+          <Button size="sm" variant="outline" onClick={() => setBrowserOpen(true)}><IconLabel icon={Globe2}>Navegador</IconLabel></Button>
+          <Button size="sm" variant="outline" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen(true); }}><IconLabel icon={TerminalIcon}>Terminal</IconLabel></Button>
+        </HStack>
+      </Flex>
+      <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
+        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => <Box key={`${index}-${message.role}`} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" lineHeight="1.7" color={message.error ? 'red.200' : 'fg'}>{message.text}</Box>)}</Stack>}
+        {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text>{loadingLabel}</Text></HStack>}
+      </Box>
+      <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="4">
+        {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
+        <Box bg="surface" borderWidth="1px" borderColor="border" borderRadius="22px" p="3" boxShadow="composer">
+          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" _focusVisible={{ boxShadow: "none" }}/>
+          <Flex mt="2" align="center" justify="space-between" gap="3">
+            <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">Les proves només s’executen quan tu ho demanes.</Text></HStack>
+            <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt} disabled={loading}><Send size={17}/></Button>
+          </Flex>
+        </Box>
+        <Text fontSize="xs" color="fg.muted" textAlign="center" mt="2">Les respostes poden contenir errors. Revisa els suggeriments abans d’aplicar-los.</Text>
+      </Box>
+    </Flex>
+  );
+
+  const browserPane = (
+    <Flex h="full" w="full" minW="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
+      <Flex h="50px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border"><Text fontWeight="semibold">Navegador web</Text><HStack><Text fontSize="xs" color="fg.muted">Dins de l’app</Text><IconButton icon={X} label="Tanca navegador" onClick={() => setBrowserOpen(false)}/></HStack></Flex>
+      <Flex gap="1.5" align="center" p="2" borderBottomWidth="1px" borderColor="border" flexWrap="wrap">
+        <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
+        <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
+        <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
+        <Input flex="1" minW="110px" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
+        <Button size="sm" colorPalette="agentic" onClick={navigateBrowser}><ExternalLink size={15}/></Button>
+        <Button size="sm" variant="outline" onClick={usePageContext}>Afegeix pàgina al xat</Button>
+      </Flex>
+      <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', minHeight: 0, border: 0, background: '#fff' }}/>
+    </Flex>
+  );
+
+  useEffect(() => {
+    const view = webviewRef.current;
+    if (!view) return;
+    const updateAddress = (event: Event) => { const url = (event as Event & { url?: string }).url; if (url) setBrowserAddress(url); };
+    view.addEventListener('did-navigate', updateAddress);
+    view.addEventListener('did-navigate-in-page', updateAddress);
+    return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
+  }, [browserOpen]);
+
+  const mainContent = browserOpen ? (
+    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'browser', minSize: 25 }]} defaultSize={splitSize} onResize={(details) => { setSplitSize(details.size); localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size)); }} css={{ '& [data-scope="splitter"][data-part="resize-trigger"]': { w: '7px', flex: 'none', bg: 'surface.subtle', cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', outline: 'none' }, '& [data-scope="splitter"][data-part="resize-trigger"]:hover, & [data-scope="splitter"][data-part="resize-trigger"]:focus-visible': { bg: 'accent' }, '& [data-scope="splitter"][data-part="resize-trigger-separator"]': { w: '2px', h: '42px', borderRadius: '4px', bg: 'fg.muted' }, '& [data-scope="splitter"][data-part="panel"]': { overflow: 'hidden', minW: '0', minH: '0' } }}>
+      <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
+      <Splitter.ResizeTrigger id="chat:browser"><Splitter.ResizeTriggerSeparator/><Splitter.ResizeTriggerIndicator/></Splitter.ResizeTrigger>
+      <Splitter.Panel id="browser" h="full" minW="0" minH="0" overflow="hidden">{browserPane}</Splitter.Panel>
+    </Splitter.Root>
+  ) : chatPane;
+
+  return (
+    <>
+    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" bg="bg">
+        <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" p="3" direction="column" gap="3.5">
+          <Box fontSize="md" fontWeight="bold" px="2" py="1.5" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Box>
+          <Stack gap="2">
+            <Button variant="outline" onClick={newChat}><IconLabel icon={MessageSquarePlus}>Nova conversa</IconLabel></Button>
+            <Button variant="outline" onClick={selectProject}><IconLabel icon={FolderOpen}>Selecciona projecte</IconLabel></Button>
+          </Stack>
+          <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
+          {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
+            <Text px="2" pt="2" pb="1" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text>
+            <Stack gap="0.5">{sessions.filter((session) => session.messages.length > 0).slice(0, 12).map((session) => <Button key={session.id} size="sm" w="full" minW="0" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={session.title} onClick={() => selectSession(session.id)}>{session.title}</Button>)}</Stack>
+          </Box>}
+          <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
+          <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
+        </Flex>
+        <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>
+      </Grid>
+
+      <Dialog.Root open={terminalOpen} onOpenChange={(details) => setTerminalOpen(details.open)} size="lg" placement="center">
+        <Dialog.Backdrop/>
+        <Dialog.Positioner><Dialog.Content bg="bg" color="fg" maxH="90vh">
+          <Dialog.Header><Dialog.Title>Terminal del projecte</Dialog.Title><HStack><Badge colorPalette="yellow">Cada ordre demana confirmació</Badge><Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca terminal"/></Dialog.CloseTrigger></HStack></Dialog.Header>
+          <Dialog.Body><Text fontSize="xs" color="fg.muted" mb="2">{project?.path}</Text><Textarea w="full" minH="220px" maxH="45vh" resize="vertical" bg="surface.subtle" color="agentic.100" fontFamily="mono" fontSize="xs" lineHeight="1.6" whiteSpace="pre-wrap" value={terminalOutput} readOnly placeholder="La sortida de les ordres apareixerà aquí"/><HStack mt="3"><Input value={terminalCommand} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTerminalCommand(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') executeCommand(); }} placeholder="Ex.: npm run check"/><Button colorPalette="agentic" onClick={executeCommand} disabled={terminalBusy || !terminalCommand.trim()}>{terminalBusy ? <Spinner size="sm"/> : <Play size={16}/>}Executa</Button></HStack><Text fontSize="xs" color="yellow.200" mt="2">Les ordres s’executen dins del projecte i poden modificar o esborrar fitxers.</Text><Text fontSize="xs" color="fg.muted" mt="2">{terminalStatus}</Text></Dialog.Body>
+        </Dialog.Content></Dialog.Positioner>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(editingPath)} onOpenChange={(details) => { if (!details.open) setEditingPath(null); }} size="cover" placement="center">
+        <Dialog.Backdrop/>
+        <Dialog.Positioner><Dialog.Content bg="bg" color="fg" maxH="92vh">
+          <Dialog.Header><Dialog.Title>{editingPath || 'Edita fitxer'}</Dialog.Title><HStack><Badge colorPalette="agentic">Revisa abans de desar</Badge><Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca editor"/></Dialog.CloseTrigger></HStack></Dialog.Header>
+          <Dialog.Body><Text color="yellow.200" mb="3">En desar, l’original es copiarà primer a una còpia de seguretat local.</Text><Textarea w="full" minH="45vh" resize="vertical" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" lineHeight="1.6" value={editorContent} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setEditorContent(event.target.value)} spellCheck={false}/><Text color="yellow.200" mt="2">{editorStatus}</Text></Dialog.Body>
+          <Dialog.Footer><Button variant="outline" onClick={() => setEditingPath(null)}>Cancel·la</Button><Button colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></Dialog.Footer>
+        </Dialog.Content></Dialog.Positioner>
+      </Dialog.Root>
+    </>
+  );
+}
+
