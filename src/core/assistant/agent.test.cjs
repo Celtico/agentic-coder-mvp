@@ -96,6 +96,52 @@ test('shows a plan before requesting a package installation', async (t) => {
   assert.match(answer, /Comprovar Playwright/);
 });
 
+test('continues after a plan, fixes a failing check and allows the check to run again', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-repair-cycle-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(path.join(projectRoot, 'src'), { recursive: true });
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture","scripts":{"test":"node --test"}}');
+  await fs.writeFile(path.join(projectRoot, 'src/math.js'), 'function add(a, b) { return a + b; }');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"plan","content":"Llegeix src/math.js; canvia add; executa npm test i corregeix qualsevol error."}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }"}}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.test.js"}}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }\\nmodule.exports = { add };"}}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"final","content":"La prova ha passat després de corregir el codi."}',
+  ];
+  const prompts = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let testRuns = 0;
+
+  const answer = await agent.ask('Corregeix add perquè add(2, 2) retorni 5 i fes passar les proves.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'read_file') return { path: tool.arguments.path, content: 'function add(a, b) { return a + b; }' };
+    if (tool.name === 'write_file') return { applied: true, path: tool.arguments.path };
+    if (tool.name === 'run_tests') {
+      testRuns += 1;
+      return testRuns === 1 ? { code: 1, output: 'AssertionError: 4 !== 5' } : { code: 0, output: 'tests 1, pass 1, fail 0' };
+    }
+    return {};
+  });
+
+  assert.deepEqual(calls, ['read_file', 'write_file', 'run_tests', 'read_file', 'write_file', 'run_tests']);
+  assert.equal(testRuns, 2);
+  assert.ok(prompts.some((prompt) => prompt.includes('La comprovació ha fallat') && prompt.includes('corregeix')));
+  assert.match(answer, /prova ha passat/);
+});
+
 test('rejects package names that contain shell arguments', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-package-test-'));
   const projectRoot = path.join(tempRoot, 'project');
