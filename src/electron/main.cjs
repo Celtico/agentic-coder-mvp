@@ -94,6 +94,48 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (!approved) return { approved: false, cancelled: true, browser: 'chromium' };
     return executeBinary(executable, ['install', 'chromium'], root, 600000);
   }
+  if (tool.name === 'inspect_browser' && typeof tool.arguments?.url === 'string') {
+    let target;
+    try { target = new URL(tool.arguments.url); } catch { throw new Error('L’adreça local no és vàlida.'); }
+    if (!['http:', 'https:'].includes(target.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname.toLowerCase()) || (target.port && (+target.port < 1 || +target.port > 65535))) {
+      throw new Error('Per seguretat, Playwright només pot obrir adreces locals de localhost, 127.0.0.1 o ::1.');
+    }
+    let playwrightPath;
+    try { playwrightPath = require.resolve('playwright', { paths: [root] }); }
+    catch { throw new Error('Playwright no està instal·lat en aquest projecte. Demana instal·lar @playwright/test o playwright amb confirmació.'); }
+    const approved = await confirmProjectAction({
+      title: 'Confirmar inspecció del navegador', message: `L’agent demana inspeccionar ${target.origin}${target.pathname}.`, button: 'Obre i inspecciona',
+      detail: `Carpeta: ${root}\nAdreça: ${target.origin}${target.pathname}\n\nS’iniciarà Chromium local en mode sense finestra per llegir el text de la pàgina, registrar errors i desar una captura a les dades locals de l’app. Només es permet localhost.`
+    });
+    if (!approved) return { approved: false, cancelled: true, url: `${target.origin}${target.pathname}` };
+    const { chromium } = require(playwrightPath);
+    let browser;
+    try {
+      browser = await chromium.launch({ headless: true, timeout: 20000 });
+      const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+      const consoleErrors = [];
+      const pageErrors = [];
+      const requestFailures = [];
+      page.on('console', (message) => { if (message.type() === 'error' && consoleErrors.length < 30) consoleErrors.push(message.text().slice(0, 500)); });
+      page.on('pageerror', (error) => { if (pageErrors.length < 30) pageErrors.push(error.message.slice(0, 500)); });
+      page.on('requestfailed', (request) => { if (requestFailures.length < 30) requestFailures.push({ url: safeBrowserUrl(request.url()), error: (request.failure()?.errorText || 'request failed').slice(0, 300) }); });
+      const response = await page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(800);
+      const pageInfo = await page.evaluate(() => ({ title: document.title, text: document.body?.innerText || '' }));
+      const screenshotDirectory = path.join(app.getPath('userData'), 'browser-inspections');
+      await fs.mkdir(screenshotDirectory, { recursive: true });
+      const screenshotPath = path.join(screenshotDirectory, `inspection-${Date.now()}.png`);
+      await page.screenshot({ path: screenshotPath, fullPage: true, timeout: 15000 });
+      return {
+        inspected: true, url: safeBrowserUrl(page.url()), status: response?.status() ?? null,
+        title: String(pageInfo.title || '').slice(0, 300), text: String(pageInfo.text || '').slice(0, 12000),
+        consoleErrors, pageErrors, requestFailures, screenshotPath,
+        truncated: String(pageInfo.text || '').length > 12000,
+      };
+    } catch (error) {
+      throw new Error(`La inspecció Playwright ha fallat: ${error instanceof Error ? error.message : String(error)}. Si Chromium no està instal·lat, demana instal·lar-lo amb l’eina confirmada.`);
+    } finally { if (browser) await browser.close().catch(() => {}); }
+  }
   if (tool.name === 'list_files') {
     const files = await listFiles(root);
     return { files: files.filter((file) => !file.directory).slice(0, 500).map((file) => file.path) };
@@ -405,6 +447,13 @@ function safeProjectPath(root, relativePath) {
 
 function isWithin(root, target) {
   return target === root || target.startsWith(root + path.sep);
+}
+
+function safeBrowserUrl(value) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch { return '(adreça local)'; }
 }
 
 function createReviewDiff(before, after) {
