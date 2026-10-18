@@ -6,7 +6,7 @@ Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. N
 - Aplicació d'escriptori Electron.
 - Selecció d'una carpeta de projecte i exploració de fitxers.
 - Inferència local amb `onnx-community/Qwen2.5-Coder-1.5B-Instruct` quantitzat Q4 mitjançant Transformers.js.
-- Context limitat del projecte, converses persistides localment i recuperació dels intercanvis completats des de `~/.agentic-coder/memory/sessions.jsonl` quan falten a l’historial de la interfície. La recuperació es mostra en una conversa separada i no substitueix les converses existents.
+- Context limitat del projecte que prioritza `AGENTS.md`, README, manifestos de dependències i fitxers d’entrada; converses persistides localment i recuperació dels intercanvis completats des de `~/.agentic-coder/memory/sessions.jsonl` quan falten a l’historial de la interfície. La recuperació es mostra en una conversa separada i no substitueix les converses existents.
 - La lectura de context respecta regles habituals de `.gitignore` a l’arrel i als subdirectoris, inclosos comodins i negacions senzilles; també manté exclusions fixes per a carpetes generades i fitxers ocults.
 - Execució explícita de `npm test` al projecte seleccionat.
 - Execució confirmada de scripts existents del projecte i instal·lació confirmada de paquets npm.

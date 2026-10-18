@@ -335,6 +335,7 @@ export class LocalCodingAgent {
     const allowed = /\.(js|cjs|mjs|ts|tsx|jsx|json|md|html|css|py|go|rs|java|php|yml|yaml)$/i;
     const manifest: string[] = [];
     const snippets: string[] = [];
+    const contextFiles: Array<{ relative: string; absolute: string }> = [];
     let contentSize = 0;
     let manifestTruncated = false;
     const maxManifestEntries = 300;
@@ -367,21 +368,36 @@ export class LocalCodingAgent {
         if (!entry.isFile()) continue;
         if (manifest.length < maxManifestEntries) manifest.push(relative);
         else manifestTruncated = true;
-        if (!allowed.test(entry.name) || contentSize >= maxContentSize) continue;
-        try {
-          const stat = await fs.stat(full);
-          if (stat.size > 12000) continue;
-          const content = await fs.readFile(full, 'utf8');
-          const snippet = `\n--- ${relative} ---\n${content.slice(0, 6000)}`;
-          if (contentSize + snippet.length <= maxContentSize) {
-            snippets.push(snippet);
-            contentSize += snippet.length;
-          }
-        } catch {}
+        if (allowed.test(entry.name)) contextFiles.push({ relative, absolute: full });
       }
     };
 
     await walk(absoluteRoot);
+    const contextPriority = (relative: string): number => {
+      const normalized = relative.split(path.sep).join('/').toLowerCase();
+      const basename = path.posix.basename(normalized);
+      const rootFile = !normalized.includes('/');
+      if (basename === 'agents.md') return rootFile ? 0 : 1;
+      if (basename === 'readme.md' || basename === 'readme') return rootFile ? 2 : 6;
+      if (rootFile && ['package.json', 'pyproject.toml', 'cargo.toml', 'go.mod', 'composer.json', 'pom.xml', 'requirements.txt'].includes(basename)) return 3;
+      if (rootFile && ['tsconfig.json', 'jsconfig.json', 'vite.config.ts', 'vite.config.js', 'webpack.config.js'].includes(basename)) return 4;
+      if (/^(src\/)?(index|main|app)\.(tsx?|jsx?|mjs|cjs|vue|py)$/i.test(normalized)) return 5;
+      return 10;
+    };
+    contextFiles.sort((a, b) => contextPriority(a.relative) - contextPriority(b.relative) || a.relative.localeCompare(b.relative));
+    for (const file of contextFiles) {
+      if (contentSize >= maxContentSize) break;
+      try {
+        const stat = await fs.stat(file.absolute);
+        if (!stat.isFile() || stat.size > 12000) continue;
+        const content = await fs.readFile(file.absolute, 'utf8');
+        const snippet = `\n--- ${file.relative} ---\n${content.slice(0, 6000)}`;
+        if (contentSize + snippet.length <= maxContentSize) {
+          snippets.push(snippet);
+          contentSize += snippet.length;
+        }
+      } catch {}
+    }
     if (manifestTruncated) manifest.push('… (mapa limitat a 300 entrades)');
     return { manifest: manifest.join('\n'), contents: snippets.join('\n') };
   }

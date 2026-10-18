@@ -302,6 +302,33 @@ test('respects root and nested gitignore rules when collecting project context',
   }
 });
 
+test('prioritizes project instructions and manifests before alphabetically early filler files', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-context-priority-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"priority-fixture"}');
+  await fs.writeFile(path.join(projectRoot, 'AGENTS.md'), 'UNIQUE_AGENT_INSTRUCTIONS_MARKER');
+  await fs.writeFile(path.join(projectRoot, 'README.md'), 'UNIQUE_PROJECT_README_MARKER');
+  await Promise.all(Array.from({ length: 6 }, (_, index) =>
+    fs.writeFile(path.join(projectRoot, `a-filler-${index}.md`), `FILLER_${index}\n${'x'.repeat(5000)}`)));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let systemPrompt = '';
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { systemPrompt = messages[0].content; return 'Context preparat.'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  await agent.ask('Resumeix el projecte segons les seves instruccions', projectRoot, async () => ({}));
+
+  assert.match(systemPrompt, /UNIQUE_AGENT_INSTRUCTIONS_MARKER/);
+  assert.match(systemPrompt, /UNIQUE_PROJECT_README_MARKER/);
+  assert.match(systemPrompt, /priority-fixture/);
+});
+
 test('rejects browser inspection for non-local URLs', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-remote-browser-test-'));
   const projectRoot = path.join(tempRoot, 'project');
