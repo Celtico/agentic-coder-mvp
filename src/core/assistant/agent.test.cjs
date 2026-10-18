@@ -150,6 +150,36 @@ test('routes project startup through its confirmation-gated tool', async (t) => 
   assert.match(answer, /no s’ha iniciat cap servidor/);
 });
 
+test('routes proposed file deletion through the confirmation-gated tool', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-delete-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'unused.txt'), 'safe to remove');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"delete_file","arguments":{"path":"unused.txt"}}',
+    'He cancel·lat l’eliminació; no s’ha esborrat el fitxer.',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift(),
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Elimina unused.txt', projectRoot, async (tool) => {
+    calls.push(tool);
+    return { deleted: false, denied: true, path: 'unused.txt' };
+  });
+
+  assert.deepEqual(calls, [{ name: 'delete_file', arguments: { path: 'unused.txt' } }]);
+  assert.equal(await fs.readFile(path.join(projectRoot, 'unused.txt'), 'utf8'), 'safe to remove');
+  assert.match(answer, /no s’ha esborrat el fitxer/);
+});
+
 test('allows browser inspection only for local development URLs', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-browser-test-'));
   const projectRoot = path.join(tempRoot, 'project');

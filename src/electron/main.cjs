@@ -6,6 +6,7 @@ const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot } = require('./git-tools.cjs');
 const { ChatStore } = require('./chat-store.cjs');
+const { inspectFileForDeletion, deleteInspectedProjectFile } = require('./project-file-tools.cjs');
 
 let win;
 let modelWorker = null;
@@ -189,6 +190,27 @@ async function dispatchAgentTool(tool, projectRoot) {
       } catch {}
     }
     return { query: tool.arguments.query, matches, truncated: matches.length >= 40 || bytesRead >= 2_000_000 };
+  }
+  if (tool.name === 'delete_file' && typeof tool.arguments?.path === 'string') {
+    const relativePath = tool.arguments.path;
+    if (relativePath.length > 500 || path.isAbsolute(relativePath)) throw new Error('La ruta no es vàlida per eliminar.');
+    const visibleFiles = await listFiles(root);
+    if (!visibleFiles.some((file) => !file.directory && file.path === relativePath)) throw new Error('Aquest fitxer no forma part de la llista visible del projecte.');
+    const snapshot = await inspectFileForDeletion(root, relativePath);
+    const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
+    const backupPath = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted', stamp, relativePath);
+    const decision = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Cancel·la', 'Elimina i desa còpia'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Revisar eliminació proposada',
+      message: `L’agent proposa eliminar ${relativePath}.`,
+      detail: `Projecte: ${root}\nFitxer: ${relativePath}\nMida: ${snapshot.size} bytes\n\nEs crearà i verificarà una còpia recuperable fora del projecte abans d’eliminar el fitxer. Si el fitxer canvia després d’aquesta confirmació, no s’eliminarà.`
+    });
+    if (decision.response !== 1) return { deleted: false, denied: true, path: relativePath };
+    return deleteInspectedProjectFile(snapshot, backupPath);
   }
   if (tool.name === 'write_file' && typeof tool.arguments?.path === 'string' && typeof tool.arguments?.content === 'string') {
     const relativePath = tool.arguments.path;

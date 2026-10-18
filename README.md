@@ -13,6 +13,7 @@ Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. N
 - Execució confirmada de scripts existents del projecte i instal·lació confirmada de paquets npm.
 - Panell Git de només lectura amb branca, estat, diff preparat i diff local; només mostra el repositori si coincideix amb la carpeta de projecte seleccionada.
 - Límits bàsics de ruta i mida per a lectura/escriptura a través de l'IPC.
+- Eliminació de fitxers a petició de l’agent només amb confirmació explícita, còpia de recuperació verificada fora del projecte i comprovació que el fitxer no hagi canviat.
 - Contracte `InferenceEngine` tipat i implementació Transformers.js aïllada de l'orquestrador.
 - Registre local optatiu de casos verificats, amb procedència i confirmació de l'usuari; no entrena automàticament el model.
 
