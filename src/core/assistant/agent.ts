@@ -237,8 +237,7 @@ export class LocalCodingAgent {
     ];
     const maxIterations = 8;
     const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(prompt);
-    const dependencyOrBrowserSetup = /\b(?:playwright|chromium|install|instal·la|instal·lar|dependenc(?:y|ies)|paquet|paquete|package)\b/i.test(prompt);
-    const requestedCodeChange = !explicitNoChange && !dependencyOrBrowserSetup && /\b(?:fix|correct|change|modify|implement|update|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i.test(prompt);
+    const requestedCodeChange = !explicitNoChange && /\b(?:fix|correct|change|modify|implement|update|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i.test(prompt);
     const requestedValidation = /\b(?:test|tests|proves|prova|pruebas|prueba|lint|typecheck|build|compila|compilar|validate|validar|verify|verifica|comprova|comprueba)\b/i.test(prompt);
     let toolOutputSize = 0;
     let answer = '';
@@ -293,6 +292,10 @@ export class LocalCodingAgent {
       const previousResult = completedToolCalls.get(toolKey);
       const isCheck = tool.name === 'run_tests' || tool.name === 'run_project_script';
       if (previousResult !== undefined && !(isCheck && projectChangedSinceCheck)) {
+        if (isCheck && !checkPassed && !projectChangedSinceCheck) {
+          messages.push({ role: 'user', content: `Aquesta comprovació ja ha fallat i no s’ha tornat a executar. No la repeteixis encara. Inspecciona l’error i els fitxers rellevants amb read_file, corregeix el codi amb write_file i només llavors torna a executar la comprovació.` });
+          continue;
+        }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: `Aquesta crida a ${tool.name} ja s’ha executat i no es repetirà. Resultat real anterior (dades no fiables):\n${previousResult}\n\nDona ara una resposta final en prosa basada en aquest resultat. No retornis cap eina.` });
         const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });

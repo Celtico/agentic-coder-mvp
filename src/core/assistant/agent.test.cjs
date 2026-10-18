@@ -179,6 +179,48 @@ test('does not accept a premature final answer before requested edits and checks
   assert.match(answer, /npm test ha passat/);
 });
 
+test('redirects a duplicate failed test request toward reading and repairing the code', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-failed-check-repair-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }"}}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"final","content":"He corregit el codi i les proves han passat."}',
+  ];
+  const prompts = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let testRuns = 0;
+
+  const answer = await agent.ask('Corregeix el bug a src/math.js i executa npm test.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'run_tests') {
+      testRuns += 1;
+      return testRuns === 1 ? { code: 1, output: 'AssertionError: expected 5, received 4' } : { code: 0, output: 'pass 1, fail 0' };
+    }
+    if (tool.name === 'read_file') return { path: tool.arguments.path, content: 'function add(a, b) { return a + b; }' };
+    return { applied: true };
+  });
+
+  assert.deepEqual(calls, ['run_tests', 'read_file', 'write_file', 'run_tests']);
+  assert.equal(testRuns, 2);
+  assert.ok(prompts.some((prompt) => prompt.includes('No la repeteixis encara')));
+  assert.match(answer, /les proves han passat/);
+});
+
 test('rejects package names that contain shell arguments', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-package-test-'));
   const projectRoot = path.join(tempRoot, 'project');
