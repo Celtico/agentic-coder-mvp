@@ -142,6 +142,43 @@ test('continues after a plan, fixes a failing check and allows the check to run 
   assert.match(answer, /prova ha passat/);
 });
 
+test('does not accept a premature final answer before requested edits and checks', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-completion-guard-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"plan","content":"Inspeccionar, corregir src/math.js y pasar npm test."}',
+    '{"type":"tool_call","name":"list_files"}',
+    '{"type":"final","content":"La tarea està acabada."}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }"}}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"final","content":"He corregit el fitxer i npm test ha passat."}',
+  ];
+  const prompts = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Corregeix el bug de src/math.js i executa npm test.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'write_file') return { applied: true };
+    if (tool.name === 'run_tests') return { code: 0, output: 'pass 1, fail 0' };
+    return { files: ['src/math.js'] };
+  });
+
+  assert.deepEqual(calls, ['list_files', 'write_file', 'run_tests']);
+  assert.ok(prompts.some((prompt) => prompt.includes('Encara no has aplicat cap canvi')));
+  assert.match(answer, /npm test ha passat/);
+});
+
 test('rejects package names that contain shell arguments', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-package-test-'));
   const projectRoot = path.join(tempRoot, 'project');

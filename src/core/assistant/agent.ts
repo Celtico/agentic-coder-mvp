@@ -235,24 +235,54 @@ export class LocalCodingAgent {
       { role: 'system', content: system },
       { role: 'user', content: prompt },
     ];
-    const maxIterations = 6;
+    const maxIterations = 8;
+    const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(prompt);
+    const dependencyOrBrowserSetup = /\b(?:playwright|chromium|install|instal·la|instal·lar|dependenc(?:y|ies)|paquet|paquete|package)\b/i.test(prompt);
+    const requestedCodeChange = !explicitNoChange && !dependencyOrBrowserSetup && /\b(?:fix|correct|change|modify|implement|update|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i.test(prompt);
+    const requestedValidation = /\b(?:test|tests|proves|prova|pruebas|prueba|lint|typecheck|build|compila|compilar|validate|validar|verify|verifica|comprova|comprueba)\b/i.test(prompt);
     let toolOutputSize = 0;
     let answer = '';
     let plan = '';
     let projectChangedSinceCheck = false;
+    let changeApplied = false;
+    let checkPassed = false;
+    let completionNudges = 0;
     const completedToolCalls = new Map<string, string>();
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       this.onStatus({ type: 'status', message: iteration === 0 ? 'Generant resposta local…' : `Revisant el projecte (${iteration}/${maxIterations})…` });
       const raw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });
       const action = parseAction(raw);
-      if (!action) { answer = raw; break; }
+      const missingWork = () => requestedCodeChange && !changeApplied
+        ? 'Encara no has aplicat cap canvi al codi. No acabis amb un resum: llegeix el fitxer rellevant amb read_file i proposa el canvi amb write_file.'
+        : requestedValidation && changeApplied && !checkPassed
+          ? 'El canvi encara no està validat. No acabis amb un resum: executa la prova o comprovació pertinent i corregeix qualsevol fallada.'
+          : null;
+      if (!action) {
+        const unmet = missingWork();
+        if (unmet && completionNudges < 2) {
+          completionNudges += 1;
+          messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
+          continue;
+        }
+        answer = raw;
+        break;
+      }
       if (action.type === 'plan') {
         plan = action.content.slice(0, 1000);
         this.onStatus({ type: 'status', message: `Pla: ${plan}` });
         messages.push({ role: 'assistant', content: `Pla breu: ${plan}` }, { role: 'user', content: 'Executa ara el pla. La teva resposta següent ha de ser exactament una crida JSON tool_call vàlida, començant per la primera eina necessària. No repeteixis el pla ni donis encara una resposta final.' });
         continue;
       }
-      if (action.type === 'final') { answer = action.content; break; }
+      if (action.type === 'final') {
+        const unmet = missingWork();
+        if (unmet && completionNudges < 2) {
+          completionNudges += 1;
+          messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
+          continue;
+        }
+        answer = action.content;
+        break;
+      }
       const tool = validateToolCall(action);
       if (!tool) {
         messages.push({ role: 'assistant', content: raw }, { role: 'user', content: 'La crida no és vàlida o l’eina no està disponible. Continua amb una resposta final en prosa clara.' });
@@ -278,8 +308,14 @@ export class LocalCodingAgent {
       let result: unknown;
       try { result = await executeTool(tool); }
       catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
-      if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) projectChangedSinceCheck = true;
-      if (isCheck) projectChangedSinceCheck = false;
+      if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) {
+        projectChangedSinceCheck = true;
+        changeApplied = true;
+      }
+      if (isCheck) {
+        projectChangedSinceCheck = false;
+        checkPassed = Boolean(result && typeof result === 'object' && (result as Record<string, unknown>).code === 0);
+      }
       if (tool.name === 'inspect_browser') {
         const browserAnswer = formatBrowserInspection(result);
         if (browserAnswer) { answer = browserAnswer; break; }
