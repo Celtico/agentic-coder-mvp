@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
+const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
@@ -109,9 +110,15 @@ async function dispatchAgentTool(tool, projectRoot) {
 
 function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
+  const nodeExecutable = findNodeExecutable();
   const child = fork(path.join(__dirname, '..', 'core', 'assistant', 'agent-worker.cjs'), [], {
+    execPath: nodeExecutable,
     execArgv: [],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models') },
+    env: {
+      ...process.env,
+      AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models'),
+      AGENT_MODEL_PATH: path.resolve(__dirname, '..', '..', 'models', 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+    },
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   });
   modelWorker = child;
@@ -143,6 +150,22 @@ function startModelWorker() {
     if (win && !win.isDestroyed()) win.webContents.send('agent:status', { type: 'status', message: `El procés del model s’ha aturat (${reason}); la resta de l’app continua funcionant.` });
   });
   return child;
+}
+
+function findNodeExecutable() {
+  const name = process.platform === 'win32' ? 'node.exe' : 'node';
+  const candidates = [process.env.AGENT_NODE_EXECUTABLE, process.env.npm_node_execpath];
+  for (const directory of (process.env.PATH || '').split(path.delimiter)) {
+    if (directory) candidates.push(path.join(directory, name));
+  }
+  for (const candidate of candidates) {
+    if (!candidate || path.resolve(candidate) === path.resolve(process.execPath)) continue;
+    try {
+      fsSync.accessSync(candidate, fsSync.constants.X_OK);
+      return candidate;
+    } catch {}
+  }
+  throw new Error('No he trobat Node.js per executar el treballador local. Configura AGENT_NODE_EXECUTABLE o obre l’app des d’un entorn amb Node.js al PATH.');
 }
 
 function askModel(prompt, projectRoot) {
