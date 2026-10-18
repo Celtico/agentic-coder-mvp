@@ -8,6 +8,7 @@ Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. N
 - Inferència local amb `onnx-community/Qwen2.5-Coder-1.5B-Instruct` quantitzat Q4 mitjançant Transformers.js.
 - Context limitat del projecte i registre local de les converses a `~/.agentic-coder/memory/sessions.jsonl`.
 - Execució explícita de `npm test` al projecte seleccionat.
+- Execució confirmada de scripts existents del projecte i instal·lació confirmada de paquets npm.
 - Límits bàsics de ruta i mida per a lectura/escriptura a través de l'IPC.
 - Contracte `InferenceEngine` tipat i implementació Transformers.js aïllada de l'orquestrador.
 - Registre local optatiu de casos verificats, amb procedència i confirmació de l'usuari; no entrena automàticament el model.
@@ -38,7 +39,14 @@ La primera inferència pot trigar i descarregar fitxers de model. No s'envia el 
 - L'entrenament nocturn no està implementat encara. La fase següent ha d'afegir preparació de dades, avaluació independent, adaptadors/fine-tuning compatible, versions immutables i rollback. No s'ha de modificar el model actiu sense superar benchmarks.
 
 ## Seguretat
-Utilitza només amb projectes de confiança. `npm test` executa codi del projecte seleccionat. Revisa els canvis suggerits abans d'aplicar-los. No posis secrets al prompt ni als fitxers indexats.
+Utilitza només amb projectes de confiança. `npm test`, altres scripts npm i les instal·lacions de paquets demanen confirmació abans d’executar-se. Una instal·lació pot modificar `package.json`, `package-lock.json` i `node_modules`; la finestra de confirmació mostra el paquet, l’ordre i la carpeta. La instal·lació del navegador Chromium per a Playwright també té una confirmació pròpia. Revisa els canvis suggerits abans d’aplicar-los. No posis secrets al prompt ni als fitxers indexats.
+
+Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, preparar un pla, implementar, executar comprovacions adequades i resumir els fitxers, resultats i limitacions. La inspecció amb Playwright només es pot afirmar quan el projecte tingui Playwright i les proves de navegador s’hagin executat; l’app demana confirmació abans d’instal·lar el paquet o Chromium. L’app encara no instal·la Playwright automàticament.
 
 ## Model i llicència
 `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat sota Apache-2.0. Consulta el model card abans de redistribuir pesos o crear un producte.
+
+
+## Primera i segona fase
+docs/primera-fase-projecte.md
+docs/segona-fase-projecte.md

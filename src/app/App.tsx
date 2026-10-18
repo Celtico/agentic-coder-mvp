@@ -237,7 +237,9 @@ export function App(): React.JSX.Element {
     appendMessage('assistant', 'Executant npm test…');
     try {
       const result = await window.agentic.runTests();
-      appendMessage('assistant', `Proves acabades (codi ${result.code}).\n\n${result.output}`);
+      appendMessage('assistant', result.code === null
+        ? 'Execució de proves cancel·lada.'
+        : `Proves acabades (codi ${result.code}).\n\n${result.output}`);
     } catch (error) { appendMessage('assistant', `Error: ${errorText(error)}`); }
   }
 
@@ -334,7 +336,7 @@ export function App(): React.JSX.Element {
         <Box bg="surface" borderWidth="1px" borderColor="border" borderRadius="22px" p="3" boxShadow="composer">
           <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
-            <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">Les proves només s’executen quan tu ho demanes.</Text></HStack>
+            <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">L’app demana confirmació abans d’executar o instal·lar.</Text></HStack>
             <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt} disabled={loading}><Send size={17}/></Button>
           </Flex>
         </Box>
