@@ -33,7 +33,7 @@ Les converses de la interfície es desen a SQLite a la carpeta de dades de l’a
 
 La inspecció s’ha validat a l’app amb un projecte Vue/Vite local: HTTP 200, títol `Vite App`, cap error de consola, pàgina o xarxa, i captura PNG desada a les dades locals de l’aplicació. Després de la prova, la resposta s’ha canviat perquè l’orquestrador presenti directament els fets retornats per Playwright, sense demanar al model que els reescrigui.
 
-La generació es pot aturar des del compositor tancant el procés aïllat del model. Això allibera el procés local i el model es tornarà a carregar a la següent petició; si una eina confirmada ja està en curs, l’app no la talla i informa que cal esperar que acabi. Encara falten ordres arbitràries des del bucle d'eines, vista de diff dedicada, converses separades per projecte, embeddings i entrenament. Aquests elements no es consideren completats ni se simulen.
+La generació es pot aturar des del compositor tancant el procés aïllat del model. Això allibera el procés local i el model es tornarà a carregar a la següent petició; si una eina confirmada ja està en curs, l’app no la talla i informa que cal esperar que acabi. Encara falten ordres arbitràries des del bucle d'eines, vista de diff dedicada, embeddings i entrenament. Aquests elements no es consideren completats ni se simulen.
 
 ## Fonts tècniques consultades
 

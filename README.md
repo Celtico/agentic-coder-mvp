@@ -37,7 +37,7 @@ La primera inferència pot trigar i descarregar fitxers de model. No s'envia el 
 - El model s'executa a través del backend ONNX de Transformers.js; l'acceleració GPU en Electron/Node pot variar segons el backend i la configuració.
 - La interfície permet obrir fitxers, editar-los i revisar el contingut abans de desar. El desat requereix confirmació explícita i crea una còpia de seguretat local a la carpeta de dades de l'aplicació. La resposta del model continua sent una proposta: no s'aplica automàticament.
 - L'execució de tests és una acció explícita de l'usuari.
-- La memòria actual és un registre JSONL, encara no una base vectorial ni una memòria amb embeddings.
+- El registre JSONL conserva els intercanvis complets de l’agent; les converses de la interfície es desen separadament a SQLite. La recuperació de casos verificats encara es basa en paraules, sense embeddings.
 - L'entrenament nocturn no està implementat encara. La fase següent ha d'afegir preparació de dades, avaluació independent, adaptadors/fine-tuning compatible, versions immutables i rollback. No s'ha de modificar el model actiu sense superar benchmarks.
 
 ## Seguretat
