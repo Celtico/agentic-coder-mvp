@@ -18,7 +18,7 @@ const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
-const NAVIGATION_SPLIT_KEY = 'agentic-navigation-split-size-v1';
+const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
 type WorkspacePanel = 'browser' | 'terminal' | 'editor';
 
@@ -59,7 +59,7 @@ const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
 const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
-  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per redimensionar o tancar el panell" title="Arrossega per redimensionar o tancar el panell" w="12px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="12px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
     <Splitter.ResizeTriggerSeparator bg="transparent"/>
     <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="border" borderWidth="0" boxShadow="none"/>
   </Splitter.ResizeTrigger>
@@ -105,13 +105,10 @@ export function App(): React.JSX.Element {
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
   const [navigationOpen, setNavigationOpen] = useState(true);
-  const [navigationSplitSize, setNavigationSplitSize] = useState(() => {
-    try {
-      const value: unknown = JSON.parse(localStorage.getItem(NAVIGATION_SPLIT_KEY) || 'null');
-      return Array.isArray(value) && value.length === 2 ? value as number[] : [18, 82];
-    } catch { return [18, 82]; }
+  const [navigationWidth, setNavigationWidth] = useState(() => {
+    const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
+    return Number.isFinite(stored) && stored >= 220 && stored <= 360 ? stored : 252;
   });
-  const lastExpandedNavigationSplitSizeRef = useRef(navigationSplitSize);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
@@ -395,32 +392,20 @@ export function App(): React.JSX.Element {
   ) : chatPane;
 
   return (
-    <Grid h="100dvh" w="full" templateColumns="64px 252px minmax(0, 1fr)" overflow="hidden" bg="bg" textStyle="interface">
+    <Grid h="100dvh" w="100vw" minW="0" templateColumns="64px minmax(0, 1fr)" overflow="hidden" bg="bg" textStyle="interface">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" direction="column" align="center" gap="2">
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="44px" h="44px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={newChat}/>
           <IconButton icon={FolderOpen} label="Selecciona projecte" w="44px" h="44px" onClick={selectProject}/>
-          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="44px" h="44px" onClick={() => {
-            if (navigationOpen) {
-              setNavigationOpen(false);
-              setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
-            } else {
-              setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
-              setNavigationOpen(true);
-            }
-          }}/>
-          <IconButton icon={Globe2} label="Obre el navegador" w="44px" h="44px" onClick={() => setWorkspacePanel('browser')}/>
-          <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" w="44px" h="44px" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
+          <IconButton icon={Globe2} label="Obre el navegador" w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel('browser')}/>
+          <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
         </Flex>
-        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={navigationSplitSize} onResize={(details) => setNavigationSplitSize(details.size)} onResizeEnd={(details) => {
-          if (details.size[0] <= 12) {
-            setNavigationOpen(false);
-            setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
-            return;
-          }
-          lastExpandedNavigationSplitSizeRef.current = details.size;
-          setNavigationSplitSize(details.size);
-          localStorage.setItem(NAVIGATION_SPLIT_KEY, JSON.stringify(details.size));
+        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '220px', maxSize: '360px', resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '440px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
+          const availableWidth = Math.max(660, window.innerWidth - 64);
+          const width = Math.max(220, Math.min(360, Math.round((details.size[0] / 100) * availableWidth)));
+          setNavigationWidth(width);
+          localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3">
