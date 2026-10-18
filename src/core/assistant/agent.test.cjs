@@ -147,7 +147,51 @@ test('allows browser inspection only for local development URLs', async (t) => {
   });
 
   assert.deepEqual(calls, [{ name: 'inspect_browser', arguments: { url: 'http://localhost:5173/preview' } }]);
-  assert.match(answer, /no ha registrat errors/);
+  assert.match(answer, /errors de consola: cap/i);
+});
+
+test('returns verified browser inspection facts without asking the model to rewrite them', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-browser-result-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let generations = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => {
+      generations += 1;
+      return '{"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5173/"}}';
+    },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  let calls = 0;
+
+  const answer = await agent.ask('Inspecciona la pàgina local', projectRoot, async () => {
+    calls += 1;
+    return {
+      inspected: true,
+      url: 'http://localhost:5173/',
+      status: 200,
+      title: 'Vite App',
+      consoleErrors: [],
+      pageErrors: [],
+      requestFailures: [],
+      screenshotPath: '/tmp/inspection.png',
+      capture: 'data:image/png;base64,should-not-be-shown',
+    };
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(generations, 1);
+  assert.match(answer, /HTTP 200/);
+  assert.match(answer, /Títol: Vite App/);
+  assert.match(answer, /Errors de consola: cap/);
+  assert.match(answer, /Captura: \/tmp\/inspection\.png/);
+  assert.doesNotMatch(answer, /base64|should-not-be-shown/);
 });
 
 test('rejects browser inspection for non-local URLs', async (t) => {

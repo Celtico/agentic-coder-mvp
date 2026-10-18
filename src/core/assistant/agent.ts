@@ -61,6 +61,30 @@ function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): 
   return null;
 }
 
+function formatBrowserInspection(result: unknown): string | null {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+  const value = result as Record<string, unknown>;
+  if (value.cancelled === true) return 'La inspecció del navegador s’ha cancel·lat; no s’ha obert cap pàgina.';
+  if (typeof value.error === 'string') return `La inspecció del navegador ha fallat: ${value.error}`;
+  if (value.inspected !== true) return null;
+
+  const status = typeof value.status === 'number' ? `HTTP ${value.status}` : 'codi HTTP no disponible';
+  const lines = [`Inspecció completada: ${status}.`];
+  if (typeof value.url === 'string') lines.push(`Adreça: ${value.url}`);
+  if (typeof value.title === 'string') lines.push(`Títol: ${value.title || '(sense títol)'}`);
+  const errors = [
+    ['consola', value.consoleErrors],
+    ['pàgina', value.pageErrors],
+    ['xarxa', value.requestFailures],
+  ] as const;
+  for (const [label, entries] of errors) {
+    const list = Array.isArray(entries) ? entries : [];
+    lines.push(list.length ? `Errors de ${label}: ${JSON.stringify(list)}` : `Errors de ${label}: cap.`);
+  }
+  if (typeof value.screenshotPath === 'string') lines.push(`Captura: ${value.screenshotPath}`);
+  return lines.join('\n');
+}
+
 export class LocalCodingAgent {
   private readonly onStatus: (status: AgentStatus) => void;
   private readonly engine: InferenceEngine;
@@ -141,6 +165,10 @@ export class LocalCodingAgent {
       let result: unknown;
       try { result = await executeTool(tool); }
       catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
+      if (tool.name === 'inspect_browser') {
+        const browserAnswer = formatBrowserInspection(result);
+        if (browserAnswer) { answer = browserAnswer; break; }
+      }
       const toolText = JSON.stringify(result);
       const remaining = Math.max(0, 20000 - toolOutputSize);
       const boundedToolText = toolText.slice(0, Math.min(12000, remaining));
