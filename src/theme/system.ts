@@ -29,6 +29,17 @@ export const system = createSystem(defaultConfig, defineConfig({
         composer: { value: "0 4px 24px #0002" },
       },
     },
+    textStyles: {
+      chatMessage: {
+        value: { fontSize: "md", lineHeight: "1.7" },
+      },
+      interface: {
+        value: { fontSize: "sm", lineHeight: "1.45" },
+      },
+      caption: {
+        value: { fontSize: "xs", lineHeight: "1.35" },
+      },
+    },
     semanticTokens: {
       colors: {
         agentic: {

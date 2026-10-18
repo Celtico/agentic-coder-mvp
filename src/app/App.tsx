@@ -288,13 +288,13 @@ export function App(): React.JSX.Element {
         </HStack>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
-        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => <Box key={`${index}-${message.role}`} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" lineHeight="1.7" color={message.error ? 'red.200' : 'fg'}>{message.text}</Box>)}</Stack>}
+        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>{message.text}</Box>)}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text>{loadingLabel}</Text></HStack>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="4">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
         <Box bg="surface" borderWidth="1px" borderColor="border" borderRadius="22px" p="3" boxShadow="composer">
-          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" _focusVisible={{ boxShadow: "none" }}/>
+          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
             <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">Les proves només s’executen quan tu ho demanes.</Text></HStack>
             <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt} disabled={loading}><Send size={17}/></Button>
@@ -339,7 +339,7 @@ export function App(): React.JSX.Element {
 
   return (
     <>
-    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" bg="bg">
+    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" bg="bg" textStyle="interface">
         <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" p="3" direction="column" gap="3.5">
           <Box fontSize="md" fontWeight="bold" px="2" py="1.5" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Box>
           <Stack gap="2">
