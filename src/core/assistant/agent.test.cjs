@@ -173,3 +173,33 @@ test('rejects browser inspection for non-local URLs', async (t) => {
   await agent.ask('Inspecciona la web', projectRoot, async () => { calls += 1; return {}; });
   assert.equal(calls, 0);
 });
+
+test('does not repeat an identical browser inspection and asks for a final answer', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-repeat-browser-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5173/"}}',
+    '{"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5173/"}}',
+    '{"type":"final","content":"La pàgina ha respost amb HTTP 200 i no hi ha errors."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift(),
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Inspecciona la pàgina local', projectRoot, async (tool) => {
+    calls.push(tool);
+    return { status: 200, consoleErrors: [], pageErrors: [], requestFailures: [] };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.match(answer, /HTTP 200/);
+});

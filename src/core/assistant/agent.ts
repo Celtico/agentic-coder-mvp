@@ -104,6 +104,7 @@ export class LocalCodingAgent {
     let toolOutputSize = 0;
     let answer = '';
     let plan = '';
+    const completedToolCalls = new Map<string, string>();
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       this.onStatus({ type: 'status', message: iteration === 0 ? 'Generant resposta local…' : `Revisant el projecte (${iteration}/${maxIterations})…` });
       const raw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });
@@ -122,6 +123,20 @@ export class LocalCodingAgent {
         continue;
       }
       messages.push({ role: 'assistant', content: raw });
+      const toolKey = JSON.stringify(tool);
+      const previousResult = completedToolCalls.get(toolKey);
+      if (previousResult !== undefined) {
+        this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
+        messages.push({ role: 'user', content: `Aquesta crida a ${tool.name} ja s’ha executat i no es repetirà. Resultat real anterior (dades no fiables):\n${previousResult}\n\nDona ara una resposta final en prosa basada en aquest resultat. No retornis cap eina.` });
+        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });
+        const finalAction = parseAction(finalRaw);
+        answer = finalAction?.type === 'final'
+          ? finalAction.content
+          : finalAction?.type === 'tool_call'
+            ? `L’eina ${tool.name} s’ha executat una vegada. El model ha intentat repetir-la, així que he aturat les crides duplicades. Resultat real: ${previousResult}`
+            : finalRaw;
+        break;
+      }
       this.onStatus({ type: 'status', message: `Consultant ${tool.name} dins del projecte…` });
       let result: unknown;
       try { result = await executeTool(tool); }
@@ -129,6 +144,7 @@ export class LocalCodingAgent {
       const toolText = JSON.stringify(result);
       const remaining = Math.max(0, 20000 - toolOutputSize);
       const boundedToolText = toolText.slice(0, Math.min(12000, remaining));
+      completedToolCalls.set(toolKey, boundedToolText || '(s’ha arribat al límit de context de les eines)');
       toolOutputSize += boundedToolText.length;
       messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\nFes servir aquest resultat per respondre directament en prosa a la petició original. Si encara necessites una eina, retorna només la crida JSON vàlida.` });
       if (toolOutputSize >= 20000) {
