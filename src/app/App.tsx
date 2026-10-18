@@ -226,7 +226,10 @@ export function App(): React.JSX.Element {
     } catch (error) {
       const text = `Error: ${errorText(error)}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
       persistMessages([...pendingMessages, { role: 'assistant', text, error: true }], requestSessionId);
-    } finally { setLoading(false); setStatus('Preparat'); }
+    } finally {
+      setLoading(false); setStatus('Preparat');
+      try { const refreshed = await window.agentic.currentProject(); if (refreshed) setProject(refreshed); } catch {}
+    }
   }
 
   async function runTests() {

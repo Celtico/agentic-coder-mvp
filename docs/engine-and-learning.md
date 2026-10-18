@@ -21,7 +21,9 @@ Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Pro
 
 ## Estat del flux de l’agent
 
-Ja existeixen selecció persistent de projecte, context de fitxers limitat, edició amb confirmació i còpia de seguretat, execució explícita de proves, terminal amb confirmació i un webview integrat. L’agent encara no té un bucle de crides estructurades a eines, vista de diff dedicada, automatització Playwright, persistència SQLite, cancel·lació real de generació ni entrenament. Aquests elements no es consideren completats ni se simulen.
+Ja existeixen selecció persistent de projecte, context de fitxers limitat, edició amb confirmació i còpia de seguretat, terminal amb confirmació i un webview integrat. L’agent ara té un bucle limitat de fins a sis crides JSON validades per l’orquestrador: llistar, cercar i llegir fitxers, proposar crear o modificar fitxers i demanar `npm test`. Cada escriptura es mostra completa en un diàleg natiu; només s’aplica amb aprovació i fa còpia de seguretat quan reemplaça un fitxer. Les proves també requereixen aprovació i retornen el codi de sortida i la sortida reals.
+
+Encara falten ordres arbitràries des del bucle d’eines, observacions automatitzades del navegador amb Playwright, vista de diff dedicada, persistència SQLite, cancel·lació real de generació, embeddings i entrenament. Aquests elements no es consideren completats ni se simulen.
 
 ## Fonts tècniques consultades
 

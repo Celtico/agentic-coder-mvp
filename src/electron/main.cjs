@@ -16,6 +16,95 @@ async function saveSettings() {
   await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject }, null, 2), 'utf8');
 }
 
+async function dispatchAgentTool(tool, projectRoot) {
+  if (!tool || typeof tool !== 'object' || !selectedProject) throw new Error('La crida de l’eina no és vàlida.');
+  const root = await fs.realpath(selectedProject);
+  if (await fs.realpath(projectRoot) !== root) throw new Error('El projecte actiu ha canviat durant la tasca.');
+  if (tool.name === 'run_tests') {
+    const pkgPath = path.join(root, 'package.json');
+    let pkg;
+    try { pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')); } catch { throw new Error('No s’ha trobat un package.json vàlid.'); }
+    if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
+    const decision = await dialog.showMessageBox(win, {
+      type: 'warning', buttons: ['Cancel·la', 'Executa npm test'], defaultId: 0, cancelId: 0,
+      title: 'L’agent demana executar proves', message: 'S’executarà npm test dins del projecte seleccionat.',
+      detail: `Carpeta: ${root}\n\nLes proves poden executar codi del projecte i modificar fitxers. El procés s’aturarà al cap de 2 minuts.`
+    });
+    if (decision.response !== 1) return { approved: false, cancelled: true, command: 'npm test' };
+    return executeProjectTests(root);
+  }
+  if (tool.name === 'list_files') {
+    const files = await listFiles(root);
+    return { files: files.filter((file) => !file.directory).slice(0, 500).map((file) => file.path) };
+  }
+  if (tool.name === 'read_file' && typeof tool.arguments?.path === 'string' && tool.arguments.path.length <= 500) {
+    const relativePath = tool.arguments.path;
+    const visibleFiles = await listFiles(root);
+    if (!visibleFiles.some((file) => !file.directory && file.path === relativePath)) throw new Error('Aquest fitxer no forma part de la llista visible del projecte.');
+    const target = safeProjectPath(root, relativePath);
+    const resolved = await fs.realpath(target);
+    if (!isWithin(root, resolved)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
+    const stat = await fs.stat(resolved);
+    if (!stat.isFile() || stat.size > 1_000_000) throw new Error('Fitxer no vàlid o massa gran (límit 1 MB).');
+    const content = await fs.readFile(resolved, 'utf8');
+    return { path: relativePath, content: content.slice(0, 12000), truncated: content.length > 12000 };
+  }
+  if (tool.name === 'search_text' && typeof tool.arguments?.query === 'string' && tool.arguments.query.trim() && tool.arguments.query.length <= 200) {
+    const query = tool.arguments.query.trim().toLowerCase();
+    const files = (await listFiles(root)).filter((file) => !file.directory && /\.(js|cjs|mjs|ts|tsx|jsx|json|md|html|css|py|go|rs|java|php|yml|yaml)$/i.test(file.path));
+    const matches = [];
+    let bytesRead = 0;
+    for (const file of files) {
+      if (matches.length >= 40 || bytesRead >= 2_000_000) break;
+      try {
+        const target = safeProjectPath(root, file.path);
+        const resolved = await fs.realpath(target);
+        if (!isWithin(root, resolved)) continue;
+        const stat = await fs.stat(resolved);
+        if (!stat.isFile() || stat.size > 200_000) continue;
+        const content = await fs.readFile(resolved, 'utf8');
+        bytesRead += stat.size;
+        const lines = content.split(/\r?\n/);
+        lines.forEach((line, index) => {
+          if (matches.length < 40 && line.toLowerCase().includes(query)) matches.push({ path: file.path, line: index + 1, text: line.slice(0, 240) });
+        });
+      } catch {}
+    }
+    return { query: tool.arguments.query, matches, truncated: matches.length >= 40 || bytesRead >= 2_000_000 };
+  }
+  if (tool.name === 'write_file' && typeof tool.arguments?.path === 'string' && typeof tool.arguments?.content === 'string') {
+    const relativePath = tool.arguments.path;
+    const content = tool.arguments.content;
+    if (relativePath.length > 500 || content.length > 8000 || path.isAbsolute(relativePath) || relativePath.split(/[\\/]/).some((part) => part.startsWith('.'))) {
+      throw new Error('El camí o el contingut no es pot revisar de manera segura. Usa el panell editor per a fitxers més grans.');
+    }
+    const target = safeProjectPath(root, relativePath);
+    const parent = await fs.realpath(path.dirname(target));
+    if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
+    let existing = null;
+    try {
+      const stat = await fs.lstat(target);
+      if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Només es poden modificar fitxers normals.');
+      existing = { path: await fs.realpath(target), content: await fs.readFile(target, 'utf8') };
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (existing && !isWithin(root, existing.path)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
+    if (existing && existing.content.length > 8000) throw new Error('El fitxer actual és massa llarg per mostrar-lo complet a la confirmació. Obre’l a l’editor per revisar-lo manualment.');
+    const decision = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Cancel·la', 'Aplica el canvi'],
+      defaultId: 0,
+      cancelId: 0,
+      title: existing ? 'Revisar canvi proposat' : 'Revisar fitxer nou',
+      message: `${existing ? 'L’agent proposa modificar' : 'L’agent proposa crear'} ${relativePath}. Revisa el contingut abans d’aplicar-lo.`,
+      detail: `CONTINGUT ACTUAL:\n${existing?.content ?? '(fitxer nou)'}\n\nCONTINGUT PROPOSAT:\n${content}`
+    });
+    if (decision.response !== 1) return { applied: false, denied: true, path: relativePath };
+    const saved = await writeProjectFile(root, relativePath, content, { allowCreate: true });
+    return { applied: true, path: relativePath, created: !existing, backupPath: saved.backupPath };
+  }
+  throw new Error('Eina desconeguda o arguments invàlids.');
+}
+
 function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
   const child = fork(path.join(__dirname, '..', 'core', 'assistant', 'agent-worker.cjs'), [], {
@@ -26,6 +115,14 @@ function startModelWorker() {
   modelWorker = child;
   child.on('message', (message) => {
     if (message?.type === 'status') { win?.webContents.send('agent:status', message.value); return; }
+    if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
+      dispatchAgentTool(message.tool, message.projectRoot).then((result) => {
+        if (child.connected) child.send({ type: 'tool-result', id: message.id, toolId: message.toolId, result });
+      }).catch((error) => {
+        if (child.connected) child.send({ type: 'tool-result', id: message.id, toolId: message.toolId, result: { error: error?.message || String(error) } });
+      });
+      return;
+    }
     const pending = pendingModelRequests.get(message?.id);
     if (!pending) return;
     pendingModelRequests.delete(message.id);
@@ -135,22 +232,7 @@ ipcMain.handle('project:write', async (_e, relativePath, content) => {
   const resolved = await fs.realpath(target);
   if (!isWithin(root, resolved)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
 
-  const relative = path.relative(root, resolved);
-  const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(app.getPath('userData'), 'backups', projectKey, stamp, relative);
-  await fs.mkdir(path.dirname(backupPath), { recursive: true });
-  await fs.copyFile(resolved, backupPath);
-
-  const temporaryPath = `${resolved}.agentic-${process.pid}-${Date.now()}.tmp`;
-  try {
-    await fs.writeFile(temporaryPath, content, { encoding: 'utf8', mode: stat.mode });
-    await fs.rename(temporaryPath, resolved);
-  } catch (error) {
-    await fs.rm(temporaryPath, { force: true }).catch(() => {});
-    throw error;
-  }
-  return { ok: true, backupPath };
+  return { ok: true, ...(await writeProjectFile(root, relativePath, content, { allowCreate: false })) };
 });
 
 function safeProjectPath(root, relativePath) {
@@ -162,6 +244,74 @@ function safeProjectPath(root, relativePath) {
 
 function isWithin(root, target) {
   return target === root || target.startsWith(root + path.sep);
+}
+
+async function writeProjectFile(root, relativePath, content, { allowCreate }) {
+  const target = safeProjectPath(root, relativePath);
+  const parent = await fs.realpath(path.dirname(target));
+  if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
+  let stat = null;
+  let resolved = path.join(parent, path.basename(target));
+  try {
+    stat = await fs.lstat(target);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Només es poden editar fitxers normals del projecte.');
+    resolved = await fs.realpath(target);
+    if (!isWithin(root, resolved)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    if (!allowCreate) throw new Error('El fitxer ja no existeix al projecte.');
+  }
+
+  let backupPath = null;
+  if (stat) {
+    const relative = path.relative(root, resolved);
+    const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}`;
+    backupPath = path.join(app.getPath('userData'), 'backups', projectKey, stamp, relative);
+    await fs.mkdir(path.dirname(backupPath), { recursive: true });
+    await fs.copyFile(resolved, backupPath);
+  }
+
+  const temporaryPath = path.join(parent, `.${path.basename(resolved)}.agentic-${process.pid}-${Date.now()}.tmp`);
+  try {
+    await fs.writeFile(temporaryPath, content, { encoding: 'utf8', mode: stat?.mode ?? 0o644, flag: 'wx' });
+    if (stat) await fs.rename(temporaryPath, resolved);
+    else {
+      await fs.link(temporaryPath, resolved);
+      await fs.rm(temporaryPath, { force: true });
+    }
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
+  }
+  return { backupPath };
+}
+
+async function executeProjectTests(root) {
+  return new Promise((resolve) => {
+    const child = spawn('npm', ['test'], { cwd: root, shell: false, detached: process.platform !== 'win32', env: { ...process.env, CI: '1' } });
+    let output = '';
+    let settled = false;
+    let timedOut = false;
+    const append = (chunk) => { output = (output + chunk.toString()).slice(-100000); };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { if (process.platform !== 'win32') process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); }
+      catch { child.kill('SIGTERM'); }
+    }, 120000);
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      resolve({ code: -1, output: `${output}\n${error.message}`, timedOut });
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      resolve({ code, output, timedOut });
+    });
+  });
 }
 
 ipcMain.handle('history:recent', async () => {
@@ -229,14 +379,7 @@ ipcMain.handle('project:run-tests', async () => {
   let pkg;
   try { pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')); } catch { throw new Error('No s’ha trobat un package.json vàlid.'); }
   if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
-  return new Promise((resolve) => {
-    const child = spawn('npm', ['test'], { cwd: selectedProject, shell: false, env: { ...process.env, CI: '1' } });
-    let output = '';
-    child.stdout.on('data', d => { output += d.toString(); win?.webContents.send('tests:output', d.toString()); });
-    child.stderr.on('data', d => { output += d.toString(); win?.webContents.send('tests:output', d.toString()); });
-    child.on('error', err => resolve({ code: -1, output: `${output}\n${err.message}` }));
-    child.on('close', code => resolve({ code, output }));
-  });
+  return executeProjectTests(selectedProject);
 });
 
 ipcMain.handle('terminal:run', async (_e, rawCommand) => {
