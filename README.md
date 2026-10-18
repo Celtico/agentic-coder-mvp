@@ -47,6 +47,20 @@ Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, pre
 `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat sota Apache-2.0. Consulta el model card abans de redistribuir pesos o crear un producte.
 
 
-## Primera i segona fase
-docs/primera-fase-projecte.md
-docs/segona-fase-projecte.md
+## Fases del projecte
+
+- [Primera fase: Agentic Desktop IDE](docs/primera-fase-projecte.md)
+- [Segona fase: aprenentatge autònom i evolució del model](docs/segona-fase-projecte.md)
+
+### Estat verificat
+
+| Fase | Estat actual |
+| --- | --- |
+| Motor local | Transformers.js amb Qwen2.5-Coder-1.5B funciona dins d’un procés Node local. La prova d’execució sense xarxa i l’acceleració Metal encara estan pendents. |
+| Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada i confirmació abans d’escriure o executar. No hi ha cancel·lació de generació ni una eina de shell lliure per al model. |
+| Navegador | Playwright ha inspeccionat una app Vue/Vite local: HTTP 200, sense errors de consola, pàgina ni xarxa, i captura desada. No s’ha validat encara el cicle complet d’editar, corregir un error preparat i tornar a provar. |
+| Interfície | React, TypeScript, Chakra UI, xat amb historial local, panells separables, navegador integrat, terminal i editor amb revisió. La distribució instal·lable encara no està feta. |
+| Memòria i aprenentatge | Converses i casos verificats es desen localment. No hi ha SQLite, embeddings recuperables ni entrenament automàtic. |
+| Distribució | L’app encara s’executa des del repositori; falten empaquetament, signatura i instal·lador de macOS. |
+
+El registre detallat de la decisió del motor i de les limitacions és a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
