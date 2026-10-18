@@ -1,0 +1,30 @@
+# Motor local i aprenentatge verificable
+
+## Decisió del motor
+
+La versió actual conserva `onnx-community/Qwen2.5-Coder-1.5B-Instruct` amb Transformers.js i ONNX Runtime. El model es carrega en un procés Node aïllat de l’UI, i la memòria cau es desa a `models/` dins del projecte de l’aplicació. La primera càrrega necessita Internet per obtenir els pesos; un cop complets, l’execució és local. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
+
+El codi separa ara el contracte `InferenceEngine` de l’orquestrador. `TransformersJsInferenceEngine` n’és la implementació actual i exposa càrrega, generació, descàrrega, estat i ús de memòria. Això permet provar altres runtimes sense reescriure la lògica de projecte.
+
+Qwen3-Coder-Next no s’activa com a candidat encara. La fitxa oficial el descriu com a 80B paràmetres totals (3B activats) en BF16; “3B actius” no implica que el model càpiga en 16 GB de RAM. La cerca feta no ha localitzat una distribució ONNX compatible i verificada per Transformers.js. Per tant, no es descarrega, no es converteix automàticament i no substitueix el model estable.
+
+Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Provider per macOS, però això no demostra que el paquet Node utilitzat per aquesta aplicació l’estigui carregant. L’acceleració Apple Silicon queda pendent d’una prova mesurada al Mac; no es mostra com a disponible fins llavors.
+
+## Aprenentatge i versions
+
+- L’historial existent de xat és context, no dades d’entrenament aprovades.
+- Les còpies de seguretat dels fitxers editats són separades de la memòria de l’agent.
+- Els embeddings i la cerca semàntica han de ser un component independent de la generació. Encara no estan implementats.
+- No hi ha fine-tuning ni tasca nocturna activa. Primer cal una col·lecció de casos seleccionats, amb procedència i resultats reproduïbles, i un runtime d’entrenament compatible amb el model i el Mac.
+- Els pesos estables no s’han de sobreescriure. Qualsevol candidat futur s’ha de guardar en una ubicació versionada, avaluar amb tasques fixes i activar només després de superar els criteris objectius.
+
+## Estat del flux de l’agent
+
+Ja existeixen selecció persistent de projecte, context de fitxers limitat, edició amb confirmació i còpia de seguretat, execució explícita de proves, terminal amb confirmació i un webview integrat. L’agent encara no té un bucle de crides estructurades a eines, vista de diff dedicada, automatització Playwright, persistència SQLite, cancel·lació real de generació ni entrenament. Aquests elements no es consideren completats ni se simulen.
+
+## Fonts tècniques consultades
+
+- [Transformers.js: configuració de cache i models locals](https://huggingface.co/docs/transformers.js/api/env)
+- [Model ONNX Qwen2.5-Coder-1.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct)
+- [Model card Qwen3-Coder-Next](https://huggingface.co/Qwen/Qwen3-Coder-Next)
+- [ONNX Runtime: CoreML Execution Provider](https://onnxruntime.ai/docs/execution-providers/CoreML-ExecutionProvider.html)

@@ -6,5 +6,6 @@ dist/
 backups/
 src/app.bundle.js
 src/app.bundle.css
+src/core/assistant/agent-runtime.cjs
 models/
 *.before-*

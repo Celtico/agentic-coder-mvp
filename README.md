@@ -9,6 +9,9 @@ Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. N
 - Context limitat del projecte i registre local de les converses a `~/.agentic-coder/memory/sessions.jsonl`.
 - Execució explícita de `npm test` al projecte seleccionat.
 - Límits bàsics de ruta i mida per a lectura/escriptura a través de l'IPC.
+- Contracte `InferenceEngine` tipat i implementació Transformers.js aïllada de l'orquestrador.
+
+La decisió del motor, l'estat de compatibilitat de Qwen3-Coder-Next i les fases pendents d'aprenentatge verificable estan documentats a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
 
 ## Requisits
 - macOS amb Apple Silicon.

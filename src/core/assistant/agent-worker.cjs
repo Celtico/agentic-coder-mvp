@@ -1,4 +1,4 @@
-const { LocalCodingAgent } = require('./agent.cjs');
+const { LocalCodingAgent } = require('./agent-runtime.cjs');
 
 const agent = new LocalCodingAgent({ onStatus: (value) => process.send?.({ type: 'status', value }) });
 process.on('message', async (message) => {

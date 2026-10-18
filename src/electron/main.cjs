@@ -20,7 +20,7 @@ function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
   const child = fork(path.join(__dirname, '..', 'core', 'assistant', 'agent-worker.cjs'), [], {
     execArgv: [],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models') },
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   });
   modelWorker = child;

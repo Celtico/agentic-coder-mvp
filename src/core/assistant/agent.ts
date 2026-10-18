@@ -1,32 +1,26 @@
-const path = require('node:path');
-const fs = require('node:fs/promises');
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import process from 'node:process';
+import { TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine } from './inference-engine';
 
-class LocalCodingAgent {
-  constructor({ onStatus = () => {} } = {}) {
+export type AgentStatus = { type: 'status'; message: string };
+
+export class LocalCodingAgent {
+  private readonly onStatus: (status: AgentStatus) => void;
+  private readonly engine: InferenceEngine;
+  private readonly historyDir: string;
+
+  constructor({ onStatus = () => {}, engine = new TransformersJsInferenceEngine() }: {
+    onStatus?: (status: AgentStatus) => void;
+    engine?: InferenceEngine;
+  } = {}) {
     this.onStatus = onStatus;
-    this.generator = null;
-    this.loading = null;
-    this.modelId = process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct';
-    this.historyDir = path.join(require('node:os').homedir(), '.agentic-coder', 'memory');
+    this.engine = engine;
+    this.historyDir = path.join(os.homedir(), '.agentic-coder', 'memory');
   }
 
-  async loadModel() {
-    if (this.generator) return this.generator;
-    if (this.loading) return this.loading;
-    this.loading = (async () => {
-      this.onStatus({ type: 'status', message: `Carregant model local: ${this.modelId}. La primera execució descarrega els pesos.` });
-      const { pipeline, env } = await import('@huggingface/transformers');
-      // Keep downloaded model weights inside the project so they are easy to find
-      // and back up. Transformers.js creates the cache structure on first download.
-      env.cacheDir = path.join(__dirname, '..', '..', '..', 'models');
-      this.generator = await pipeline('text-generation', this.modelId, { dtype: 'q4' });
-      this.onStatus({ type: 'status', message: 'Model carregat.' });
-      return this.generator;
-    })();
-    try { return await this.loading; } finally { this.loading = null; }
-  }
-
-  async ask(prompt, projectRoot) {
+  async ask(prompt: string, projectRoot: string): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
     const context = await this.collectContext(projectRoot);
     const system = [
@@ -38,42 +32,46 @@ class LocalCodingAgent {
       'No afirmis que has modificat fitxers. Si proposes canvis, indica la ruta relativa correcta i mostra un diff o el contingut complet que cal revisar i desar des de l’editor.',
       'No inventis resultats de proves ni contingut que no aparegui al context.',
       `Mapa de fitxers del projecte (pot estar retallat):\n${context.manifest || '(no s’han trobat fitxers visibles)'}`,
-      `Contingut llegit per a aquesta petició (límit aproximat de 20 KB):\n${context.contents || '(no hi ha fitxers de text compatibles dins del límit)'}`
+      `Contingut llegit per a aquesta petició (límit aproximat de 20 KB):\n${context.contents || '(no hi ha fitxers de text compatibles dins del límit)'}`,
     ].join('\n\n');
-    const generator = await this.loadModel();
-    this.onStatus({ type: 'status', message: 'Generant resposta…' });
-    const result = await generator([
+
+    await this.engine.loadModel((message) => this.onStatus({ type: 'status', message }));
+    this.onStatus({ type: 'status', message: 'Generant resposta local…' });
+    const messages: ChatTurn[] = [
       { role: 'system', content: system },
-      { role: 'user', content: prompt }
-    ], { max_new_tokens: 700, temperature: 0.2, do_sample: false });
-    const text = result?.[0]?.generated_text;
-    let answer = '';
-    if (Array.isArray(text)) answer = text[text.length - 1]?.content || '';
-    else answer = String(text || 'No s’ha generat cap resposta.');
+      { role: 'user', content: prompt },
+    ];
+    const answer = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });
     await fs.mkdir(this.historyDir, { recursive: true });
-    await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({ at: new Date().toISOString(), model: this.modelId, prompt, answer }) + '\n');
-    this.onStatus({ type: 'status', message: 'Resposta generada i registrada a la memòria local.' });
+    await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({
+      at: new Date().toISOString(),
+      model: this.engine.getModelStatus().modelId,
+      prompt,
+      answer,
+    }) + '\n');
+    this.onStatus({ type: 'status', message: 'Resposta local generada i registrada a la memòria.' });
     return answer;
   }
 
-  async collectContext(root) {
+  private async collectContext(root: string): Promise<{ manifest: string; contents: string }> {
+    const absoluteRoot = path.resolve(root);
     const ignored = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'coverage', '.venv', 'venv', 'models']);
     const allowed = /\.(js|cjs|mjs|ts|tsx|jsx|json|md|html|css|py|go|rs|java|php|yml|yaml)$/i;
-    const manifest = [];
-    const snippets = [];
+    const manifest: string[] = [];
+    const snippets: string[] = [];
     let contentSize = 0;
     let manifestTruncated = false;
     const maxManifestEntries = 300;
     const maxContentSize = 20000;
 
-    async function walk(dir, depth = 0) {
+    const walk = async (dir: string, depth = 0): Promise<void> => {
       if (depth > 4) return;
       let entries;
       try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
       for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         if (entry.name.startsWith('.') || ignored.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
-        const relative = path.relative(root, full);
+        const relative = path.relative(absoluteRoot, full);
         if (entry.isDirectory()) {
           if (manifest.length < maxManifestEntries) manifest.push(`${relative}/`);
           else manifestTruncated = true;
@@ -95,14 +93,10 @@ class LocalCodingAgent {
           }
         } catch {}
       }
-    }
-
-    await walk(root);
-    if (manifestTruncated) manifest.push('… (mapa limitat a 300 entrades)');
-    return {
-      manifest: manifest.join('\n'),
-      contents: snippets.join('\n')
     };
+
+    await walk(absoluteRoot);
+    if (manifestTruncated) manifest.push('… (mapa limitat a 300 entrades)');
+    return { manifest: manifest.join('\n'), contents: snippets.join('\n') };
   }
 }
-module.exports = { LocalCodingAgent };
