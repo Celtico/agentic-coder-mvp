@@ -425,11 +425,11 @@ export function App(): React.JSX.Element {
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3">
           <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontWeight="semibold">Espai de treball</Flex>
-          <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
           {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
             <Text px="2" pt="2" pb="1" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text>
             <Stack gap="0.5">{sessions.filter((session) => session.messages.length > 0).slice(0, 12).map((session) => <Button key={session.id} size="sm" w="full" minW="0" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={session.title} onClick={() => selectSession(session.id)}>{session.title}</Button>)}</Stack>
           </Box>}
+          <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
           <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
         </Flex>
