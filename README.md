@@ -61,7 +61,7 @@ El model generatiu és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat so
 
 | Fase | Estat actual |
 | --- | --- |
-| Motor local | Transformers.js amb Qwen2.5-Coder-1.5B funciona dins d’un procés Node local. La prova d’execució sense xarxa i l’acceleració Metal encara estan pendents. |
+| Motor local | Transformers.js ha carregat Qwen2.5-Coder-1.5B des de `models/` i ha generat una resposta en un procés Node local. La prova amb la xarxa físicament desactivada i l’acceleració Metal encara estan pendents. |
 | Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada i confirmació abans d’escriure o executar. La generació es pot aturar tancant el procés aïllat del model, que es torna a carregar en la petició següent; les accions confirmades en curs no s’interrompen. No hi ha una eina de shell lliure per al model. |
 | Navegador | Playwright ha inspeccionat una app Vue/Vite local: HTTP 200, sense errors de consola, pàgina ni xarxa, i captura desada. No s’ha validat encara el cicle complet d’editar, corregir un error preparat i tornar a provar. |
 | Interfície | React, TypeScript, Chakra UI, xat amb historial local, panells separables, navegador integrat, terminal, editor amb revisió i panell Git de només lectura. La distribució instal·lable encara no està feta. |

@@ -2,7 +2,7 @@
 
 ## Decisió del motor
 
-La versió actual conserva `onnx-community/Qwen2.5-Coder-1.5B-Instruct` amb Transformers.js i ONNX Runtime. El model es carrega en un procés Node aïllat de l’UI, i la memòria cau es desa a `models/` dins del projecte de l’aplicació. La primera càrrega necessita Internet per obtenir els pesos; un cop complets, l’execució és local. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
+La versió actual conserva `onnx-community/Qwen2.5-Coder-1.5B-Instruct` amb Transformers.js i ONNX Runtime. El model es carrega en un procés Node aïllat de l’UI, i la memòria cau es desa a `models/` dins del projecte de l’aplicació. En l’última comprovació s’ha carregat des d’aquesta ruta local i ha generat «OK»; el runtime té desactivada la càrrega de models remots. La primera càrrega necessita Internet per obtenir els pesos; un cop complets, la inferència és local. La prova amb la xarxa físicament desactivada encara queda pendent. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
 
 El codi separa ara el contracte `InferenceEngine` de l’orquestrador. `TransformersJsInferenceEngine` n’és la implementació actual i exposa càrrega, generació, descàrrega, estat i ús de memòria. Això permet provar altres runtimes sense reescriure la lògica de projecte.
 
