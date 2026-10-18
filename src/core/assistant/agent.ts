@@ -11,14 +11,27 @@ export type AgentToolExecutor = (tool: AgentToolCall) => Promise<unknown>;
 type AgentAction = { type: 'final'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown };
 
 function parseAction(raw: string): AgentAction | null {
-  try {
-    const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-    const value: unknown = JSON.parse(normalized);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const action = value as Record<string, unknown>;
-    if (action.type === 'final' && typeof action.content === 'string') return { type: 'final', content: action.content };
-    if (action.type === 'tool_call' && typeof action.name === 'string') return { type: 'tool_call', name: action.name, arguments: action.arguments };
-  } catch {}
+  const parseCandidate = (candidate: string): AgentAction | null => {
+    try {
+      const value: unknown = JSON.parse(candidate.trim());
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const action = value as Record<string, unknown>;
+      if (action.type === 'final' && typeof action.content === 'string') return { type: 'final', content: action.content };
+      if (action.type === 'tool_call' && typeof action.name === 'string') return { type: 'tool_call', name: action.name, arguments: action.arguments };
+    } catch {}
+    return null;
+  };
+
+  const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const directAction = parseCandidate(normalized);
+  if (directAction) return directAction;
+
+  // Small local models often add an explanation before their JSON action.
+  // Only parse explicit fenced blocks, so arbitrary JSON in project text is not executed.
+  for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+    const fencedAction = parseCandidate(match[1]);
+    if (fencedAction) return fencedAction;
+  }
   return null;
 }
 
@@ -80,7 +93,7 @@ export class LocalCodingAgent {
       if (action.type === 'final') { answer = action.content; break; }
       const tool = validateToolCall(action);
       if (!tool) {
-        messages.push({ role: 'assistant', content: raw }, { role: 'user', content: 'La crida no és vàlida o l’eina no està disponible. Continua amb una resposta final en JSON.' });
+        messages.push({ role: 'assistant', content: raw }, { role: 'user', content: 'La crida no és vàlida o l’eina no està disponible. Continua amb una resposta final en prosa clara.' });
         continue;
       }
       messages.push({ role: 'assistant', content: raw });
