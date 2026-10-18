@@ -7,7 +7,8 @@ import {
 import {
   LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
-  LuMessageSquarePlus as MessageSquarePlus, LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
+  LuPlay as Play, LuRefreshCw as RefreshCw,
   LuSend as Send, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -17,6 +18,7 @@ const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
+const NAVIGATION_SPLIT_KEY = 'agentic-navigation-split-size-v1';
 type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
 type WorkspacePanel = 'browser' | 'terminal' | 'editor';
 
@@ -102,6 +104,14 @@ export function App(): React.JSX.Element {
   const [editorStatus, setEditorStatus] = useState('');
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
+  const [navigationOpen, setNavigationOpen] = useState(true);
+  const [navigationSplitSize, setNavigationSplitSize] = useState(() => {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(NAVIGATION_SPLIT_KEY) || 'null');
+      return Array.isArray(value) && value.length === 2 ? value as number[] : [18, 82];
+    } catch { return [18, 82]; }
+  });
+  const lastExpandedNavigationSplitSizeRef = useRef(navigationSplitSize);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
@@ -390,9 +400,29 @@ export function App(): React.JSX.Element {
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={newChat}/>
           <IconButton icon={FolderOpen} label="Selecciona projecte" w="44px" h="44px" onClick={selectProject}/>
+          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="44px" h="44px" onClick={() => {
+            if (navigationOpen) {
+              setNavigationOpen(false);
+              setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
+            } else {
+              setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
+              setNavigationOpen(true);
+            }
+          }}/>
           <IconButton icon={Globe2} label="Obre el navegador" w="44px" h="44px" onClick={() => setWorkspacePanel('browser')}/>
           <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" w="44px" h="44px" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
         </Flex>
+        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={navigationSplitSize} onResize={(details) => setNavigationSplitSize(details.size)} onResizeEnd={(details) => {
+          if (details.size[0] <= 12) {
+            setNavigationOpen(false);
+            setNavigationSplitSize(lastExpandedNavigationSplitSizeRef.current);
+            return;
+          }
+          lastExpandedNavigationSplitSizeRef.current = details.size;
+          setNavigationSplitSize(details.size);
+          localStorage.setItem(NAVIGATION_SPLIT_KEY, JSON.stringify(details.size));
+        }}>
+        <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3">
           <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontWeight="semibold">Espai de treball</Flex>
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
@@ -403,7 +433,10 @@ export function App(): React.JSX.Element {
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
           <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
         </Flex>
-        <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>
+        </Splitter.Panel>
+        <SplitterHandle id={'navigation:main' as SplitterHandleId}/>
+        <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
+        </Splitter.Root> : <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>}
     </Grid>
   );
 }
