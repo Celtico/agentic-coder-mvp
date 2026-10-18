@@ -58,7 +58,7 @@ Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, pre
 | Fase | Estat actual |
 | --- | --- |
 | Motor local | Transformers.js amb Qwen2.5-Coder-1.5B funciona dins d’un procés Node local. La prova d’execució sense xarxa i l’acceleració Metal encara estan pendents. |
-| Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada i confirmació abans d’escriure o executar. No hi ha cancel·lació de generació ni una eina de shell lliure per al model. |
+| Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada i confirmació abans d’escriure o executar. La generació es pot aturar tancant el procés aïllat del model, que es torna a carregar en la petició següent; les accions confirmades en curs no s’interrompen. No hi ha una eina de shell lliure per al model. |
 | Navegador | Playwright ha inspeccionat una app Vue/Vite local: HTTP 200, sense errors de consola, pàgina ni xarxa, i captura desada. No s’ha validat encara el cicle complet d’editar, corregir un error preparat i tornar a provar. |
 | Interfície | React, TypeScript, Chakra UI, xat amb historial local, panells separables, navegador integrat, terminal i editor amb revisió. La distribució instal·lable encara no està feta. |
 | Memòria i aprenentatge | Converses i casos verificats es desen localment; l’agent recupera fins a tres casos semblants del mateix projecte amb coincidència de paraules. No hi ha SQLite, embeddings ni entrenament automàtic. |

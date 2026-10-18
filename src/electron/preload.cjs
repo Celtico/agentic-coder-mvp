@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('agentic', {
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (prompt) => ipcRenderer.invoke('agent:ask', prompt),
+  cancel: () => ipcRenderer.invoke('agent:cancel'),
   recentHistory: () => ipcRenderer.invoke('history:recent'),
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
   runTests: () => ipcRenderer.invoke('project:run-tests'),

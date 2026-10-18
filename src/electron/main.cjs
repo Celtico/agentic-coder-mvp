@@ -9,6 +9,8 @@ let win;
 let modelWorker = null;
 let requestId = 0;
 const pendingModelRequests = new Map();
+const activeModelToolCalls = new Set();
+let activeModelRequestId = null;
 let selectedProject = null;
 let activeProjectProcess = null;
 let activeProjectRoot = null;
@@ -303,27 +305,32 @@ function startModelWorker() {
   child.on('message', (message) => {
     if (message?.type === 'status') { win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
+      const toolKey = `${message.id}:${message.toolId}`;
+      activeModelToolCalls.add(toolKey);
       dispatchAgentTool(message.tool, message.projectRoot).then((result) => {
         if (child.connected) child.send({ type: 'tool-result', id: message.id, toolId: message.toolId, result });
       }).catch((error) => {
         if (child.connected) child.send({ type: 'tool-result', id: message.id, toolId: message.toolId, result: { error: error?.message || String(error) } });
-      });
+      }).finally(() => activeModelToolCalls.delete(toolKey));
       return;
     }
     const pending = pendingModelRequests.get(message?.id);
     if (!pending) return;
     pendingModelRequests.delete(message.id);
+    if (activeModelRequestId === message.id) activeModelRequestId = null;
     if (message.error) pending.reject(new Error(message.error)); else pending.resolve(message.answer);
   });
   child.on('error', (error) => {
     for (const pending of pendingModelRequests.values()) pending.reject(error);
     pendingModelRequests.clear();
+    activeModelRequestId = null;
     if (modelWorker === child) modelWorker = null;
   });
   child.on('exit', (code, signal) => {
     const reason = signal ? `senyal ${signal}` : `codi ${code}`;
     for (const pending of pendingModelRequests.values()) pending.reject(new Error(`El procés aïllat del model s’ha aturat (${reason}). La finestra de l’app continua oberta; torna-ho a provar.`));
     pendingModelRequests.clear();
+    activeModelRequestId = null;
     if (modelWorker === child) modelWorker = null;
     if (win && !win.isDestroyed()) win.webContents.send('agent:status', { type: 'status', message: `El procés del model s’ha aturat (${reason}); la resta de l’app continua funcionant.` });
   });
@@ -347,16 +354,43 @@ function findNodeExecutable() {
 }
 
 function askModel(prompt, projectRoot) {
+  if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
   const child = startModelWorker();
   const id = ++requestId;
+  activeModelRequestId = id;
   return new Promise((resolve, reject) => {
     pendingModelRequests.set(id, { resolve, reject });
     child.send({ id, prompt, projectRoot }, (error) => {
       if (!error) return;
       pendingModelRequests.delete(id);
+      if (activeModelRequestId === id) activeModelRequestId = null;
       reject(error);
     });
   });
+}
+
+function cancelModelRequest() {
+  const id = activeModelRequestId;
+  if (id === null) return { cancelled: false, reason: 'no-active-request' };
+  if ([...activeModelToolCalls].some((key) => key.startsWith(`${id}:`))) {
+    return { cancelled: false, reason: 'confirmed-action-in-progress' };
+  }
+  const pending = pendingModelRequests.get(id);
+  if (!pending) return { cancelled: false, reason: 'no-active-request' };
+
+  pendingModelRequests.delete(id);
+  activeModelRequestId = null;
+  const child = modelWorker;
+  modelWorker = null;
+  pending.reject(new Error('Generació cancel·lada.'));
+  if (child && !child.killed) {
+    let exited = false;
+    const forceTimer = setTimeout(() => { if (!exited) child.kill('SIGKILL'); }, 1500);
+    forceTimer.unref();
+    child.once('exit', () => { exited = true; clearTimeout(forceTimer); });
+    child.kill('SIGTERM');
+  }
+  return { cancelled: true };
 }
 
 function createWindow() {
@@ -611,6 +645,8 @@ ipcMain.handle('agent:ask', async (_e, prompt) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   return askModel(String(prompt || ''), selectedProject);
 });
+
+ipcMain.handle('agent:cancel', async () => cancelModelRequest());
 
 ipcMain.handle('project:run-tests', async () => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');

@@ -9,7 +9,7 @@ import {
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuPlay as Play, LuRefreshCw as RefreshCw,
-  LuSend as Send, LuTerminal as TerminalIcon, LuX as X
+  LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -224,12 +224,25 @@ export function App(): React.JSX.Element {
       const answer = await window.agentic.ask(request);
       persistMessages([...pendingMessages, { role: 'assistant', text: answer }], requestSessionId);
     } catch (error) {
-      const text = `Error: ${errorText(error)}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
-      persistMessages([...pendingMessages, { role: 'assistant', text, error: true }], requestSessionId);
+      const message = errorText(error);
+      const cancelled = message.includes('Generació cancel·lada.');
+      const text = cancelled
+        ? 'Generació cancel·lada. El model local es tornarà a carregar quan enviïs la següent petició.'
+        : `Error: ${message}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
+      persistMessages([...pendingMessages, { role: 'assistant', text, error: !cancelled }], requestSessionId);
     } finally {
       setLoading(false); setStatus('Preparat');
       try { const refreshed = await window.agentic.currentProject(); if (refreshed) setProject(refreshed); } catch {}
     }
+  }
+
+  async function cancelPrompt() {
+    try {
+      const result = await window.agentic.cancel();
+      if (!result.cancelled && result.reason === 'confirmed-action-in-progress') {
+        setStatus('No es pot aturar una acció del projecte que ja s’està executant. Espera que acabi.');
+      } else if (!result.cancelled) setStatus('No hi ha cap generació que es pugui aturar.');
+    } catch (error) { setStatus(errorText(error)); }
   }
 
   async function runTests() {
@@ -337,7 +350,9 @@ export function App(): React.JSX.Element {
           <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
             <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">L’app demana confirmació abans d’executar o instal·lar.</Text></HStack>
-            <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt} disabled={loading}><Send size={17}/></Button>
+            {loading
+              ? <Button aria-label="Atura la generació" title="Atura la generació" colorPalette="red" rounded="full" size="sm" onClick={cancelPrompt}><Stop size={17}/></Button>
+              : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
           </Flex>
         </Box>
         <Text fontSize="xs" color="fg.muted" textAlign="center" mt="2">Les respostes poden contenir errors. Revisa els suggeriments abans d’aplicar-los.</Text>

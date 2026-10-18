@@ -12,6 +12,7 @@ export interface AgenticBridge {
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
   ask(prompt: string): Promise<string>;
+  cancel(): Promise<{ cancelled: boolean; reason?: string }>;
   recentHistory(): Promise<HistoryEntry[]>;
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
   runTests(): Promise<{ code: number; output: string }>;
