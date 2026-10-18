@@ -13,7 +13,7 @@ Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Pro
 ## Aprenentatge i versions
 
 - L’historial existent de xat és context, no dades d’entrenament aprovades. L’usuari pot desar manualment una resposta com a cas verificat indicant l’evidència; l’app demana confirmació, intenta detectar credencials conegudes i desa el registre local amb permisos restringits.
-- Els casos verificats són una col·lecció curada amb procedència, no un procés d’entrenament ni una garantia que el contingut sigui correcte. La recuperació d’aquests casos com a context encara no està connectada.
+- Els casos verificats són una col·lecció curada amb procedència, no un procés d’entrenament ni una garantia que el contingut sigui correcte. L’agent recupera fins a tres exemples amb coincidència de paraules a partir de la petició desada i només els inclou quan pertanyen exactament al mateix directori de projecte. No s’utilitzen embeddings.
 - Les còpies de seguretat dels fitxers editats són separades de la memòria de l’agent.
 - Els embeddings i la cerca semàntica han de ser un component independent de la generació. Encara no estan implementats.
 - No hi ha fine-tuning ni tasca nocturna activa. El primer pas de curació manual ja desa casos a `userData/learning/verified-experiences.jsonl`. Abans d’entrenar cal auditar-ne la qualitat, afegir avaluacions repetibles i validar un runtime d’entrenament compatible amb el model i el Mac.

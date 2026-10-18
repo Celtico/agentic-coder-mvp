@@ -295,6 +295,7 @@ function startModelWorker() {
       ...process.env,
       AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models'),
       AGENT_MODEL_PATH: path.resolve(__dirname, '..', '..', 'models', 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+      AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
     },
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   });

@@ -194,6 +194,45 @@ test('returns verified browser inspection facts without asking the model to rewr
   assert.doesNotMatch(answer, /base64|should-not-be-shown/);
 });
 
+test('uses only relevant, user-confirmed experiences from the same project', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-learning-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  const otherProject = path.join(tempRoot, 'other-project');
+  const experiencesPath = path.join(tempRoot, 'verified-experiences.jsonl');
+  await fs.mkdir(projectRoot);
+  await fs.mkdir(otherProject);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  const realProjectRoot = await fs.realpath(projectRoot);
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const records = [
+    { projectPath: realProjectRoot, verification: 'user-confirmed', prompt: 'Configurar alias Vite per TypeScript', answer: 'Cas confirmat: definir paths a tsconfig.', evidence: 'npm run check correcte' },
+    { projectPath: otherProject, verification: 'user-confirmed', prompt: 'Configurar alias Vite per TypeScript', answer: 'Dada privada d’un altre projecte', evidence: 'test correcte' },
+    { projectPath: realProjectRoot, verification: 'unconfirmed', prompt: 'Configurar alias Vite per TypeScript', answer: 'Cas encara no confirmat', evidence: 'test correcte' },
+    { projectPath: realProjectRoot, verification: 'user-confirmed', prompt: 'Canviar el color del botó verd', answer: 'Cas no relacionat', evidence: 'captura revisada' },
+  ];
+  await fs.writeFile(experiencesPath, records.map((record) => JSON.stringify(record)).join('\n') + '\n');
+
+  let systemPrompt = '';
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => {
+      systemPrompt = messages[0].content;
+      return '{"type":"final","content":"Tasca completada."}';
+    },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, verifiedExperiencesPath: experiencesPath });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  await agent.ask('Com configurar alias de Vite en TypeScript', projectRoot, async () => ({}));
+
+  assert.match(systemPrompt, /Cas confirmat: definir paths a tsconfig/);
+  assert.doesNotMatch(systemPrompt, /Dada privada d’un altre projecte/);
+  assert.doesNotMatch(systemPrompt, /Cas encara no confirmat/);
+  assert.doesNotMatch(systemPrompt, /Cas no relacionat/);
+});
+
 test('rejects browser inspection for non-local URLs', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-remote-browser-test-'));
   const projectRoot = path.join(tempRoot, 'project');
