@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
+import { recoverCompletedHistory } from './history-recovery';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
   Spinner, Splitter, Text, Textarea
@@ -141,14 +142,15 @@ export function App(): React.JSX.Element {
     const offTerminal = window.agentic.onTerminalOutput((chunk: string) => setTerminalOutput((prev) => (prev + chunk).slice(-100000)));
     let cancelled = false;
     (async () => {
-      if (localStorage.getItem(CHAT_KEY) === null) {
-        try {
-          const entries = await window.agentic.recentHistory();
-          if (!cancelled && entries?.length) persistMessages(entries.flatMap((entry) => [
-            { role: 'user', text: entry.prompt }, { role: 'assistant', text: entry.answer }
-          ]));
-        } catch {}
-      }
+      try {
+        const entries = await window.agentic.recentHistory();
+        if (!cancelled && entries?.length) setSessions((current) => {
+          const recovered = recoverCompletedHistory(current, entries);
+          if (recovered === current) return current;
+          localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(recovered));
+          return recovered;
+        });
+      } catch {}
       try { const saved = await window.agentic.currentProject(); if (!cancelled && saved) setProject(saved); }
       catch {}
     })();
