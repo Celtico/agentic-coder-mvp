@@ -251,7 +251,9 @@ test('uses only relevant, user-confirmed experiences from the same project', asy
     },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
-  const agent = new LocalCodingAgent({ engine, verifiedExperiencesPath: experiencesPath });
+  const agent = new LocalCodingAgent({ engine, verifiedExperiencesPath: experiencesPath, experienceRanker: {
+    rank: async (_prompt, values) => values.filter((value) => value.prompt.includes('alias')).map((value) => ({ ...value, score: 0.9 })),
+  } });
   agent.historyDir = path.join(tempRoot, 'history');
 
   await agent.ask('Com configurar alias de Vite en TypeScript', projectRoot, async () => ({}));

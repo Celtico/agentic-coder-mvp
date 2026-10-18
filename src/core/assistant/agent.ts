@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine } from './inference-engine';
+import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
 
 export type AgentStatus = { type: 'status'; message: string };
 export type AgentToolCall =
@@ -19,6 +20,7 @@ export type AgentToolCall =
 export type AgentToolExecutor = (tool: AgentToolCall) => Promise<unknown>;
 
 type AgentAction = { type: 'final'; content: string } | { type: 'plan'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown };
+type ExperienceRanker = { rank(prompt: string, values: EmbeddableExperience[], onStatus?: (message: string) => void): Promise<RankedExperience[]> };
 
 function parseAction(raw: string): AgentAction | null {
   const parseCandidate = (candidate: string): AgentAction | null => {
@@ -188,16 +190,20 @@ export class LocalCodingAgent {
   private readonly engine: InferenceEngine;
   private readonly historyDir: string;
   private readonly verifiedExperiencesPath?: string;
+  private readonly experienceRanker: ExperienceRanker;
+  private experienceEmbeddingsUnavailable = false;
 
-  constructor({ onStatus = () => {}, engine = new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH }: {
+  constructor({ onStatus = () => {}, engine = new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
     engine?: InferenceEngine;
     verifiedExperiencesPath?: string;
+    experienceRanker?: ExperienceRanker;
   } = {}) {
     this.onStatus = onStatus;
     this.engine = engine;
     this.historyDir = path.join(os.homedir(), '.agentic-coder', 'memory');
     this.verifiedExperiencesPath = verifiedExperiencesPath;
+    this.experienceRanker = experienceRanker;
   }
 
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor): Promise<string> {
@@ -298,7 +304,6 @@ export class LocalCodingAgent {
   private async collectVerifiedExperiences(prompt: string, projectRoot: string): Promise<string> {
     if (!this.verifiedExperiencesPath) return '';
     const queryWords = words(prompt);
-    if (queryWords.size < 2) return '';
     try {
       const stat = await fs.stat(this.verifiedExperiencesPath);
       if (!stat.isFile() || stat.size === 0) return '';
@@ -311,19 +316,34 @@ export class LocalCodingAgent {
         contents = buffer.toString('utf8');
       } finally { await handle.close(); }
       const root = await fs.realpath(projectRoot);
-      const candidates = contents.split(/\r?\n/).slice(-500).flatMap((line) => {
+      const candidates = contents.split(/\r?\n/).slice(-500).flatMap((line, index) => {
         try {
           const value = JSON.parse(line);
           if (value?.verification !== 'user-confirmed' || typeof value.projectPath !== 'string' || path.resolve(value.projectPath) !== root) return [];
           if ([value.prompt, value.answer, value.evidence].some((field) => typeof field !== 'string')) return [];
-          const sampleWords = words(value.prompt);
+          return [{ id: typeof value.id === 'string' ? value.id : `legacy-${index}`, prompt: value.prompt.slice(0, 1000), answer: value.answer.slice(0, 3000), evidence: value.evidence.slice(0, 500) }];
+        } catch { return []; }
+      });
+      if (!candidates.length) return '';
+      let ranked: RankedExperience[] = [];
+      if (!this.experienceEmbeddingsUnavailable) {
+        try {
+          ranked = await this.experienceRanker.rank(prompt, candidates, (message) => this.onStatus({ type: 'status', message }));
+        } catch {
+          this.experienceEmbeddingsUnavailable = true;
+          this.onStatus({ type: 'status', message: 'La cerca semàntica no està disponible; faré servir coincidències de paraules.' });
+        }
+      }
+      if (!ranked.length && queryWords.size >= 2) {
+        ranked = candidates.flatMap((item) => {
+          const sampleWords = words(item.prompt);
           let overlap = 0;
           for (const word of queryWords) if (sampleWords.has(word)) overlap += 1;
           if (overlap < 2 || overlap / queryWords.size < 0.2) return [];
-          return [{ overlap, prompt: value.prompt.slice(0, 1000), answer: value.answer.slice(0, 3000), evidence: value.evidence.slice(0, 500) }];
-        } catch { return []; }
-      });
-      return candidates.sort((a, b) => b.overlap - a.overlap).slice(0, 3).map((item, index) =>
+          return [{ ...item, score: overlap }];
+        }).sort((a, b) => b.score - a.score).slice(0, 3);
+      }
+      return ranked.slice(0, 3).map((item, index) =>
         `${index + 1}. Petició: ${item.prompt}\nResposta desada: ${item.answer}\nComprovació indicada: ${item.evidence}`
       ).join('\n\n');
     } catch { return ''; }
