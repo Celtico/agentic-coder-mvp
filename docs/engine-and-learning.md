@@ -8,7 +8,16 @@ El codi separa ara el contracte `InferenceEngine` de l’orquestrador. `Transfor
 
 Qwen3-Coder-Next no s’activa com a candidat encara. La fitxa oficial el descriu com a 80B paràmetres totals (3B activats) en BF16; “3B actius” no implica que el model càpiga en 16 GB de RAM. La cerca feta no ha localitzat una distribució ONNX compatible i verificada per Transformers.js. Per tant, no es descarrega, no es converteix automàticament i no substitueix el model estable.
 
-Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Provider per macOS, però això no demostra que el paquet Node utilitzat per aquesta aplicació l’estigui carregant. L’acceleració Apple Silicon queda pendent d’una prova mesurada al Mac; no es mostra com a disponible fins llavors.
+Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Provider per macOS, però aquesta app no l’ha verificat. Transformers.js 4.3.1 sí que ha executat un test directe amb `device: 'webgpu'` a Node al Mac; el resultat és al paràgraf següent.
+
+Proves de runtime al MacBook Pro M2 Pro amb 16 GB, 19 d’octubre de 2026:
+
+- Amb el Qwen2.5-Coder-1.5B local, Transformers.js 4.3.1 per defecte ha tardat 1,60 s a carregar i 0,88 s a generar. Amb `device: 'webgpu'`, ha tardat 1,72 s a carregar i 0,76 s a generar. En tots dos casos, en demanar exactament «Hello IA», ha respost «Hello! How can I assist you today?». WebGPU funciona en aquest procés Node, però aquesta petita prova no mostra una millora de qualitat i només una diferència modesta de velocitat.
+- MLX 0.32.4 amb `mlx-lm` 0.32.2 s’ha provat en un entorn Python temporal, sense servidor. El model `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` ocupa 4,28 GB. En una petició per crear «Hello IA», ha generat primer un pla i després una crida `write_file` coherent en 2,42 s i 3,78 s; el document generat feia servir `lang="es"` tot i que l’usuari s’expressava en català. El pic de memòria MLX mesurat ha estat de 4,39 GB. No s’ha escrit cap fitxer real en aquesta prova.
+- En una petició per comprovar Git, el mateix 7B ha triat `read_file(".git/config")` en lloc d’informar que no tenia cap eina de Git. L’usuari ja havia inicialitzat el repositori amb `git init` des de la terminal de l’app; aquesta acció no era l’objectiu de la prova. L’app té una vista Git de lectura (estat i diferències), però l’agent no té aquesta capacitat al seu catàleg d’eines. El model, a més, va triar una eina inadequada.
+- La càrrega MLX inicial ha trigat 11 min i 7 s, incloent-hi la descàrrega de 4,28 GB des de Hugging Face. Les execucions posteriors amb el model a la memòria cau han estat molt més ràpides. Els pesos es conserven a `models/.hf/`; l’entorn Python temporal no és una dependència del projecte ni una instal·lació de producció.
+
+La prova mostra que un model local més gran amb MLX és viable en aquesta màquina per a tasques petites, però encara falla en la selecció d’eines. No hi ha prou evidència per prometre edició autònoma fiable ni per executar dos models grans en paral·lel. Caldria integrar MLX com a runtime seleccionable, afegir les eines Git amb confirmació nativa i provar diversos casos reals abans d’activar-ho a la interfície.
 
 ## Aprenentatge i versions
 
@@ -47,4 +56,7 @@ El 19 d’octubre de 2026, una prova manual amb Qwen local sobre un projecte tem
 - [Transformers.js: configuració de cache i models locals](https://huggingface.co/docs/transformers.js/api/env)
 - [Model ONNX Qwen2.5-Coder-1.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct)
 - [Model card Qwen3-Coder-Next](https://huggingface.co/Qwen/Qwen3-Coder-Next)
+- [Transformers.js v4: WebGPU en Node.js](https://huggingface.co/blog/transformersjs-v4)
+- [Model MLX Qwen2.5-Coder-7B-Instruct quantitzat a 4 bits](https://huggingface.co/mlx-community/Qwen2.5-Coder-7B-Instruct-4bit)
+- [MLX-LM: codi i ús local](https://github.com/ml-explore/mlx-lm)
 - [ONNX Runtime: CoreML Execution Provider](https://onnxruntime.ai/docs/execution-providers/CoreML-ExecutionProvider.html)
