@@ -19,6 +19,7 @@ function cleanSession(value) {
     id: value.id,
     title: typeof value.title === 'string' ? value.title.slice(0, 200) : 'Conversa nova',
     updatedAt: typeof value.updatedAt === 'string' && !Number.isNaN(Date.parse(value.updatedAt)) ? value.updatedAt : new Date().toISOString(),
+    ...(typeof value.projectPath === 'string' && value.projectPath.length <= 4096 ? { projectPath: value.projectPath } : {}),
     messages,
   };
 }
@@ -32,11 +33,16 @@ class ChatStore {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+      project_path TEXT,
       messages_json TEXT NOT NULL
     )`);
-    this.listStatement = this.db.prepare('SELECT id, title, updated_at, messages_json FROM chat_sessions ORDER BY updated_at DESC');
-    this.upsertStatement = this.db.prepare(`INSERT INTO chat_sessions (id, title, updated_at, messages_json)
-      VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, updated_at=excluded.updated_at, messages_json=excluded.messages_json`);
+    if (!this.db.prepare('PRAGMA table_info(chat_sessions)').all().some((column) => column.name === 'project_path')) {
+      this.db.exec('ALTER TABLE chat_sessions ADD COLUMN project_path TEXT');
+    }
+    this.listStatement = this.db.prepare('SELECT id, title, updated_at, project_path, messages_json FROM chat_sessions ORDER BY updated_at DESC');
+    this.getStatement = this.db.prepare('SELECT id, title, updated_at, project_path, messages_json FROM chat_sessions WHERE id = ?');
+    this.upsertStatement = this.db.prepare(`INSERT INTO chat_sessions (id, title, updated_at, project_path, messages_json)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title=excluded.title, updated_at=excluded.updated_at, project_path=excluded.project_path, messages_json=excluded.messages_json`);
     this.deleteStatement = this.db.prepare('DELETE FROM chat_sessions WHERE id = ?');
     try { fs.chmodSync(filePath, 0o600); } catch {}
   }
@@ -44,10 +50,17 @@ class ChatStore {
   list() {
     return this.listStatement.all().flatMap((row) => {
       try {
-        const session = cleanSession({ id: row.id, title: row.title, updatedAt: row.updated_at, messages: JSON.parse(row.messages_json) });
+        const session = cleanSession({ id: row.id, title: row.title, updatedAt: row.updated_at, projectPath: row.project_path, messages: JSON.parse(row.messages_json) });
         return session ? [session] : [];
       } catch { return []; }
     }).slice(0, MAX_SESSIONS);
+  }
+
+  get(id) {
+    const row = this.getStatement.get(id);
+    if (!row) return null;
+    try { return cleanSession({ id: row.id, title: row.title, updatedAt: row.updated_at, projectPath: row.project_path, messages: JSON.parse(row.messages_json) }); }
+    catch { return null; }
   }
 
   saveMany(values) {
@@ -56,7 +69,7 @@ class ChatStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const ids = new Set(sessions.map((session) => session.id));
-      for (const session of sessions) this.upsertStatement.run(session.id, session.title, session.updatedAt, JSON.stringify(session.messages));
+      for (const session of sessions) this.upsertStatement.run(session.id, session.title, session.updatedAt, session.projectPath || null, JSON.stringify(session.messages));
       for (const row of this.listStatement.all()) if (!ids.has(row.id)) this.deleteStatement.run(row.id);
       this.db.exec('COMMIT');
     } catch (error) {

@@ -29,7 +29,7 @@ El bucle de l’agent pot inspeccionar una URL local amb Playwright quan el proj
 
 Quan un model petit concatena diversos objectes JSON en una resposta, l’orquestrador ara llegeix només el primer objecte complet si comença la resposta i continua el cicle d’eines a partir del resultat real. No busca crides dins de prosa arbitrària; cada eina encara passa per validació d’esquema i pels controls de confirmació existents.
 
-Les converses de la interfície es desen a SQLite a la carpeta de dades de l’aplicació, amb transaccions i límits de mida. En el primer inici es migren les sessions de `localStorage`, que es conserva com a còpia de recuperació. Això encara no vincula cada conversa a un projecte ni substitueix el registre JSONL utilitzat per recuperar intercanvis completats.
+Les converses de la interfície es desen a SQLite a la carpeta de dades de l’aplicació, amb transaccions i límits de mida. En el primer inici es migren les sessions de `localStorage`, que es conserva com a còpia de recuperació. Les converses noves s’associen al projecte actiu; en obrir una conversa associada, l’app restaura la carpeta si encara existeix. Les converses antigues sense associació es conserven i es vinculen quan s’utilitzen amb un projecte. El registre JSONL continua sent una font separada per recuperar intercanvis completats.
 
 La inspecció s’ha validat a l’app amb un projecte Vue/Vite local: HTTP 200, títol `Vite App`, cap error de consola, pàgina o xarxa, i captura PNG desada a les dades locals de l’aplicació. Després de la prova, la resposta s’ha canviat perquè l’orquestrador presenti directament els fets retornats per Playwright, sense demanar al model que els reescrigui.
 

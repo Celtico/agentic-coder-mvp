@@ -462,6 +462,19 @@ ipcMain.handle('project:current', async () => {
   return { path: selectedProject, files: await listFiles(selectedProject) };
 });
 
+ipcMain.handle('project:for-chat', async (_event, sessionId) => {
+  if (typeof sessionId !== 'string' || sessionId.length > 200) return null;
+  const session = getChatStore().get(sessionId);
+  if (!session?.projectPath) return null;
+  try {
+    const root = await fs.realpath(session.projectPath);
+    if (!(await fs.stat(root)).isDirectory()) return null;
+    selectedProject = root;
+    await saveSettings();
+    return { path: root, files: await listFiles(root) };
+  } catch { return null; }
+});
+
 ipcMain.handle('project:read', async (_e, relativePath) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
   const root = await fs.realpath(selectedProject);

@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('agentic', {
   openProject: () => ipcRenderer.invoke('project:open'),
   currentProject: () => ipcRenderer.invoke('project:current'),
+  projectForChat: (sessionId) => ipcRenderer.invoke('project:for-chat', sessionId),
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (prompt) => ipcRenderer.invoke('agent:ask', prompt),

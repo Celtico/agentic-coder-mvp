@@ -4,13 +4,14 @@ export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
 export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean };
 export type HistoryEntry = { prompt: string; answer: string; at?: string };
-export type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
+export type ChatSession = { id: string; title: string; updatedAt: string; projectPath?: string | null; messages: ChatMessage[] };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
   currentProject(): Promise<ProjectInfo | null>;
+  projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
   ask(prompt: string): Promise<string>;

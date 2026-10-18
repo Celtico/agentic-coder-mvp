@@ -22,12 +22,13 @@ const SPLIT_KEY = 'agentic-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git';
 
-function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova'): ChatSession {
+function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
   return {
     id: globalThis.crypto?.randomUUID?.() || `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title: prompt ? (prompt.length > 42 ? `${prompt.slice(0, 39)}…` : prompt) : title,
     updatedAt: new Date().toISOString(),
+    ...(projectPath ? { projectPath } : {}),
     messages: messages.slice(-100),
   };
 }
@@ -124,20 +125,47 @@ export function App(): React.JSX.Element {
     });
   }, []);
 
-  const persistMessages = useCallback((next: ChatMessage[], sessionId = activeSessionId) => {
+  const updateSessions = useCallback((update: (current: ChatSession[]) => ChatSession[]) => {
+    setSessions((current) => {
+      const next = update(current);
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+      storeSessions(next);
+      return next;
+    });
+  }, [storeSessions]);
+
+  const persistMessages = useCallback((next: ChatMessage[], sessionId = activeSessionId, projectPath?: string) => {
     const trimmed = next.slice(-100);
     setSessions((current) => {
       const existing = current.find((session) => session.id === sessionId);
       const prompt = trimmed.find((message) => message.role === 'user')?.text.trim();
       const updated = existing
         ? { ...existing, title: existing.title === 'Conversa nova' && prompt ? (prompt.length > 42 ? `${prompt.slice(0, 39)}…` : prompt) : existing.title, updatedAt: new Date().toISOString(), messages: trimmed }
-        : makeSession(trimmed);
-      const nextSessions = [updated, ...current.filter((session) => session.id !== sessionId)].slice(0, 50);
+        : makeSession(trimmed, 'Conversa nova', projectPath || project?.path);
+      const scoped = updated.projectPath || projectPath || project?.path;
+      const finalUpdated = scoped ? { ...updated, projectPath: scoped } : updated;
+      const nextSessions = [finalUpdated, ...current.filter((session) => session.id !== sessionId)].slice(0, 50);
       localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(nextSessions));
       storeSessions(nextSessions);
       return nextSessions;
     });
-  }, [activeSessionId, storeSessions]);
+  }, [activeSessionId, project?.path, storeSessions]);
+
+  const activateProject = useCallback((next: ProjectInfo, announce = false) => {
+    localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft);
+    const existing = sessions.find((session) => session.projectPath === next.path);
+    const session = existing || makeSession([], 'Conversa nova', next.path);
+    if (!existing) updateSessions((current) => [session, ...current].slice(0, 50));
+    localStorage.setItem(ACTIVE_SESSION_KEY, session.id);
+    setActiveSessionId(session.id);
+    setDraft(localStorage.getItem(`${DRAFT_KEY}:${session.id}`) || '');
+    setProject(next);
+    setBrowserContext('');
+    if (announce) {
+      const notice = `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar propostes de canvi.`;
+      persistMessages([...session.messages, { role: 'assistant', text: notice }], session.id, next.path);
+    }
+  }, [activeSessionId, draft, persistMessages, sessions, updateSessions]);
 
   useEffect(() => {
     const offStatus = window.agentic.onStatus((s) => {
@@ -174,7 +202,20 @@ export function App(): React.JSX.Element {
           return recovered;
         });
       } catch {}
-      try { const saved = await window.agentic.currentProject(); if (!cancelled && saved) setProject(saved); }
+      try {
+        const saved = await window.agentic.currentProject();
+        if (!cancelled && saved) {
+          setProject(saved);
+          setSessions((current) => {
+            const active = current.find((session) => session.id === localStorage.getItem(ACTIVE_SESSION_KEY));
+            if (!active || active.projectPath) return current;
+            const next = current.map((session) => session.id === active.id ? { ...session, projectPath: saved.path } : session);
+            localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+            storeSessions(next);
+            return next;
+          });
+        }
+      }
       catch {}
     })();
     return () => { cancelled = true; offStatus?.(); offTerminal?.(); };
@@ -205,8 +246,7 @@ export function App(): React.JSX.Element {
     try {
       const next = await window.agentic.openProject();
       if (!next) return;
-      setProject(next);
-      appendMessage('assistant', `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar propostes de canvi.`);
+      activateProject(next, true);
       setStatus('Projecte carregat');
     } catch (error) { setStatus(errorText(error)); }
   }
@@ -214,21 +254,25 @@ export function App(): React.JSX.Element {
   function newChat() {
     if (messages.length === 0 && !draft.trim()) { setBrowserContext(''); return; }
     localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft);
-    const session = makeSession();
-    setSessions((current) => {
-      const next = [session, ...current].slice(0, 50);
-      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
-      storeSessions(next);
-      return next;
-    });
+    const session = makeSession([], 'Conversa nova', project?.path);
+    updateSessions((current) => [session, ...current].slice(0, 50));
     localStorage.setItem(ACTIVE_SESSION_KEY, session.id);
     setActiveSessionId(session.id);
     setDraft('');
     setBrowserContext('');
   }
 
-  function selectSession(sessionId: string) {
+  async function selectSession(sessionId: string) {
     if (sessionId === activeSessionId) return;
+    const selected = sessions.find((session) => session.id === sessionId);
+    if (!selected) return;
+    if (selected.projectPath) {
+      try {
+        const nextProject = await window.agentic.projectForChat(sessionId);
+        if (!nextProject) { setStatus('La carpeta associada a aquesta conversa ja no està disponible.'); return; }
+        setProject(nextProject);
+      } catch (error) { setStatus(errorText(error)); return; }
+    }
     localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft);
     localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
     setActiveSessionId(sessionId);
@@ -519,7 +563,7 @@ export function App(): React.JSX.Element {
           <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontWeight="semibold">Espai de treball</Flex>
           {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
             <Text px="2" pt="2" pb="1" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text>
-            <Stack gap="0.5">{sessions.filter((session) => session.messages.length > 0).slice(0, 12).map((session) => <Button key={session.id} size="sm" w="full" minW="0" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={session.title} onClick={() => selectSession(session.id)}>{session.title}</Button>)}</Stack>
+            <Stack gap="0.5">{sessions.filter((session) => session.messages.length > 0 && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Button key={session.id} size="sm" w="full" minW="0" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={session.title} onClick={() => void selectSession(session.id)}>{session.title}</Button>)}</Stack>
           </Box>}
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
