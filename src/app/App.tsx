@@ -250,9 +250,9 @@ export function App(): React.JSX.Element {
     if (!window.confirm(`Desar els canvis a ${editingPath}?`)) return;
     setEditorBusy(true);
     try {
-      await window.agentic.writeFile(editingPath, editorContent);
+      const saved = await window.agentic.writeFile(editingPath, editorContent);
       setEditorOriginal(editorContent); setEditingPath(null); setWorkspacePanel(null);
-      appendMessage('assistant', `Canvi desat a ${editingPath}.`);
+      appendMessage('assistant', `Canvi desat a ${editingPath}.\nCòpia de seguretat local: ${saved.backupPath}`);
     } catch (error) { setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
   }

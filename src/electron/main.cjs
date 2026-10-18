@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 
 let win;
@@ -115,25 +116,41 @@ ipcMain.handle('project:current', async () => {
 
 ipcMain.handle('project:read', async (_e, relativePath) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
-  const target = safeProjectPath(selectedProject, relativePath);
-  const stat = await fs.stat(target);
+  const root = await fs.realpath(selectedProject);
+  const target = safeProjectPath(root, relativePath);
+  const resolved = await fs.realpath(target);
+  if (!isWithin(root, resolved)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
+  const stat = await fs.stat(resolved);
   if (!stat.isFile() || stat.size > 1_000_000) throw new Error('Fitxer no vàlid o massa gran (límit 1 MB).');
-  return fs.readFile(target, 'utf8');
+  return fs.readFile(resolved, 'utf8');
 });
 
 ipcMain.handle('project:write', async (_e, relativePath, content) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
   if (typeof content !== 'string' || content.length > 1_000_000) throw new Error('Contingut invàlid o massa gran.');
-  const target = safeProjectPath(selectedProject, relativePath);
+  const root = await fs.realpath(selectedProject);
+  const target = safeProjectPath(root, relativePath);
+  const stat = await fs.lstat(target);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Només es poden editar fitxers normals existents del projecte.');
+  const resolved = await fs.realpath(target);
+  if (!isWithin(root, resolved)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
+
+  const relative = path.relative(root, resolved);
+  const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(app.getPath('userData'), 'backups', projectKey, stamp, relative);
+  await fs.mkdir(path.dirname(backupPath), { recursive: true });
+  await fs.copyFile(resolved, backupPath);
+
+  const temporaryPath = `${resolved}.agentic-${process.pid}-${Date.now()}.tmp`;
   try {
-    const stat = await fs.lstat(target);
-    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Només es poden editar fitxers normals del projecte.');
+    await fs.writeFile(temporaryPath, content, { encoding: 'utf8', mode: stat.mode });
+    await fs.rename(temporaryPath, resolved);
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    await fs.rm(temporaryPath, { force: true }).catch(() => {});
+    throw error;
   }
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, content, 'utf8');
-  return { ok: true };
+  return { ok: true, backupPath };
 });
 
 function safeProjectPath(root, relativePath) {
@@ -141,6 +158,10 @@ function safeProjectPath(root, relativePath) {
   const target = path.resolve(root, relativePath);
   if (target !== root && !target.startsWith(root + path.sep)) throw new Error('Ruta fora del projecte.');
   return target;
+}
+
+function isWithin(root, target) {
+  return target === root || target.startsWith(root + path.sep);
 }
 
 ipcMain.handle('history:recent', async () => {
