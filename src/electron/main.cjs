@@ -89,6 +89,8 @@ async function dispatchAgentTool(tool, projectRoot) {
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (existing && !isWithin(root, existing.path)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
     if (existing && existing.content.length > 8000) throw new Error('El fitxer actual és massa llarg per mostrar-lo complet a la confirmació. Obre’l a l’editor per revisar-lo manualment.');
+    if (existing?.content === content) return { applied: false, unchanged: true, path: relativePath };
+    const diff = createReviewDiff(existing?.content ?? '', content);
     const decision = await dialog.showMessageBox(win, {
       type: 'warning',
       buttons: ['Cancel·la', 'Aplica el canvi'],
@@ -96,7 +98,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       cancelId: 0,
       title: existing ? 'Revisar canvi proposat' : 'Revisar fitxer nou',
       message: `${existing ? 'L’agent proposa modificar' : 'L’agent proposa crear'} ${relativePath}. Revisa el contingut abans d’aplicar-lo.`,
-      detail: `CONTINGUT ACTUAL:\n${existing?.content ?? '(fitxer nou)'}\n\nCONTINGUT PROPOSAT:\n${content}`
+      detail: `DIFERÈNCIA (una secció):\n${diff}\n\nCONTINGUT ACTUAL:\n${existing?.content ?? '(fitxer nou)'}\n\nCONTINGUT PROPOSAT:\n${content}`
     });
     if (decision.response !== 1) return { applied: false, denied: true, path: relativePath };
     const saved = await writeProjectFile(root, relativePath, content, { allowCreate: true });
@@ -244,6 +246,23 @@ function safeProjectPath(root, relativePath) {
 
 function isWithin(root, target) {
   return target === root || target.startsWith(root + path.sep);
+}
+
+function createReviewDiff(before, after) {
+  const oldLines = before.split(/\r?\n/);
+  const newLines = after.split(/\r?\n/);
+  let prefix = 0;
+  while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) prefix += 1;
+  let oldTail = oldLines.length - 1;
+  let newTail = newLines.length - 1;
+  while (oldTail >= prefix && newTail >= prefix && oldLines[oldTail] === newLines[newTail]) { oldTail -= 1; newTail -= 1; }
+  const removed = oldLines.slice(prefix, oldTail + 1);
+  const added = newLines.slice(prefix, newTail + 1);
+  const hunk = [`@@ -${prefix + 1},${removed.length} +${prefix + 1},${added.length} @@`];
+  if (prefix > 0) hunk.push(` ${oldLines[prefix - 1]}`);
+  hunk.push(...removed.map((line) => `-${line}`), ...added.map((line) => `+${line}`));
+  if (oldTail + 1 < oldLines.length) hunk.push(` ${oldLines[oldTail + 1]}`);
+  return hunk.join('\n').slice(0, 18000);
 }
 
 async function writeProjectFile(root, relativePath, content, { allowCreate }) {
