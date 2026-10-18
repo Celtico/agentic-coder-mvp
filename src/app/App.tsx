@@ -221,12 +221,12 @@ export function App(): React.JSX.Element {
   async function saveEdit() {
     if (!editingPath) return;
     if (editorContent === editorOriginal) { setEditorStatus('No hi ha canvis.'); return; }
-    if (!window.confirm(`Desar els canvis a ${editingPath}? Es crearà una còpia de seguretat local de l’original.`)) return;
+    if (!window.confirm(`Desar els canvis a ${editingPath}?`)) return;
     setEditorBusy(true);
     try {
-      const result = await window.agentic.writeFile(editingPath, editorContent);
+      await window.agentic.writeFile(editingPath, editorContent);
       setEditorOriginal(editorContent); setEditingPath(null);
-      appendMessage('assistant', `Canvi desat a ${editingPath}. Còpia de seguretat: ${result.backupPath}`);
+      appendMessage('assistant', `Canvi desat a ${editingPath}.`);
     } catch (error) { setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
   }
@@ -320,9 +320,9 @@ export function App(): React.JSX.Element {
   }, [browserOpen]);
 
   const mainContent = browserOpen ? (
-    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'browser', minSize: 25 }]} defaultSize={splitSize} onResize={(details) => { setSplitSize(details.size); localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size)); }} css={{ '& [data-scope="splitter"][data-part="resize-trigger"]': { w: '7px', flex: 'none', bg: 'surface.subtle', cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', outline: 'none' }, '& [data-scope="splitter"][data-part="resize-trigger"]:hover, & [data-scope="splitter"][data-part="resize-trigger"]:focus-visible': { bg: 'accent' }, '& [data-scope="splitter"][data-part="resize-trigger-separator"]': { w: '2px', h: '42px', borderRadius: '4px', bg: 'fg.muted' }, '& [data-scope="splitter"][data-part="panel"]': { overflow: 'hidden', minW: '0', minH: '0' } }}>
+    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'browser', minSize: 25 }]} defaultSize={splitSize} onResize={(details) => { setSplitSize(details.size); localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size)); }}>
       <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
-      <Splitter.ResizeTrigger id="chat:browser"><Splitter.ResizeTriggerSeparator/><Splitter.ResizeTriggerIndicator/></Splitter.ResizeTrigger>
+      <Splitter.ResizeTrigger id="chat:browser" w="7px" flex="none" bg="surface.subtle" cursor="col-resize" display="flex" alignItems="center" justifyContent="center" outline="none" _hover={{ bg: 'accent' }} _focusVisible={{ bg: 'accent' }}><Splitter.ResizeTriggerSeparator w="2px" h="42px" borderRadius="4px" bg="fg.muted"/><Splitter.ResizeTriggerIndicator/></Splitter.ResizeTrigger>
       <Splitter.Panel id="browser" h="full" minW="0" minH="0" overflow="hidden">{browserPane}</Splitter.Panel>
     </Splitter.Root>
   ) : chatPane;
@@ -359,7 +359,7 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop/>
         <Dialog.Positioner><Dialog.Content bg="bg" color="fg" maxH="92vh">
           <Dialog.Header><Dialog.Title>{editingPath || 'Edita fitxer'}</Dialog.Title><HStack><Badge colorPalette="agentic">Revisa abans de desar</Badge><Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca editor"/></Dialog.CloseTrigger></HStack></Dialog.Header>
-          <Dialog.Body><Text color="yellow.200" mb="3">En desar, l’original es copiarà primer a una còpia de seguretat local.</Text><Textarea w="full" minH="45vh" resize="vertical" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" lineHeight="1.6" value={editorContent} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setEditorContent(event.target.value)} spellCheck={false}/><Text color="yellow.200" mt="2">{editorStatus}</Text></Dialog.Body>
+          <Dialog.Body><Text color="fg.muted" mb="3">Revisa els canvis abans de desar. Si el projecte està sota Git, pots guardar-los amb un commit.</Text><Textarea w="full" minH="45vh" resize="vertical" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" lineHeight="1.6" value={editorContent} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setEditorContent(event.target.value)} spellCheck={false}/><Text color="yellow.200" mt="2">{editorStatus}</Text></Dialog.Body>
           <Dialog.Footer><Button variant="outline" onClick={() => setEditingPath(null)}>Cancel·la</Button><Button colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></Dialog.Footer>
         </Dialog.Content></Dialog.Positioner>
       </Dialog.Root>

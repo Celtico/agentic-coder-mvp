@@ -125,20 +125,15 @@ ipcMain.handle('project:write', async (_e, relativePath, content) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
   if (typeof content !== 'string' || content.length > 1_000_000) throw new Error('Contingut invàlid o massa gran.');
   const target = safeProjectPath(selectedProject, relativePath);
-  let backupPath = null;
   try {
     const stat = await fs.lstat(target);
     if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Només es poden editar fitxers normals del projecte.');
-    const backupRoot = path.join(app.getPath('userData'), 'backups', Date.now().toString());
-    backupPath = path.join(backupRoot, relativePath);
-    await fs.mkdir(path.dirname(backupPath), { recursive: true });
-    await fs.copyFile(target, backupPath);
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, content, 'utf8');
-  return { ok: true, backupPath };
+  return { ok: true };
 });
 
 function safeProjectPath(root, relativePath) {
