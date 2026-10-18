@@ -15,7 +15,7 @@ Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. N
 - Límits bàsics de ruta i mida per a lectura/escriptura a través de l'IPC.
 - Eliminació de fitxers a petició de l’agent només amb confirmació explícita, còpia de recuperació verificada fora del projecte i comprovació que el fitxer no hagi canviat; el panell de còpies permet restaurar-los sense sobreescriure fitxers existents.
 - Contracte `InferenceEngine` tipat i implementació Transformers.js aïllada de l'orquestrador.
-- Registre local optatiu de casos verificats, amb procedència i confirmació de l'usuari; no entrena automàticament el model.
+- Registre local optatiu de casos verificats, amb procedència i confirmació de l'usuari; es poden preparar candidatures de dades separades per a entrenament/validació/prova, però no s’entrena ni s’activa cap model automàticament.
 
 La decisió del motor, l'estat de compatibilitat de Qwen3-Coder-Next i les fases pendents d'aprenentatge verificable estan documentats a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
 
@@ -42,7 +42,7 @@ Per executar l’avaluació sintètica de recuperació semàntica sense llegir d
 - La interfície permet obrir fitxers, editar-los i revisar el contingut abans de desar. El desat requereix confirmació explícita i crea una còpia de seguretat local a la carpeta de dades de l'aplicació. La resposta del model continua sent una proposta: no s'aplica automàticament.
 - L'execució de tests és una acció explícita de l'usuari.
 - El registre JSONL conserva els intercanvis complets de l’agent; les converses de la interfície es desen separadament a SQLite. Els casos verificats es poden cercar amb embeddings locals; això no entrena ni modifica el model generatiu.
-- L'entrenament nocturn no està implementat encara. La fase següent ha d'afegir preparació de dades, avaluació independent, adaptadors/fine-tuning compatible, versions immutables i rollback. No s'ha de modificar el model actiu sense superar benchmarks.
+- L'entrenament nocturn no està implementat encara. La preparació local de candidatures de dades existeix, però encara cal revisar-ne qualitat, ampliar l’avaluació independent, trobar un mètode d’entrenament compatible, gestionar versions del model i rollback. No s'ha de modificar el model actiu sense superar benchmarks.
 
 ## Seguretat
 Utilitza només amb projectes de confiança. `npm test`, altres scripts npm i les instal·lacions de paquets demanen confirmació abans d’executar-se. Una instal·lació pot modificar `package.json`, `package-lock.json` i `node_modules`; la finestra de confirmació mostra el paquet, l’ordre i la carpeta. La instal·lació del navegador Chromium per a Playwright també té una confirmació pròpia. Revisa els canvis suggerits abans d’aplicar-los. No posis secrets al prompt ni als fitxers indexats.
@@ -66,7 +66,7 @@ El model generatiu és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat so
 | Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada i confirmació abans d’escriure o executar. La generació es pot aturar tancant el procés aïllat del model, que es torna a carregar en la petició següent; les accions confirmades en curs no s’interrompen. No hi ha una eina de shell lliure per al model. |
 | Navegador | Playwright ha inspeccionat una app Vue/Vite local: HTTP 200, sense errors de consola, pàgina ni xarxa, i captura desada. No s’ha validat encara el cicle complet d’editar, corregir un error preparat i tornar a provar. |
 | Interfície | React, TypeScript, Chakra UI, xat amb historial local, panells separables, navegador integrat, terminal, editor amb revisió i panell Git de només lectura. La distribució instal·lable encara no està feta. |
-| Memòria i aprenentatge | Converses guardades a SQLite local, associades al projecte quan se selecciona i restaurades amb la carpeta corresponent; migració des de `localStorage`. Els casos verificats es desen localment i se’n recuperen fins a tres del mateix projecte amb un model d’embeddings multilingüe local; si no es pot carregar, s’utilitza coincidència de paraules. L’entrenament automàtic continua pendent. |
+| Memòria i aprenentatge | Converses guardades a SQLite local, associades al projecte quan se selecciona i restaurades amb la carpeta corresponent; migració des de `localStorage`. Els casos verificats es desen localment i se’n recuperen fins a tres del mateix projecte amb un model d’embeddings multilingüe local; les candidatures de dades es filtren i separen localment, però l’entrenament automàtic continua pendent. |
 | Distribució | L’app encara s’executa des del repositori; falten empaquetament, signatura i instal·lador de macOS. |
 
 El registre detallat de la decisió del motor i de les limitacions és a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).

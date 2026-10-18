@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('agentic', {
   loadChatSessions: () => ipcRenderer.invoke('chat-store:load'),
   saveChatSessions: (sessions) => ipcRenderer.invoke('chat-store:save', sessions),
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
+  learningDatasetPreview: () => ipcRenderer.invoke('learning:dataset-preview'),
+  prepareLearningDataset: () => ipcRenderer.invoke('learning:prepare-dataset'),
   runTests: () => ipcRenderer.invoke('project:run-tests'),
   runCommand: (command) => ipcRenderer.invoke('terminal:run', command),
   onTerminalOutput: (callback) => {

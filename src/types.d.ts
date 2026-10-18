@@ -8,12 +8,15 @@ export type ChatSession = { id: string; title: string; updatedAt: string; projec
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
 export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
+export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
   currentProject(): Promise<ProjectInfo | null>;
   deletedBackups(): Promise<DeletedBackup[]>;
   restoreDeletedBackup(backupId: string): Promise<{ restored: boolean; denied?: boolean; path: string }>;
+  learningDatasetPreview(): Promise<TrainingDatasetPreview>;
+  prepareLearningDataset(): Promise<{ prepared: boolean; cancelled?: boolean; directory?: string; manifest?: Record<string, unknown>; counts?: TrainingDatasetPreview['counts'] }>;
   projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;

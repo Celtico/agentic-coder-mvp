@@ -7,6 +7,7 @@ const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot } = require('./git-tools.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
+const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
 
 let win;
 let modelWorker = null;
@@ -720,6 +721,38 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
   await fs.chmod(filePath, 0o600);
   return { id, saved: true };
+});
+
+async function readPreparedExperienceDataset() {
+  const filePath = path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl');
+  let contents;
+  try { contents = await fs.readFile(filePath, 'utf8'); }
+  catch (error) { if (error.code === 'ENOENT') return prepareTrainingDataset([]); throw error; }
+  const records = parseVerifiedExperiences(contents);
+  return prepareTrainingDataset(records);
+}
+
+ipcMain.handle('learning:dataset-preview', async () => {
+  const prepared = await readPreparedExperienceDataset();
+  return { counts: prepared.counts, splitCounts: prepared.splitCounts, trainingReady: prepared.trainingReady };
+});
+
+ipcMain.handle('learning:prepare-dataset', async () => {
+  const prepared = await readPreparedExperienceDataset();
+  if (prepared.counts.included === 0) throw new Error('No hi ha casos confirmats aptes per preparar.');
+  const candidatesDirectory = path.join(app.getPath('userData'), 'learning', 'candidates');
+  const decision = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Cancel·la', 'Prepara versió candidata'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Preparar dades locals d’aprenentatge?',
+    message: `Es prepararan ${prepared.counts.included} casos confirmats en particions locals.`,
+    detail: `Origen: ${path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl')}\nDestinació: ${candidatesDirectory}/dataset-…/\nIncloses: ${prepared.counts.included}\nDuplicades descartades: ${prepared.counts.duplicates}\nPossibles secrets descartats: ${prepared.counts.secrets}\nNo confirmades descartades: ${prepared.counts.unverified}\nRegistres invàlids descartats: ${prepared.counts.invalid}\nParticions: entrenament ${prepared.splitCounts.train}, validació ${prepared.splitCounts.validation}, prova ${prepared.splitCounts.test}\n\nTot queda en aquest Mac. No s’entrena ni es canvia cap model. ${prepared.trainingReady ? 'El conjunt arriba al llindar mínim tècnic, però encara requereix revisió de qualitat.' : 'Hi ha massa pocs casos per considerar-lo llest per entrenar.'}`
+  });
+  if (decision.response !== 1) return { prepared: false, cancelled: true, counts: prepared.counts };
+  const candidate = await writeTrainingCandidate(prepared, candidatesDirectory);
+  return { prepared: true, directory: candidate.directory, manifest: candidate.manifest };
 });
 
 ipcMain.handle('agent:ask', async (_e, prompt) => {

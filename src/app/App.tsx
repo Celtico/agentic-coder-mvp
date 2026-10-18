@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ChatSession, DeletedBackup, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, DeletedBackup, ElectronWebviewTag, GitSnapshot, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
 import { recoverCompletedHistory } from './history-recovery';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
@@ -10,7 +10,7 @@ import {
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw,
-  LuHistory as History, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
+  LuBrain as Brain, LuHistory as History, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -20,7 +20,7 @@ const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
-type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git' | 'backups';
+type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git' | 'backups' | 'learning';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -104,6 +104,9 @@ export function App(): React.JSX.Element {
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState('');
+  const [datasetPreview, setDatasetPreview] = useState<TrainingDatasetPreview | null>(null);
+  const [learningBusy, setLearningBusy] = useState(false);
+  const [learningStatus, setLearningStatus] = useState('');
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
   const [editorOriginal, setEditorOriginal] = useState('');
@@ -359,6 +362,30 @@ export function App(): React.JSX.Element {
     finally { setRestoringBackupId(null); }
   }
 
+  async function openLearningPanel() {
+    if (workspacePanel === 'learning') { setWorkspacePanel(null); return; }
+    setWorkspacePanel('learning');
+    setLearningStatus('');
+    setLearningBusy(true);
+    try { setDatasetPreview(await window.agentic.learningDatasetPreview()); }
+    catch (error) { setLearningStatus(errorText(error)); }
+    finally { setLearningBusy(false); }
+  }
+
+  async function prepareLearningDataset() {
+    setLearningBusy(true);
+    setLearningStatus('');
+    try {
+      const result = await window.agentic.prepareLearningDataset();
+      if (result.cancelled) { setLearningStatus('Preparació cancel·lada. No s’ha escrit cap versió.'); return; }
+      if (result.prepared && result.directory) {
+        setLearningStatus(`Versió candidata preparada: ${result.directory}. No s’ha entrenat ni canviat cap model.`);
+        setDatasetPreview(await window.agentic.learningDatasetPreview());
+      }
+    } catch (error) { setLearningStatus(errorText(error)); }
+    finally { setLearningBusy(false); }
+  }
+
   async function runTests() {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
     appendMessage('assistant', 'Executant npm test…');
@@ -543,6 +570,33 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
+  const learningPane = (
+    <Flex h="full" minH="0" direction="column" p="4" bg="bg" gap="3" overflowY="auto">
+      <Text fontSize="sm" color="fg.muted">Prepara un conjunt local només amb casos confirmats. Es descarten duplicats i credencials detectables; el contingut no es mostra aquí ni s’envia fora del Mac.</Text>
+      {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text>Revisant els casos locals…</Text></HStack>
+        : datasetPreview ? <>
+          <Text fontWeight="semibold" color={datasetPreview.trainingReady ? 'agentic.200' : 'yellow.200'}>{datasetPreview.trainingReady ? 'Llindar mínim tècnic assolit; cal revisió independent' : 'Encara no hi ha prou casos per entrenar'}</Text>
+          <Stack gap="2" fontSize="sm">
+            <Text>Casos examinats: {datasetPreview.counts.input}</Text>
+            <Text>Preparats: {datasetPreview.counts.included}</Text>
+            <Text>Duplicats descartats: {datasetPreview.counts.duplicates}</Text>
+            <Text>Possibles secrets descartats: {datasetPreview.counts.secrets}</Text>
+            <Text>Sense confirmació descartats: {datasetPreview.counts.unverified}</Text>
+            <Text>Invàlids descartats: {datasetPreview.counts.invalid}</Text>
+          </Stack>
+          <Box p="3" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface.subtle">
+            <Text fontWeight="medium" mb="2">Separació determinista</Text>
+            <Text fontSize="sm">Entrenament: {datasetPreview.splitCounts.train} · Validació: {datasetPreview.splitCounts.validation} · Prova final: {datasetPreview.splitCounts.test}</Text>
+          </Box>
+          <Button alignSelf="flex-start" colorPalette="agentic" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>
+            {learningBusy ? <Spinner size="sm"/> : <Brain size={16}/>}Prepara versió candidata
+          </Button>
+        </> : <Text color="fg.muted">No s’ha pogut llegir la memòria local.</Text>}
+      {learningStatus && <Text fontSize="xs" color={learningStatus.startsWith('Versió candidata') ? 'agentic.200' : 'yellow.200'} overflowWrap="anywhere">{learningStatus}</Text>}
+      <Text fontSize="xs" color="fg.muted">Preparar dades no entrena el model. Cap candidat no es pot activar des d’aquest panell.</Text>
+    </Flex>
+  );
+
   useEffect(() => {
     const view = webviewRef.current;
     if (!view) return;
@@ -552,8 +606,8 @@ export function App(): React.JSX.Element {
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
   }, [browserOpen, browserUrl]);
 
-  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : workspacePanel === 'backups' ? 'Còpies eliminades' : 'Edita fitxer';
-  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : workspacePanel === 'backups' ? backupsPane : null;
+  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : workspacePanel === 'backups' ? 'Còpies eliminades' : workspacePanel === 'learning' ? 'Aprenentatge local' : 'Edita fitxer';
+  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : workspacePanel === 'backups' ? backupsPane : workspacePanel === 'learning' ? learningPane : null;
   const workspacePane = panelContent && (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
@@ -593,6 +647,7 @@ export function App(): React.JSX.Element {
           <IconButton icon={TerminalIcon} label={workspacePanel === 'terminal' ? 'Tanca la terminal del projecte' : 'Obre la terminal del projecte'} w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel((current) => current === 'terminal' ? null : 'terminal'); }}/>
           <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={History} label={workspacePanel === 'backups' ? 'Tanca les còpies eliminades' : 'Restaura fitxers eliminats'} w="44px" h="44px" variant={workspacePanel === 'backups' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'backups' ? 'agentic' : 'gray'} onClick={() => void openDeletedBackups()}/>
+          <IconButton icon={Brain} label={workspacePanel === 'learning' ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="44px" h="44px" variant={workspacePanel === 'learning' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'learning' ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
         </Flex>
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '220px', maxSize: '360px', resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '440px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(660, window.innerWidth - 64);
