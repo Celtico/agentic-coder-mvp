@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { getGitSnapshot } = require('./git-tools.cjs');
+const { getGitSnapshot, getGitCommitCandidates } = require('./git-tools.cjs');
 
 function git(cwd, ...args) {
   execFileSync('git', args, { cwd, stdio: 'ignore' });
@@ -61,6 +61,26 @@ test('reports a selected folder that is not in Git', async (t) => {
 
   assert.equal(snapshot.available, false);
   assert.match(snapshot.reason, /no és un repositori Git/);
+});
+
+test('lists only repository changes as commit candidates, including new files', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-git-commit-candidates-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  git(projectRoot, 'init', '-q');
+  git(projectRoot, 'config', 'user.name', 'Test User');
+  git(projectRoot, 'config', 'user.email', 'test@example.invalid');
+  await fs.writeFile(path.join(projectRoot, 'tracked.txt'), 'initial\n');
+  git(projectRoot, 'add', 'tracked.txt');
+  git(projectRoot, 'commit', '-m', 'initial', '-q');
+  await fs.writeFile(path.join(projectRoot, 'tracked.txt'), 'changed\n');
+  await fs.writeFile(path.join(projectRoot, 'new file.txt'), 'new\n');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const result = await getGitCommitCandidates(projectRoot);
+
+  assert.equal(result.available, true);
+  assert.deepEqual(result.paths.sort(), ['new file.txt', 'tracked.txt']);
 });
 
 test('keeps large diffs bounded and marks their output as truncated', async (t) => {

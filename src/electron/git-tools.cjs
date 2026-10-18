@@ -75,4 +75,26 @@ async function getGitSnapshot(projectRoot) {
   };
 }
 
-module.exports = { getGitSnapshot };
+async function getGitCommitCandidates(projectRoot) {
+  let root;
+  try { root = await fs.realpath(projectRoot); }
+  catch (error) { return { available: false, reason: error.message }; }
+  const top = await runGit(['rev-parse', '--show-toplevel'], root);
+  if (top.code !== 0) return { available: false, reason: 'Aquesta carpeta no és un repositori Git.' };
+  let repositoryRoot;
+  try { repositoryRoot = await fs.realpath(top.stdout.trim()); }
+  catch { return { available: false, reason: 'No s’ha pogut resoldre la carpeta del repositori Git.' }; }
+  if (repositoryRoot !== root) return { available: false, reason: 'Selecciona la carpeta arrel del repositori per crear un commit amb seguretat.' };
+  const status = await runGit(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames'], root);
+  if (status.code !== 0 || status.timedOut || status.truncated) return { available: false, reason: status.stderr.trim() || 'Git no ha pogut llegir tots els canvis; no es crearà cap commit.' };
+  const entries = status.stdout.split('\0').filter(Boolean);
+  const paths = [];
+  for (const entry of entries) {
+    const filePath = entry.slice(3);
+    if (!filePath || filePath.includes('\n') || filePath.includes('\r')) return { available: false, reason: 'Hi ha un nom de fitxer que no es pot mostrar de manera segura.' };
+    paths.push(filePath);
+  }
+  return { available: true, root, paths: [...new Set(paths)], status: status.stdout };
+}
+
+module.exports = { getGitSnapshot, getGitCommitCandidates };

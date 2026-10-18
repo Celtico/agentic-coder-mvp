@@ -63,6 +63,29 @@ test('starts the first tool when a small model concatenates multiple JSON action
   assert.match(answer, /he comprovat la cerca/i);
 });
 
+test('routes a requested Git commit through the confirmation gated commit tool', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-commit-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"plan","content":"Revisaré els canvis de Git i crearé el commit després de la confirmació."}',
+    '{"type":"tool_call","name":"create_git_commit","arguments":{"message":"Actualitza el projecte"}}',
+    '{"type":"final","content":"El commit s’ha creat després de la confirmació."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Fes un commit del projecte', tempRoot, async (tool) => {
+    calls.push(tool);
+    return { committed: true, message: tool.arguments.message };
+  });
+
+  assert.deepEqual(calls, [{ name: 'create_git_commit', arguments: { message: 'Actualitza el projecte' } }]);
+  assert.match(answer, /commit s’ha creat/i);
+});
+
 test('shows a plan before requesting a package installation', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-plan-test-'));
   const projectRoot = path.join(tempRoot, 'project');

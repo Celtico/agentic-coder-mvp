@@ -4,7 +4,7 @@ const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
-const { getGitSnapshot } = require('./git-tools.cjs');
+const { getGitSnapshot, getGitCommitCandidates } = require('./git-tools.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
@@ -76,6 +76,24 @@ async function dispatchAgentTool(tool, projectRoot) {
   if (!tool || typeof tool !== 'object' || !selectedProject) throw new Error('La crida de l’eina no és vàlida.');
   const root = await fs.realpath(selectedProject);
   if (await fs.realpath(projectRoot) !== root) throw new Error('El projecte actiu ha canviat durant la tasca.');
+  if (tool.name === 'create_git_commit' && typeof tool.arguments?.message === 'string') {
+    const message = tool.arguments.message.trim();
+    if (!message || message.length > 200 || /[\r\n\0]/.test(message)) throw new Error('El missatge del commit no és vàlid.');
+    const snapshot = await getGitCommitCandidates(root);
+    if (!snapshot.available) throw new Error(snapshot.reason);
+    if (!snapshot.paths.length) return { committed: false, nothingToCommit: true, message: 'No hi ha canvis per incloure al commit.' };
+    const approved = await confirmProjectAction({
+      title: 'Revisa el commit proposat', message: `L’agent vol crear un commit amb ${snapshot.paths.length} fitxer(s).`, button: 'Revisa i crea el commit',
+      detail: `Projecte: ${root}\nMissatge: ${message}\n\nFitxers inclosos:\n${snapshot.paths.map((file) => `• ${file}`).join('\n')}\n\nEs prepararan aquests fitxers i es crearà el commit. Els fitxers ignorats no s’inclouen.`
+    });
+    if (!approved) return { committed: false, approved: false, cancelled: true, message: 'L’usuari ha cancel·lat el commit.' };
+    const latest = await getGitCommitCandidates(root);
+    if (!latest.available || latest.status !== snapshot.status) throw new Error('Els canvis del projecte han canviat durant la confirmació. Torna a revisar Git abans de crear el commit.');
+    const staged = await executeBinary('git', ['add', '-A', '--', ...snapshot.paths], root, 30000);
+    if (staged.code !== 0) return { committed: false, stageCode: staged.code, output: staged.output };
+    const committed = await executeBinary('git', ['commit', '-m', message], root, 30000);
+    return { committed: committed.code === 0, code: committed.code, message, output: committed.output };
+  }
   if (tool.name === 'run_tests') {
     const pkgPath = path.join(root, 'package.json');
     let pkg;
