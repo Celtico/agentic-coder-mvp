@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, ElectronWebviewTag, ProjectInfo } from '../types';
 import {
   Badge, Box, Button, Dialog, Flex, Grid, Heading, HStack, Input, Stack,
@@ -94,6 +94,8 @@ export function App(): React.JSX.Element {
   const [editorStatus, setEditorStatus] = useState('');
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const hasInitialScrollRef = useRef(false);
+  const previousSessionIdRef = useRef(activeSessionId);
   const webviewRef = useRef<ElectronWebviewTag | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -135,12 +137,20 @@ export function App(): React.JSX.Element {
   }, [persistMessages]);
 
   useEffect(() => { localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft); }, [draft, activeSessionId]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const feed = feedRef.current;
     if (!feed) return;
+    const firstRender = !hasInitialScrollRef.current;
+    const changedSession = previousSessionIdRef.current !== activeSessionId;
+    if (firstRender || changedSession) {
+      feed.scrollTop = feed.scrollHeight;
+      hasInitialScrollRef.current = true;
+      previousSessionIdRef.current = activeSessionId;
+      return;
+    }
     const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 160;
     if (nearBottom) feed.scrollTop = feed.scrollHeight;
-  }, [messages, loading, loadingLabel]);
+  }, [activeSessionId, messages, loading, loadingLabel]);
 
   const appendMessage = useCallback((role: ChatMessage['role'], text: string) => {
     const next = [...messages, { role, text }].slice(-100);
