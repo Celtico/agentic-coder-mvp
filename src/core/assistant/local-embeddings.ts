@@ -20,7 +20,7 @@ export function cosineSimilarity(left: number[], right: number[]): number {
   return dot / Math.sqrt(leftNorm * rightNorm);
 }
 
-export function rankExperiences(queryVector: number[], values: EmbeddableExperience[], vectors: Map<string, number[]>, minimumScore = 0.25): RankedExperience[] {
+export function rankExperiences(queryVector: number[], values: EmbeddableExperience[], vectors: Map<string, number[]>, minimumScore = 0.2): RankedExperience[] {
   return values.map((value) => ({ ...value, score: cosineSimilarity(queryVector, vectors.get(value.id) || []) }))
     .filter((value) => value.score >= minimumScore)
     .sort((left, right) => right.score - left.score)

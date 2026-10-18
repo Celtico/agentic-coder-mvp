@@ -13,7 +13,7 @@ Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Pro
 ## Aprenentatge i versions
 
 - L’historial existent de xat és context, no dades d’entrenament aprovades. L’usuari pot desar manualment una resposta com a cas verificat indicant l’evidència; l’app demana confirmació, intenta detectar credencials conegudes i desa el registre local amb permisos restringits.
-- Els casos verificats són una col·lecció curada amb procedència, no un procés d’entrenament ni una garantia que el contingut sigui correcte. L’agent recupera fins a tres exemples amb coincidència de paraules a partir de la petició desada i només els inclou quan pertanyen exactament al mateix directori de projecte. No s’utilitzen embeddings.
+- Els casos verificats són una col·lecció curada amb procedència, no un procés d’entrenament ni una garantia que el contingut sigui correcte. L’agent només recupera exemples del mateix directori de projecte; pot fer servir embeddings locals i manté una cerca per paraules com a alternativa.
 - Les còpies de seguretat dels fitxers editats són separades de la memòria de l’agent.
 - La recuperació semàntica és un component independent de la generació: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` calcula embeddings locals amb Transformers.js. Només classifica casos verificats del mateix directori de projecte; els vectors es mantenen a memòria durant la vida del worker. La càrrega inicial necessita internet; després, els pesos queden a `models/`. Si la càrrega o inferència falla, s’utilitza la cerca per paraules i no s’interromp la resposta.
 - No hi ha fine-tuning ni tasca nocturna activa. El primer pas de curació manual ja desa casos a `userData/learning/verified-experiences.jsonl`. Abans d’entrenar cal auditar-ne la qualitat, afegir avaluacions repetibles i validar un runtime d’entrenament compatible amb el model i el Mac.
@@ -33,7 +33,9 @@ Les converses de la interfície es desen a SQLite a la carpeta de dades de l’a
 
 La inspecció s’ha validat a l’app amb un projecte Vue/Vite local: HTTP 200, títol `Vite App`, cap error de consola, pàgina o xarxa, i captura PNG desada a les dades locals de l’aplicació. Després de la prova, la resposta s’ha canviat perquè l’orquestrador presenti directament els fets retornats per Playwright, sense demanar al model que els reescrigui.
 
-La generació es pot aturar des del compositor tancant el procés aïllat del model. Això allibera el procés local i el model es tornarà a carregar a la següent petició; si una eina confirmada ja està en curs, l’app no la talla i informa que cal esperar que acabi. Encara falten ordres arbitràries des del bucle d'eines, vista de diff dedicada, embeddings i entrenament. Aquests elements no es consideren completats ni se simulen.
+`npm run evaluate:memory` executa una comparació reproduïble amb sis peticions sintètiques multilingües i una consulta irrellevant de control. En l’última execució, la cerca semàntica ha obtingut Recall@3 i MRR@3 d’1,0; la cerca per paraules, 0,0; la consulta irrellevant no ha retornat cap exemple. Aquest conjunt és massa petit i artificial per justificar entrenament o afirmar qualitat general; cal ampliar-lo amb casos reals curats i separar validació i proves finals abans d’activar entrenament.
+
+La generació es pot aturar des del compositor tancant el procés aïllat del model. Això allibera el procés local i el model es tornarà a carregar a la següent petició; si una eina confirmada ja està en curs, l’app no la talla i informa que cal esperar que acabi. Encara falten ordres arbitràries des del bucle d'eines, vista de diff dedicada, índex persistent d’embeddings, preparació d’un benchmark representatiu i entrenament. Aquests elements no es consideren completats ni se simulen.
 
 ## Fonts tècniques consultades
 

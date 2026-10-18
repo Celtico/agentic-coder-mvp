@@ -422,3 +422,5 @@ export class LocalCodingAgent {
     return { manifest: manifest.join('\n'), contents: snippets.join('\n') };
   }
 }
+
+export { LocalExperienceEmbedder, cosineSimilarity, rankExperiences } from './local-embeddings';
