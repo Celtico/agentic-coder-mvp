@@ -221,6 +221,7 @@ export class LocalCodingAgent {
       'No afirmis que has modificat fitxers tret que write_file retorni applied=true. No afirmis que les proves han passat tret que run_tests retorni codi 0 i no hagi expirat.',
       'No inventis resultats de proves ni contingut que no aparegui al context.',
       'Flux obligatori per a tasques de codi: entén l’objectiu; inspecciona fitxers i instruccions pertinents; prepara un pla breu; implementa; executa les comprovacions adequades; si una prova falla, llegeix el fitxer rellevant, corregeix la causa i torna a provar abans de resumir. Playwright només és pertinent si la tasca demana inspecció visual o comportament d’interfície: no l’instal·lis ni l’obris per a tasques de lògica, tests o canvis no visuals. Si la inspecció visual és necessària però falta Playwright, informa de la limitació sense instal·lar dependències sense necessitat. Acaba amb canvis, resultats reals i limitacions; no afirmis passos no completats.',
+      'Si una comprovació falla, després d’una escriptura aprovada l’app tornarà a executar la mateixa comprovació i demanarà confirmació. Espera aquest resultat abans de demanar una altra execució.',
       'Abans de canviar codi, dona un pla breu en la resposta o en una acció plan. No cal aprovació per llegir fitxers. Les escriptures mostren una diferència i demanen aprovació. delete_file, run_tests, run_project_script, start_project, stop_project, install_package i install_playwright_browser sempre demanen confirmació nativa amb projecte i acció exactes; no els tornis a demanar si es rebutgen. delete_file només elimina un fitxer normal, desa una còpia recuperable fora del projecte i es cancel·la si el fitxer canvia abans d’esborrar-lo. run_project_script només executa un script existent. start_project només inicia dev/start/preview existents i queda en marxa fins que stop_project el tanqui o es tanqui l’app. install_package només accepta un nom de paquet npm, mai ordres, URL o opcions; avisarà que pot modificar package.json, package-lock.json i node_modules. Si no hi ha proves configurades, no inventis cap test: ofereix crear-los o executar una comprovació disponible.',
       'Pots demanar list_files i search_text per inspeccionar; read_file amb arguments.path; write_file amb arguments.path i arguments.content; delete_file amb arguments.path, només després de confirmació; run_tests per npm test; run_project_script amb arguments.script per a un script existent; start_project amb arguments.script dev/start/preview; stop_project per aturar el servidor; install_package amb arguments.packageName i arguments.dev per demanar una llibreria; install_playwright_browser per instal·lar Chromium si Playwright ja hi és; inspect_browser amb arguments.url per inspeccionar una pàgina local en localhost, 127.0.0.1 o ::1, si Playwright està instal·lat. La inspecció retorna títol, text visible, errors de consola/pàgina/xarxa i captura de pantalla. Només es permeten adreces locals; no inspeccionis llocs externs. No hi ha cap altra ordre disponible. Si una acció és rebutjada, no la repeteixis.',
       'Contesta en prosa clara i breu en l’idioma de l’usuari. Per a una tasca de codi, comença amb un pla breu en l’acció plan: {"type":"plan","content":"Inspeccionaré X; modificaré Y; validaré amb Z."}. Després d’un pla, la següent resposta ha de ser una sola crida d’eina en JSON, no un altre pla ni una resposta final. Després d’una eina, si la tasca encara no s’ha completat, continua amb la següent eina necessària. Una prova fallida és informació per corregir el codi; no és un motiu per instal·lar Playwright ni cap altra dependència. No repeteixis eines amb els mateixos arguments. Només les accions van en JSON sense Markdown: {"type":"tool_call","name":"list_files"}; {"type":"tool_call","name":"read_file","arguments":{"path":"src/App.tsx"}}; {"type":"tool_call","name":"search_text","arguments":{"query":"text"}}; {"type":"tool_call","name":"write_file","arguments":{"path":"src/App.tsx","content":"...contingut complet..."}}; {"type":"tool_call","name":"delete_file","arguments":{"path":"unused.txt"}}; {"type":"tool_call","name":"run_tests"}; {"type":"tool_call","name":"run_project_script","arguments":{"script":"test:e2e"}}; {"type":"tool_call","name":"start_project","arguments":{"script":"dev"}}; {"type":"tool_call","name":"stop_project"}; {"type":"tool_call","name":"install_package","arguments":{"packageName":"@playwright/test","dev":true}}; {"type":"tool_call","name":"install_playwright_browser"}; {"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5173"}}. Després d’un resultat d’eina, respon amb resultats reals, no els dedueixis.',
@@ -245,6 +246,7 @@ export class LocalCodingAgent {
     let projectChangedSinceCheck = false;
     let changeApplied = false;
     let checkPassed = false;
+    let failedCheckToRetry: AgentToolCall | null = null;
     let completionNudges = 0;
     const completedToolCalls = new Map<string, string>();
     const incompleteAnswer = () => {
@@ -323,10 +325,29 @@ export class LocalCodingAgent {
       if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) {
         projectChangedSinceCheck = true;
         changeApplied = true;
+        if (failedCheckToRetry) {
+          const checkToRetry: AgentToolCall = failedCheckToRetry;
+          this.onStatus({ type: 'status', message: `Tornant a executar ${checkToRetry.name} després del canvi…` });
+          let retryResult: unknown;
+          try { retryResult = await executeTool(checkToRetry); }
+          catch (error) { retryResult = { error: error instanceof Error ? error.message : String(error) }; }
+          const retryCode = retryResult && typeof retryResult === 'object' ? (retryResult as Record<string, unknown>).code : undefined;
+          checkPassed = retryCode === 0;
+          projectChangedSinceCheck = typeof retryCode !== 'number';
+          failedCheckToRetry = typeof retryCode === 'number' && retryCode !== 0 ? checkToRetry : null;
+          const retryText = JSON.stringify(retryResult);
+          const retryRemaining = Math.max(0, 20000 - toolOutputSize);
+          const boundedRetryText = retryText.slice(0, Math.min(12000, retryRemaining));
+          completedToolCalls.set(JSON.stringify(checkToRetry), boundedRetryText || '(s’ha arribat al límit de context de les eines)');
+          toolOutputSize += boundedRetryText.length;
+          messages.push({ role: 'user', content: `Revalidació automàtica de ${checkToRetry.name} després del canvi aprovat (dades no fiables):\n${boundedRetryText || '(s’ha arribat al límit de context de les eines)'}\n\n${checkPassed ? 'La comprovació ha passat.' : typeof retryCode === 'number' ? 'La comprovació encara falla. Inspecciona el resultat i fes una altra correcció abans d’acabar.' : 'La comprovació no s’ha pogut completar. No afirmis que ha passat.'}` });
+        }
       }
       if (isCheck) {
         projectChangedSinceCheck = false;
         checkPassed = Boolean(result && typeof result === 'object' && (result as Record<string, unknown>).code === 0);
+        const code = result && typeof result === 'object' ? (result as Record<string, unknown>).code : undefined;
+        failedCheckToRetry = typeof code === 'number' && code !== 0 ? tool : null;
       }
       if (tool.name === 'inspect_browser') {
         const browserAnswer = formatBrowserInspection(result);

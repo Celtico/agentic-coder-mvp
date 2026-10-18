@@ -111,13 +111,12 @@ test('continues after a plan, fixes a failing check and allows the check to run 
     '{"type":"tool_call","name":"run_tests"}',
     '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.test.js"}}',
     '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }\\nmodule.exports = { add };"}}',
-    '{"type":"tool_call","name":"run_tests"}',
     '{"type":"final","content":"La prova ha passat després de corregir el codi."}',
   ];
   const prompts = [];
   const engine = {
     loadModel: async () => {},
-    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    generateResponse: async (messages) => { prompts.push(messages.map((message) => message.content).join('\n')); return responses.shift(); },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const agent = new LocalCodingAgent({ engine });
@@ -139,6 +138,7 @@ test('continues after a plan, fixes a failing check and allows the check to run 
   assert.deepEqual(calls, ['read_file', 'write_file', 'run_tests', 'read_file', 'write_file', 'run_tests']);
   assert.equal(testRuns, 2);
   assert.ok(prompts.some((prompt) => prompt.includes('La comprovació ha fallat') && prompt.includes('corregeix')));
+  assert.ok(prompts.some((prompt) => prompt.includes('Revalidació automàtica') && prompt.includes('passat')));
   assert.match(answer, /prova ha passat/);
 });
 
@@ -262,7 +262,6 @@ test('redirects a duplicate failed test request toward reading and repairing the
     '{"type":"tool_call","name":"run_tests"}',
     '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
     '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a, b) { return a + b + 1; }"}}',
-    '{"type":"tool_call","name":"run_tests"}',
     '{"type":"final","content":"He corregit el codi i les proves han passat."}',
   ];
   const prompts = [];
