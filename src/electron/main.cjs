@@ -4,6 +4,7 @@ const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
+const { getGitSnapshot } = require('./git-tools.cjs');
 
 let win;
 let modelWorker = null;
@@ -647,6 +648,11 @@ ipcMain.handle('agent:ask', async (_e, prompt) => {
 });
 
 ipcMain.handle('agent:cancel', async () => cancelModelRequest());
+
+ipcMain.handle('git:snapshot', async () => {
+  if (!selectedProject) return { available: false, reason: 'Selecciona primer un projecte.' };
+  return getGitSnapshot(selectedProject);
+});
 
 ipcMain.handle('project:run-tests', async () => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');

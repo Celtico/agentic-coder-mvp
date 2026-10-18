@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('agentic', {
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (prompt) => ipcRenderer.invoke('agent:ask', prompt),
   cancel: () => ipcRenderer.invoke('agent:cancel'),
+  gitSnapshot: () => ipcRenderer.invoke('git:snapshot'),
   recentHistory: () => ipcRenderer.invoke('history:recent'),
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
   runTests: () => ipcRenderer.invoke('project:run-tests'),

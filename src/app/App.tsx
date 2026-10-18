@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ElectronWebviewTag, ProjectInfo, VerifiedExperience } from '../types';
+import type { ChatMessage, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
   Spinner, Splitter, Text, Textarea
@@ -8,7 +8,7 @@ import {
   LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
-  LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw,
   LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -20,7 +20,7 @@ const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
-type WorkspacePanel = 'browser' | 'terminal' | 'editor';
+type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova'): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -97,6 +97,8 @@ export function App(): React.JSX.Element {
   const [terminalOutput, setTerminalOutput] = useState('');
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [terminalStatus, setTerminalStatus] = useState('');
+  const [gitSnapshot, setGitSnapshot] = useState<GitSnapshot | null>(null);
+  const [gitLoading, setGitLoading] = useState(false);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
   const [editorOriginal, setEditorOriginal] = useState('');
@@ -243,6 +245,20 @@ export function App(): React.JSX.Element {
         setStatus('No es pot aturar una acció del projecte que ja s’està executant. Espera que acabi.');
       } else if (!result.cancelled) setStatus('No hi ha cap generació que es pugui aturar.');
     } catch (error) { setStatus(errorText(error)); }
+  }
+
+  async function openGitPanel() {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    if (workspacePanel === 'git') { setWorkspacePanel(null); return; }
+    setWorkspacePanel('git');
+    await refreshGitSnapshot();
+  }
+
+  async function refreshGitSnapshot() {
+    setGitLoading(true);
+    try { setGitSnapshot(await window.agentic.gitSnapshot()); }
+    catch (error) { setGitSnapshot({ available: false, reason: errorText(error) }); }
+    finally { setGitLoading(false); }
   }
 
   async function runTests() {
@@ -395,6 +411,27 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
+  const gitPane = (
+    <Flex h="full" minH="0" direction="column" p="4" bg="bg" gap="3">
+      <Flex align="center" justify="space-between" gap="3">
+        <Box minW="0"><Text fontWeight="semibold">Estat del repositori</Text><Text fontSize="xs" color="fg.muted" overflowWrap="anywhere">{project?.path}</Text></Box>
+        <IconButton icon={RefreshCw} label="Actualitza l’estat de Git" onClick={() => void refreshGitSnapshot()}/>
+      </Flex>
+      {gitLoading ? <HStack color="fg.muted"><Spinner size="sm"/><Text>Consultant Git…</Text></HStack>
+        : !gitSnapshot?.available ? <Text color="fg.muted">{gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Text>
+          : <>
+            <Text fontSize="sm" color="agentic.200">{gitSnapshot.branch || 'Branca desconeguda'}</Text>
+            {gitSnapshot.truncated && <Text fontSize="xs" color="yellow.200">La sortida s’ha limitat per mida o temps.</Text>}
+            <Textarea flex="none" h="100px" minH="65px" resize="vertical" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" value={gitSnapshot.status || 'Repositori net.'} readOnly aria-label="Estat de Git"/>
+            <Text fontSize="xs" color="fg.muted">Diferències preparades</Text>
+            <Textarea flex="1" minH="80px" resize="none" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" value={gitSnapshot.stagedDiff || 'No hi ha canvis preparats.'} readOnly aria-label="Diferències preparades"/>
+            <Text fontSize="xs" color="fg.muted">Diferències sense preparar</Text>
+            <Textarea flex="1" minH="80px" resize="none" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" value={gitSnapshot.unstagedDiff || 'No hi ha canvis sense preparar.'} readOnly aria-label="Diferències sense preparar"/>
+          </>}
+      <Text fontSize="xs" color="fg.muted">Vista de només lectura. Prepara i desa commits des de la terminal després de revisar els canvis.</Text>
+    </Flex>
+  );
+
   useEffect(() => {
     const view = webviewRef.current;
     if (!view) return;
@@ -404,12 +441,12 @@ export function App(): React.JSX.Element {
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
   }, [browserOpen, browserUrl]);
 
-  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : 'Edita fitxer';
-  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : null;
+  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : 'Edita fitxer';
+  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : null;
   const workspacePane = panelContent && (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
-        <HStack gap="2"><Text fontWeight="semibold">{panelTitle}</Text>{workspacePanel === 'terminal' && <Badge colorPalette="yellow">Cada ordre demana confirmació</Badge>}{workspacePanel === 'editor' && <Badge colorPalette="agentic">Revisa abans de desar</Badge>}</HStack>
+        <HStack gap="2"><Text fontWeight="semibold">{panelTitle}</Text>{workspacePanel === 'terminal' && <Badge colorPalette="yellow">Cada ordre demana confirmació</Badge>}{workspacePanel === 'editor' && <Badge colorPalette="agentic">Revisa abans de desar</Badge>}{workspacePanel === 'git' && <Badge colorPalette="gray">Només lectura</Badge>}</HStack>
         <IconButton icon={X} label="Tanca panell" onClick={() => { setWorkspacePanel(null); if (workspacePanel === 'editor') setEditingPath(null); }}/>
       </Flex>
       <Box flex="1" minH="0" overflow="hidden">{panelContent}</Box>
@@ -443,6 +480,7 @@ export function App(): React.JSX.Element {
           <IconButton icon={FolderOpen} label="Selecciona projecte" w="44px" h="44px" onClick={selectProject}/>
           <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
           <IconButton icon={TerminalIcon} label={workspacePanel === 'terminal' ? 'Tanca la terminal del projecte' : 'Obre la terminal del projecte'} w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel((current) => current === 'terminal' ? null : 'terminal'); }}/>
+          <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
         </Flex>
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '220px', maxSize: '360px', resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '440px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(660, window.innerWidth - 64);
