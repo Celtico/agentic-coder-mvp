@@ -67,6 +67,71 @@ function words(text: string): Set<string> {
   return new Set((text.toLocaleLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !experienceStopWords.has(word)));
 }
 
+type GitIgnoreRule = { base: string; pattern: RegExp; negated: boolean; directoryOnly: boolean };
+
+function gitIgnorePattern(pattern: string): { regex: RegExp; directoryOnly: boolean } | null {
+  let value = pattern.trim();
+  if (!value || value.startsWith('#')) return null;
+  let directoryOnly = false;
+  if (value.endsWith('/') && !value.endsWith('\\/')) {
+    directoryOnly = true;
+    value = value.slice(0, -1);
+  }
+  const anchored = value.startsWith('/');
+  if (anchored) value = value.slice(1);
+  const hasSlash = value.includes('/');
+  let source = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === '\\' && index + 1 < value.length) {
+      source += value[++index].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    } else if (character === '*') {
+      if (value[index + 1] === '*') {
+        index += 1;
+        if (value[index + 1] === '/') {
+          index += 1;
+          source += '(?:.*/)?';
+        } else source += '.*';
+      } else source += '[^/]*';
+    } else if (character === '?') source += '[^/]';
+    else if (character === '[') {
+      const close = value.indexOf(']', index + 1);
+      if (close > index + 1) {
+        source += value.slice(index, close + 1);
+        index = close;
+      } else source += '\\[';
+    } else source += character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  const body = anchored || hasSlash ? `^${source}$` : `(?:^|/)${source}$`;
+  try { return { regex: new RegExp(body), directoryOnly }; } catch { return null; }
+}
+
+function parseGitIgnore(contents: string, base: string): GitIgnoreRule[] {
+  return contents.split(/\r?\n/).slice(0, 2000).flatMap((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return [];
+    const negated = trimmed.startsWith('!');
+    const patternText = negated ? trimmed.slice(1) : trimmed;
+    const compiled = gitIgnorePattern(patternText);
+    return compiled ? [{ base, pattern: compiled.regex, negated, directoryOnly: compiled.directoryOnly }] : [];
+  });
+}
+
+function isGitIgnored(absolutePath: string, isDirectory: boolean, rules: GitIgnoreRule[]): boolean {
+  let ignored = false;
+  for (const rule of rules) {
+    const relative = path.relative(rule.base, absolutePath).split(path.sep).join('/');
+    if (!relative || relative === '..' || relative.startsWith('../')) continue;
+    const candidates = [relative];
+    if (rule.directoryOnly || !isDirectory) {
+      const parts = relative.split('/');
+      for (let index = 1; index < parts.length; index += 1) candidates.push(parts.slice(0, index).join('/'));
+    }
+    if (candidates.some((candidate) => rule.pattern.test(candidate))) ignored = !rule.negated;
+  }
+  return ignored;
+}
+
 function formatBrowserInspection(result: unknown): string | null {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
   const value = result as Record<string, unknown>;
@@ -248,18 +313,28 @@ export class LocalCodingAgent {
     const maxManifestEntries = 300;
     const maxContentSize = 20000;
 
-    const walk = async (dir: string, depth = 0): Promise<void> => {
+    const walk = async (dir: string, depth = 0, inheritedRules: GitIgnoreRule[] = []): Promise<void> => {
       if (depth > 4) return;
+      let rules = inheritedRules;
+      try {
+        const ignoreFile = path.join(dir, '.gitignore');
+        const stat = await fs.stat(ignoreFile);
+        if (stat.isFile() && stat.size <= 64_000) {
+          const contents = await fs.readFile(ignoreFile, 'utf8');
+          rules = [...inheritedRules, ...parseGitIgnore(contents, dir)];
+        }
+      } catch {}
       let entries;
       try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
       for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         if (entry.name.startsWith('.') || ignored.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
         const relative = path.relative(absoluteRoot, full);
+        if (isGitIgnored(full, entry.isDirectory(), rules)) continue;
         if (entry.isDirectory()) {
           if (manifest.length < maxManifestEntries) manifest.push(`${relative}/`);
           else manifestTruncated = true;
-          await walk(full, depth + 1);
+          await walk(full, depth + 1, rules);
           continue;
         }
         if (!entry.isFile()) continue;

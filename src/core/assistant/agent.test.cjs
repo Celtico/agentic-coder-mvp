@@ -233,6 +233,46 @@ test('uses only relevant, user-confirmed experiences from the same project', asy
   assert.doesNotMatch(systemPrompt, /Cas no relacionat/);
 });
 
+test('respects root and nested gitignore rules when collecting project context', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-gitignore-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(path.join(projectRoot, 'build'), { recursive: true });
+  await fs.mkdir(path.join(projectRoot, 'src', 'generated'), { recursive: true });
+  await fs.mkdir(path.join(projectRoot, 'docs'), { recursive: true });
+  await fs.writeFile(path.join(projectRoot, '.gitignore'), 'ignored.json\nbuild/\n**/temp?.ts\nsecret-*.json\n!secret-public.json\ndocs/*.draft.md\n');
+  await fs.writeFile(path.join(projectRoot, 'src', '.gitignore'), 'generated/\n');
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  await fs.writeFile(path.join(projectRoot, 'ignored.json'), 'PRIVATE_IGNORED_JSON');
+  await fs.writeFile(path.join(projectRoot, 'secret-private.json'), 'PRIVATE_SECRET_JSON');
+  await fs.writeFile(path.join(projectRoot, 'secret-public.json'), '{"visible":"re-included"}');
+  await fs.writeFile(path.join(projectRoot, 'build', 'bundle.ts'), 'PRIVATE_BUILD_OUTPUT');
+  await fs.writeFile(path.join(projectRoot, 'src', 'temp1.ts'), 'PRIVATE_TEMP_FILE');
+  await fs.writeFile(path.join(projectRoot, 'src', 'temp12.ts'), 'VISIBLE_TEMP12');
+  await fs.writeFile(path.join(projectRoot, 'src', 'generated', 'types.ts'), 'PRIVATE_GENERATED_TYPES');
+  await fs.writeFile(path.join(projectRoot, 'docs', 'release.draft.md'), 'PRIVATE_DRAFT_DOCUMENT');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let systemPrompt = '';
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => {
+      systemPrompt = messages[0].content;
+      return '{"type":"final","content":"Context preparat."}';
+    },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  await agent.ask('Resumeix l’estructura del projecte', projectRoot, async () => ({}));
+
+  assert.match(systemPrompt, /secret-public\.json/);
+  assert.match(systemPrompt, /VISIBLE_TEMP12/);
+  for (const ignored of ['ignored.json', 'PRIVATE_IGNORED_JSON', 'PRIVATE_SECRET_JSON', 'build/', 'PRIVATE_BUILD_OUTPUT', 'temp1.ts', 'PRIVATE_TEMP_FILE', 'generated/', 'PRIVATE_GENERATED_TYPES', 'release.draft.md', 'PRIVATE_DRAFT_DOCUMENT']) {
+    assert.doesNotMatch(systemPrompt, new RegExp(ignored.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+});
+
 test('rejects browser inspection for non-local URLs', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-remote-browser-test-'));
   const projectRoot = path.join(tempRoot, 'project');
