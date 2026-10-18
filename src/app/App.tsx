@@ -290,11 +290,7 @@ export function App(): React.JSX.Element {
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
       <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
         <Heading size="sm" fontWeight="500">Agentic Coder</Heading>
-        <HStack gap="2">
-          <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
-          <IconButton icon={Globe2} label="Obre el navegador" onClick={() => setWorkspacePanel('browser')}/>
-          <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
-        </HStack>
+        <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>{message.text}</Box>)}</Stack>}
@@ -389,13 +385,16 @@ export function App(): React.JSX.Element {
   ) : chatPane;
 
   return (
-    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" overflow="hidden" bg="bg" textStyle="interface">
-        <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3.5">
-          <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontSize="md" fontWeight="bold" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Flex>
-          <Stack gap="2" mt="0.5">
-            <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={newChat}><IconLabel icon={MessageSquarePlus}>Nova conversa</IconLabel></Button>
-            <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={selectProject}><IconLabel icon={FolderOpen}>Selecciona projecte</IconLabel></Button>
-          </Stack>
+    <Grid h="100dvh" w="full" templateColumns="64px 252px minmax(0, 1fr)" overflow="hidden" bg="bg" textStyle="interface">
+        <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" direction="column" align="center" gap="2">
+          <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={newChat}/>
+          <IconButton icon={FolderOpen} label="Selecciona projecte" w="44px" h="44px" onClick={selectProject}/>
+          <IconButton icon={Globe2} label="Obre el navegador" w="44px" h="44px" onClick={() => setWorkspacePanel('browser')}/>
+          <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" w="44px" h="44px" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
+        </Flex>
+        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3">
+          <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontWeight="semibold">Espai de treball</Flex>
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
           {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
             <Text px="2" pt="2" pb="1" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text>

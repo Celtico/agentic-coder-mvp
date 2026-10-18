@@ -31,7 +31,7 @@ export const system = createSystem(defaultConfig, defineConfig({
     },
     textStyles: {
       chatMessage: {
-        value: { fontSize: "md", lineHeight: "1.7" },
+        value: { fontSize: "sm", lineHeight: "1.7" },
       },
       interface: {
         value: { fontSize: "sm", lineHeight: "1.45" },
