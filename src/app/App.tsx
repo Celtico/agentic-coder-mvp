@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
 import { recoverCompletedHistory } from './history-recovery';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
@@ -20,7 +20,6 @@ const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
-type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
 type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova'): ChatSession {
@@ -119,6 +118,12 @@ export function App(): React.JSX.Element {
   const webviewRef = useRef<ElectronWebviewTag | null>(null);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const storeSessions = useCallback((value: ChatSession[]) => {
+    window.agentic.saveChatSessions(value).catch(() => {
+      // localStorage remains the recovery copy if SQLite is temporarily unavailable.
+    });
+  }, []);
+
   const persistMessages = useCallback((next: ChatMessage[], sessionId = activeSessionId) => {
     const trimmed = next.slice(-100);
     setSessions((current) => {
@@ -129,9 +134,10 @@ export function App(): React.JSX.Element {
         : makeSession(trimmed);
       const nextSessions = [updated, ...current.filter((session) => session.id !== sessionId)].slice(0, 50);
       localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(nextSessions));
+      storeSessions(nextSessions);
       return nextSessions;
     });
-  }, [activeSessionId]);
+  }, [activeSessionId, storeSessions]);
 
   useEffect(() => {
     const offStatus = window.agentic.onStatus((s) => {
@@ -143,11 +149,28 @@ export function App(): React.JSX.Element {
     let cancelled = false;
     (async () => {
       try {
+        const savedSessions = await window.agentic.loadChatSessions();
+        if (cancelled) return;
+        if (savedSessions.length) {
+          setSessions(savedSessions);
+          localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(savedSessions));
+          if (!savedSessions.some((session) => session.id === localStorage.getItem(ACTIVE_SESSION_KEY))) {
+            localStorage.setItem(ACTIVE_SESSION_KEY, savedSessions[0].id);
+            setActiveSessionId(savedSessions[0].id);
+          }
+        } else {
+          // First launch migration: keep localStorage as a recoverable copy until SQLite has the full snapshot.
+          const localSessions = getStoredSessions();
+          storeSessions(localSessions);
+        }
+      } catch {}
+      try {
         const entries = await window.agentic.recentHistory();
         if (!cancelled && entries?.length) setSessions((current) => {
           const recovered = recoverCompletedHistory(current, entries);
           if (recovered === current) return current;
           localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(recovered));
+          storeSessions(recovered);
           return recovered;
         });
       } catch {}
@@ -155,7 +178,7 @@ export function App(): React.JSX.Element {
       catch {}
     })();
     return () => { cancelled = true; offStatus?.(); offTerminal?.(); };
-  }, [persistMessages]);
+  }, [persistMessages, storeSessions]);
 
   useEffect(() => { localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft); }, [draft, activeSessionId]);
   useLayoutEffect(() => {
@@ -195,6 +218,7 @@ export function App(): React.JSX.Element {
     setSessions((current) => {
       const next = [session, ...current].slice(0, 50);
       localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+      storeSessions(next);
       return next;
     });
     localStorage.setItem(ACTIVE_SESSION_KEY, session.id);

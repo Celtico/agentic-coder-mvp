@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('agentic', {
   cancel: () => ipcRenderer.invoke('agent:cancel'),
   gitSnapshot: () => ipcRenderer.invoke('git:snapshot'),
   recentHistory: () => ipcRenderer.invoke('history:recent'),
+  loadChatSessions: () => ipcRenderer.invoke('chat-store:load'),
+  saveChatSessions: (sessions) => ipcRenderer.invoke('chat-store:save', sessions),
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
   runTests: () => ipcRenderer.invoke('project:run-tests'),
   runCommand: (command) => ipcRenderer.invoke('terminal:run', command),

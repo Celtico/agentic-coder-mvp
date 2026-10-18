@@ -4,6 +4,7 @@ export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
 export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean };
 export type HistoryEntry = { prompt: string; answer: string; at?: string };
+export type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
 
@@ -16,6 +17,8 @@ export interface AgenticBridge {
   cancel(): Promise<{ cancelled: boolean; reason?: string }>;
   gitSnapshot(): Promise<GitSnapshot>;
   recentHistory(): Promise<HistoryEntry[]>;
+  loadChatSessions(): Promise<ChatSession[]>;
+  saveChatSessions(sessions: ChatSession[]): Promise<number>;
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
   runTests(): Promise<{ code: number; output: string }>;
   runCommand(command: string): Promise<{ code: number | null; output: string }>;

@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot } = require('./git-tools.cjs');
+const { ChatStore } = require('./chat-store.cjs');
 
 let win;
 let modelWorker = null;
@@ -16,6 +17,17 @@ let selectedProject = null;
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
+let chatStore;
+
+function getChatStore() {
+  if (!chatStore) chatStore = new ChatStore(path.join(app.getPath('userData'), 'memory', 'conversations.sqlite'));
+  return chatStore;
+}
+
+app.on('before-quit', () => {
+  try { chatStore?.close(); } catch {}
+  chatStore = null;
+});
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
@@ -604,6 +616,9 @@ ipcMain.handle('history:recent', async () => {
     } catch { return []; }
   });
 });
+
+ipcMain.handle('chat-store:load', () => getChatStore().list());
+ipcMain.handle('chat-store:save', (_event, sessions) => getChatStore().saveMany(sessions));
 
 ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
