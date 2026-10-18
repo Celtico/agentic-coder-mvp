@@ -179,6 +179,77 @@ test('does not accept a premature final answer before requested edits and checks
   assert.match(answer, /npm test ha passat/);
 });
 
+test('reports a coding task as incomplete when the model never applies an edit', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-incomplete-task-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"plan","content":"Llegir src/math.js, corregir add i passar les proves."}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
+    '{"type":"final","content":"He acabat; add ja retorna 5."}',
+    '{"type":"final","content":"Tot està corregit i validat."}',
+    '{"type":"final","content":"La tasca està acabada."}',
+  ];
+  const prompts = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Corregeix el bug de src/math.js i executa les proves.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    return { path: tool.arguments.path, content: 'function add(a, b) { return a + b; }' };
+  });
+
+  assert.deepEqual(calls, ['read_file']);
+  assert.ok(prompts.some((prompt) => prompt.includes('Encara no has aplicat cap canvi')));
+  assert.match(answer, /no s’ha aplicat cap canvi/i);
+  assert.doesNotMatch(answer, /he acabat|tot està corregit|tasca està acabada/i);
+});
+
+test('keeps duplicate tool calls from bypassing the incomplete task report', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-incomplete-duplicate-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"plan","content":"Llegir, corregir i provar src/math.js."}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
+    '{"type":"tool_call","name":"run_tests"}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/math.js","content":"function add(a,b){return a+b+1;}"}}',
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
+    '{"type":"final","content":"La tasca està acabada i les proves han passat."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift(),
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Corregeix el bug de src/math.js i executa npm test.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'run_tests') return { code: 1, output: 'AssertionError: expected 5, received 4' };
+    if (tool.name === 'write_file') return { applied: false, cancelled: true };
+    return { path: 'src/math.js', content: 'function add(a,b){return a+b;}' };
+  });
+
+  assert.deepEqual(calls, ['read_file', 'run_tests', 'write_file']);
+  assert.match(answer, /no s’ha aplicat cap canvi/i);
+  assert.doesNotMatch(answer, /tasca està acabada|les proves han passat/i);
+});
+
 test('redirects a duplicate failed test request toward reading and repairing the code', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-failed-check-repair-test-'));
   const projectRoot = path.join(tempRoot, 'project');

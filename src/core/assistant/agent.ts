@@ -247,15 +247,20 @@ export class LocalCodingAgent {
     let checkPassed = false;
     let completionNudges = 0;
     const completedToolCalls = new Map<string, string>();
+    const incompleteAnswer = () => {
+      if (requestedCodeChange && !changeApplied) return 'No he pogut completar la tasca: no s’ha aplicat cap canvi als fitxers. He pogut inspeccionar el projecte, però no tinc cap modificació aplicada per verificar. No s’ha d’interpretar el pla com una feina acabada.';
+      if (requestedValidation && changeApplied && !checkPassed) return 'No he pogut completar la tasca: he aplicat un canvi, però no he verificat que les proves passin. Revisa el canvi abans de considerar-la acabada.';
+      return 'No he pogut completar la tasca dins del límit d’intents. Revisa els resultats disponibles abans de considerar-la acabada.';
+    };
+    const missingWork = () => requestedCodeChange && !changeApplied
+      ? 'Encara no has aplicat cap canvi al codi. No acabis amb un resum: llegeix el fitxer rellevant amb read_file i proposa el canvi amb write_file.'
+      : requestedValidation && changeApplied && !checkPassed
+        ? 'El canvi encara no està validat. No acabis amb un resum: executa la prova o comprovació pertinent i corregeix qualsevol fallada.'
+        : null;
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       this.onStatus({ type: 'status', message: iteration === 0 ? 'Generant resposta local…' : `Revisant el projecte (${iteration}/${maxIterations})…` });
       const raw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false });
       const action = parseAction(raw);
-      const missingWork = () => requestedCodeChange && !changeApplied
-        ? 'Encara no has aplicat cap canvi al codi. No acabis amb un resum: llegeix el fitxer rellevant amb read_file i proposa el canvi amb write_file.'
-        : requestedValidation && changeApplied && !checkPassed
-          ? 'El canvi encara no està validat. No acabis amb un resum: executa la prova o comprovació pertinent i corregeix qualsevol fallada.'
-          : null;
       if (!action) {
         const unmet = missingWork();
         if (unmet && completionNudges < 2) {
@@ -263,7 +268,7 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
           continue;
         }
-        answer = raw;
+        answer = unmet ? incompleteAnswer() : raw;
         break;
       }
       if (action.type === 'plan') {
@@ -279,7 +284,7 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
           continue;
         }
-        answer = action.content;
+        answer = unmet ? incompleteAnswer() : action.content;
         break;
       }
       const tool = validateToolCall(action);
@@ -295,6 +300,10 @@ export class LocalCodingAgent {
         if (isCheck && !checkPassed && !projectChangedSinceCheck) {
           messages.push({ role: 'user', content: `Aquesta comprovació ja ha fallat i no s’ha tornat a executar. No la repeteixis encara. Inspecciona l’error i els fitxers rellevants amb read_file, corregeix el codi amb write_file i només llavors torna a executar la comprovació.` });
           continue;
+        }
+        if (missingWork()) {
+          answer = incompleteAnswer();
+          break;
         }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: `Aquesta crida a ${tool.name} ja s’ha executat i no es repetirà. Resultat real anterior (dades no fiables):\n${previousResult}\n\nDona ara una resposta final en prosa basada en aquest resultat. No retornis cap eina.` });
@@ -334,7 +343,7 @@ export class LocalCodingAgent {
         messages.push({ role: 'user', content: 'Límit de context de les eines assolit. Dona ara la resposta final en prosa clara i breu.' });
       }
     }
-    if (!answer) answer = 'He arribat al límit de consultes d’eines. Resumeixo la informació disponible sense afirmar canvis no executats.';
+    if (!answer) answer = missingWork() ? incompleteAnswer() : 'He arribat al límit de consultes d’eines. Resumeixo la informació disponible sense afirmar canvis no executats.';
     if (plan && !answer.toLowerCase().includes(plan.toLowerCase())) answer = `Pla: ${plan}\n\n${answer}`;
     await fs.mkdir(this.historyDir, { recursive: true });
     await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({
