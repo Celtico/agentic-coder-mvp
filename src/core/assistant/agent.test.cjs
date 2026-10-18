@@ -34,6 +34,31 @@ test('executes a tool call wrapped in an explanatory Markdown response', async (
   assert.match(answer, /HelloWorld/);
 });
 
+test('includes recent turns from the active chat when answering a follow-up', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-conversation-context-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  let receivedMessages;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { receivedMessages = messages; return '{"type":"final","content":"Continuo amb el canvi que havies demanat."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  await agent.ask('sí, continua', tempRoot, async () => ({}), [
+    { role: 'user', content: 'Canvia el títol de src/App.vue a Hello IA.' },
+    { role: 'assistant', content: 'He llegit src/App.vue i encara em falta aplicar el canvi.' },
+  ]);
+
+  assert.deepEqual(receivedMessages.slice(-3), [
+    { role: 'user', content: 'Canvia el títol de src/App.vue a Hello IA.' },
+    { role: 'assistant', content: 'He llegit src/App.vue i encara em falta aplicar el canvi.' },
+    { role: 'user', content: 'sí, continua' },
+  ]);
+});
+
 test('starts the first tool when a small model concatenates multiple JSON actions', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-concatenated-actions-test-'));
   const projectRoot = path.join(tempRoot, 'project');

@@ -309,7 +309,8 @@ export function App(): React.JSX.Element {
     setLoading(true);
     setLoadingLabel('Preparant el model local…');
     try {
-      const answer = await window.agentic.ask(request);
+      const history = messages.slice(-8).map((message) => ({ role: message.role, content: message.text }));
+      const answer = await window.agentic.ask({ prompt: request, history });
       persistMessages([...pendingMessages, { role: 'assistant', text: answer }], requestSessionId);
     } catch (error) {
       const message = errorText(error);

@@ -28,7 +28,7 @@ process.on('message', async (message) => {
         reject(error);
       });
     });
-    const answer = await agent.ask(String(message.prompt || ''), String(message.projectRoot || ''), executeTool);
+    const answer = await agent.ask(String(message.prompt || ''), String(message.projectRoot || ''), executeTool, Array.isArray(message.history) ? message.history : []);
     process.send?.({ id: message.id, answer });
   } catch (error) {
     process.send?.({ id: message.id, error: error?.message || String(error) });

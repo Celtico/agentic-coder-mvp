@@ -21,7 +21,7 @@ export interface AgenticBridge {
   projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
-  ask(prompt: string): Promise<string>;
+  ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[] }): Promise<string>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   cancel(): Promise<{ cancelled: boolean; reason?: string }>;

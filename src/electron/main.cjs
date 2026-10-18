@@ -408,7 +408,18 @@ function findNodeExecutable() {
   throw new Error('No he trobat Node.js per executar el treballador local. Configura AGENT_NODE_EXECUTABLE o obre l’app des d’un entorn amb Node.js al PATH.');
 }
 
-async function askModel(prompt, projectRoot) {
+function cleanConversationHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-8).flatMap((message) => {
+    if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') return [];
+    const content = message.content.trim();
+    if (!content || content.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) return [];
+    if (message.role === 'assistant' && /(?:"type"\s*:\s*"tool_call"|<tool_call>|<\|tool_call\|>)/i.test(content)) return [];
+    return [{ role: message.role, content }];
+  });
+}
+
+async function askModel(prompt, projectRoot, history = []) {
   if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
   const id = ++requestId;
   activeModelRequestId = id;
@@ -417,7 +428,7 @@ async function askModel(prompt, projectRoot) {
   catch (error) { activeModelRequestId = null; throw error; }
   return new Promise((resolve, reject) => {
     pendingModelRequests.set(id, { resolve, reject });
-    child.send({ id, prompt, projectRoot }, (error) => {
+    child.send({ id, prompt, projectRoot, history: cleanConversationHistory(history) }, (error) => {
       if (!error) return;
       pendingModelRequests.delete(id);
       if (activeModelRequestId === id) activeModelRequestId = null;
@@ -757,9 +768,10 @@ ipcMain.handle('learning:prepare-dataset', async () => {
   return { prepared: true, directory: candidate.directory, manifest: candidate.manifest };
 });
 
-ipcMain.handle('agent:ask', async (_e, prompt) => {
+ipcMain.handle('agent:ask', async (_e, request) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
-  return askModel(String(prompt || ''), selectedProject);
+  const payload = request && typeof request === 'object' ? request : { prompt: request };
+  return askModel(String(payload.prompt || ''), selectedProject, payload.history);
 });
 
 ipcMain.handle('models:list', async () => ({ selectedModel, models: await getAvailableModels() }));

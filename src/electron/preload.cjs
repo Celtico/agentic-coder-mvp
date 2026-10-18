@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('agentic', {
   projectForChat: (sessionId) => ipcRenderer.invoke('project:for-chat', sessionId),
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
-  ask: (prompt) => ipcRenderer.invoke('agent:ask', prompt),
+  ask: (request) => ipcRenderer.invoke('agent:ask', request),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
   cancel: () => ipcRenderer.invoke('agent:cancel'),

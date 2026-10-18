@@ -212,13 +212,14 @@ export class LocalCodingAgent {
 
   async unloadModel(): Promise<void> { await this.engine.unloadModel(); }
 
-  async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor): Promise<string> {
+  async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = []): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
     const context = await this.collectContext(projectRoot);
     const verifiedExperiences = await this.collectVerifiedExperiences(prompt, projectRoot);
     const system = [
       'Ets un agent de programació local que ajuda a treballar sobre el projecte seleccionat per l’usuari.',
       'Quan l’usuari demana una acció clara, fes-la directament fins al final: no demanis aclariments, confirmacions ni permís per passos normals de programació. Si falta un detall menor, tria una opció habitual, continua i indica el supòsit al resum. Atura’t i pregunta només si falta una dada imprescindible o hi ha un impediment real que no es pugui resoldre inspeccionant el projecte.',
+      'Conserva el fil actual. L’historial inclòs abans de l’últim missatge pertany a aquesta conversa; utilitza’l per entendre respostes breus com «sí», «ok», «continua» i referències com «això» o «el canvi anterior». No tornis a preguntar dades que ja hi apareixen. Si una resposta anterior de l’assistent no va completar la tasca, continua-la des d’on es va quedar.',
       `Et dius Agentic Coder. Aquesta resposta la genera localment ${this.engine.getModelStatus().modelId} amb ${process.env.AGENT_MODEL_RUNTIME === 'mlx' ? 'MLX d’Apple' : 'Transformers.js'}. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder i indica el model/runtime seleccionat.`,
       `La carpeta de projecte oberta és: ${path.resolve(projectRoot)}`,
       'A cada pregunta reps un mapa de fitxers del projecte i el contingut de text que s’ha pogut incloure. Utilitza aquest context per respondre sobre el projecte; no diguis que no tens accés al directori.',
@@ -237,8 +238,15 @@ export class LocalCodingAgent {
     ].join('\n\n');
 
     await this.engine.loadModel((message) => this.onStatus({ type: 'status', message }));
+    const recentHistory = conversationHistory.slice(-8).flatMap((turn) => {
+      if (!turn || !['user', 'assistant'].includes(turn.role) || typeof turn.content !== 'string') return [];
+      const content = turn.content.trim();
+      if (!content || content.length > 2000 || (turn.role === 'assistant' && /(?:"type"\s*:\s*"tool_call"|<tool_call>|<\|tool_call\|>)/i.test(content))) return [];
+      return [{ role: turn.role, content } as ChatTurn];
+    });
     const messages: ChatTurn[] = [
       { role: 'system', content: system },
+      ...recentHistory,
       { role: 'user', content: prompt },
     ];
     const maxIterations = 8;
