@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, ElectronWebviewTag, ProjectInfo } from '../types';
 import {
-  Badge, Box, Button, Flex, Heading, HStack, Input, Stack,
+  Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
   Spinner, Splitter, Text, Textarea
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
-  LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftOpen as PanelLeftOpen, LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuMessageSquarePlus as MessageSquarePlus, LuPlay as Play, LuRefreshCw as RefreshCw,
   LuSend as Send, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -17,7 +17,6 @@ const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
-const SIDEBAR_SPLIT_KEY = 'agentic-sidebar-split-size-v1';
 type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
 type WorkspacePanel = 'browser' | 'terminal' | 'editor';
 
@@ -103,14 +102,6 @@ export function App(): React.JSX.Element {
   const [editorStatus, setEditorStatus] = useState('');
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarSplitSize, setSidebarSplitSize] = useState(() => {
-    try {
-      const value: unknown = JSON.parse(localStorage.getItem(SIDEBAR_SPLIT_KEY) || 'null');
-      return Array.isArray(value) && value.length === 2 ? value as number[] : [20, 80];
-    } catch { return [20, 80]; }
-  });
-  const lastExpandedSidebarSplitSizeRef = useRef(sidebarSplitSize);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
@@ -298,7 +289,7 @@ export function App(): React.JSX.Element {
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
       <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
-        <HStack gap="2">{!sidebarOpen && <IconButton icon={PanelLeftOpen} label="Obre el menú del projecte" onClick={() => { setSidebarSplitSize(lastExpandedSidebarSplitSizeRef.current); setSidebarOpen(true); }}/>}<Heading size="sm" fontWeight="500">Agentic Coder</Heading></HStack>
+        <Heading size="sm" fontWeight="500">Agentic Coder</Heading>
         <HStack gap="2">
           <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
           <IconButton icon={Globe2} label="Obre el navegador" onClick={() => setWorkspacePanel('browser')}/>
@@ -397,18 +388,8 @@ export function App(): React.JSX.Element {
     </Splitter.Root>
   ) : chatPane;
 
-  return sidebarOpen ? (
-      <Splitter.Root key="sidebar-open" h="100dvh" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'sidebar', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={sidebarSplitSize} onResize={(details) => setSidebarSplitSize(details.size)} onResizeEnd={(details) => {
-      if (details.size[0] <= 12) {
-        setSidebarOpen(false);
-        setSidebarSplitSize(lastExpandedSidebarSplitSizeRef.current);
-        return;
-      }
-      lastExpandedSidebarSplitSizeRef.current = details.size;
-      setSidebarSplitSize(details.size);
-      localStorage.setItem(SIDEBAR_SPLIT_KEY, JSON.stringify(details.size));
-    }} bg="bg" textStyle="interface">
-        <Splitter.Panel id="sidebar" h="full" minW="0" minH="0" overflow="hidden">
+  return (
+    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" overflow="hidden" bg="bg" textStyle="interface">
         <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3.5">
           <Flex h="58px" flex="none" align="center" borderBottomWidth="1px" borderColor="border" px="2" fontSize="md" fontWeight="bold" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Flex>
           <Stack gap="2" mt="0.5">
@@ -423,12 +404,8 @@ export function App(): React.JSX.Element {
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
           <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
         </Flex>
-        </Splitter.Panel>
-        <SplitterHandle id={'sidebar:main' as SplitterHandleId}/>
-        <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
-      </Splitter.Root>
-  ) : (
-    <Box h="100dvh" w="full" overflow="hidden" bg="bg" textStyle="interface">{mainContent}</Box>
+        <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>
+    </Grid>
   );
 }
 
