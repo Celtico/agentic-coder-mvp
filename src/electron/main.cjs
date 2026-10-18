@@ -16,6 +16,7 @@ const pendingModelRequests = new Map();
 const activeModelToolCalls = new Set();
 let activeModelRequestId = null;
 let selectedProject = null;
+let selectedModel = 'qwen-1.5b';
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
@@ -27,6 +28,8 @@ function getChatStore() {
 }
 
 app.on('before-quit', () => {
+  if (modelWorker && !modelWorker.killed) modelWorker.kill('SIGTERM');
+  modelWorker = null;
   try { chatStore?.close(); } catch {}
   chatStore = null;
 });
@@ -34,7 +37,39 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel }, null, 2), 'utf8');
+}
+
+const modelDefinitions = [
+  { id: 'qwen-1.5b', label: 'Qwen2.5-Coder 1.5B · Transformers.js', modelId: 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', runtime: 'transformers' },
+  { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX (Apple)', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx' },
+];
+const projectModelsDirectory = () => path.resolve(__dirname, '..', '..', 'models');
+const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || path.join(projectModelsDirectory(), '.mlx-venv', 'bin', 'python');
+const mlxModelDirectory = async () => {
+  const modelRoot = path.join(projectModelsDirectory(), '.hf', 'hub', 'models--mlx-community--Qwen2.5-Coder-7B-Instruct-4bit', 'snapshots');
+  const snapshots = await fs.readdir(modelRoot).catch(() => []);
+  for (const snapshot of snapshots) {
+    const directory = path.join(modelRoot, snapshot);
+    try {
+      await fs.access(path.join(directory, 'config.json'));
+      await fs.access(path.join(directory, 'model.safetensors'));
+      return directory;
+    } catch {}
+  }
+  return null;
+};
+async function getAvailableModels() {
+  const modelRoot = projectModelsDirectory();
+  const mlxPath = await mlxModelDirectory();
+  const mlxPythonReady = await fs.access(mlxPythonPath()).then(() => true, () => false);
+  return modelDefinitions.map((model) => {
+    const available = model.runtime === 'mlx' ? Boolean(mlxPath && mlxPythonReady) : true;
+    const reason = model.runtime === 'mlx' && !available
+      ? !mlxPath ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.'
+      : undefined;
+    return { id: model.id, label: model.label, modelId: model.modelId, available, ...(reason ? { reason } : {}) };
+  });
 }
 
 async function dispatchAgentTool(tool, projectRoot) {
@@ -325,7 +360,7 @@ function stopProjectProcess() {
   });
 }
 
-function startModelWorker() {
+async function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
   const nodeExecutable = findNodeExecutable();
   const child = fork(path.join(__dirname, '..', 'core', 'assistant', 'agent-worker.cjs'), [], {
@@ -334,7 +369,11 @@ function startModelWorker() {
     env: {
       ...process.env,
       AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models'),
+      AGENT_MODEL_RUNTIME: modelDefinitions.find((model) => model.id === selectedModel)?.runtime || 'transformers',
+      AGENT_MODEL: modelDefinitions.find((model) => model.id === selectedModel)?.modelId || modelDefinitions[0].modelId,
       AGENT_MODEL_PATH: path.resolve(__dirname, '..', '..', 'models', 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+      AGENT_MLX_PYTHON: mlxPythonPath(),
+      AGENT_MLX_MODEL_PATH: await mlxModelDirectory() || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
       AGENT_EMBEDDING_INDEX_PATH: path.join(app.getPath('userData'), 'learning', 'embedding-index-v1.json'),
     },
@@ -392,11 +431,13 @@ function findNodeExecutable() {
   throw new Error('No he trobat Node.js per executar el treballador local. Configura AGENT_NODE_EXECUTABLE o obre l’app des d’un entorn amb Node.js al PATH.');
 }
 
-function askModel(prompt, projectRoot) {
+async function askModel(prompt, projectRoot) {
   if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
-  const child = startModelWorker();
   const id = ++requestId;
   activeModelRequestId = id;
+  let child;
+  try { child = await startModelWorker(); }
+  catch (error) { activeModelRequestId = null; throw error; }
   return new Promise((resolve, reject) => {
     pendingModelRequests.set(id, { resolve, reject });
     child.send({ id, prompt, projectRoot }, (error) => {
@@ -452,6 +493,7 @@ app.whenReady().then(async () => {
   try {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
+    if (modelDefinitions.some((model) => model.id === saved.selectedModel)) selectedModel = saved.selectedModel;
   } catch {}
   if (!selectedProject) { selectedProject = path.resolve(__dirname, '..', '..'); await saveSettings(); }
   createWindow();
@@ -758,6 +800,24 @@ ipcMain.handle('learning:prepare-dataset', async () => {
 ipcMain.handle('agent:ask', async (_e, prompt) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   return askModel(String(prompt || ''), selectedProject);
+});
+
+ipcMain.handle('models:list', async () => ({ selectedModel, models: await getAvailableModels() }));
+ipcMain.handle('models:select', async (_e, modelId) => {
+  if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans de canviar de model.');
+  const model = modelDefinitions.find((candidate) => candidate.id === modelId);
+  if (!model) throw new Error('Aquest model no és vàlid.');
+  const available = (await getAvailableModels()).find((candidate) => candidate.id === model.id);
+  if (!available?.available) throw new Error(available?.reason || 'Aquest model encara no està disponible en aquest Mac.');
+  if (selectedModel !== model.id && modelWorker) {
+    const child = modelWorker;
+    modelWorker = null;
+    child.kill('SIGTERM');
+    await Promise.race([new Promise((resolve) => child.once('exit', resolve)), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  }
+  selectedModel = model.id;
+  await saveSettings();
+  return { selectedModel, models: await getAvailableModels() };
 });
 
 ipcMain.handle('agent:cancel', async () => cancelModelRequest());

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine } from './inference-engine';
+import { MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine } from './inference-engine';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
 
 export type AgentStatus = { type: 'status'; message: string };
@@ -195,7 +195,7 @@ export class LocalCodingAgent {
   private readonly experienceRanker: ExperienceRanker;
   private experienceEmbeddingsUnavailable = false;
 
-  constructor({ onStatus = () => {}, engine = new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
+  constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'mlx' ? new MlxInferenceEngine() : new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
     engine?: InferenceEngine;
     verifiedExperiencesPath?: string;
@@ -208,13 +208,15 @@ export class LocalCodingAgent {
     this.experienceRanker = experienceRanker;
   }
 
+  async unloadModel(): Promise<void> { await this.engine.unloadModel(); }
+
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
     const context = await this.collectContext(projectRoot);
     const verifiedExperiences = await this.collectVerifiedExperiences(prompt, projectRoot);
     const system = [
       'Ets un agent de programació local que ajuda a treballar sobre el projecte seleccionat per l’usuari.',
-      'Et dius Agentic Coder. La resposta la genera localment el model Qwen2.5-Coder-1.5B-Instruct amb Transformers.js. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder, l’assistent local basat en Qwen.',
+      `Et dius Agentic Coder. Aquesta resposta la genera localment ${this.engine.getModelStatus().modelId} amb ${process.env.AGENT_MODEL_RUNTIME === 'mlx' ? 'MLX d’Apple' : 'Transformers.js'}. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder i indica el model/runtime seleccionat.`,
       `La carpeta de projecte oberta és: ${path.resolve(projectRoot)}`,
       'A cada pregunta reps un mapa de fitxers del projecte i el contingut de text que s’ha pogut incloure. Utilitza aquest context per respondre sobre el projecte; no diguis que no tens accés al directori.',
       'L’accés queda limitat a la carpeta seleccionada. Fes servir les eines disponibles per consultar altres fitxers; cada lectura es valida al procés principal. Les escriptures només s’apliquen després que l’usuari revisi i aprovi el contingut complet.',

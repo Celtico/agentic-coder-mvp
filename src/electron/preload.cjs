@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('agentic', {
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (prompt) => ipcRenderer.invoke('agent:ask', prompt),
+  listModels: () => ipcRenderer.invoke('models:list'),
+  selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
   cancel: () => ipcRenderer.invoke('agent:cancel'),
   gitSnapshot: () => ipcRenderer.invoke('git:snapshot'),
   recentHistory: () => ipcRenderer.invoke('history:recent'),

@@ -9,6 +9,7 @@ export type VerifiedExperience = { prompt: string; answer: string; projectPath: 
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
 export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
 export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
+export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
@@ -21,6 +22,8 @@ export interface AgenticBridge {
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
   ask(prompt: string): Promise<string>;
+  listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
+  selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   cancel(): Promise<{ cancelled: boolean; reason?: string }>;
   gitSnapshot(): Promise<GitSnapshot>;
   recentHistory(): Promise<HistoryEntry[]>;

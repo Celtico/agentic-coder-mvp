@@ -4,6 +4,11 @@ const agent = new LocalCodingAgent({ onStatus: (value) => process.send?.({ type:
 const pendingTools = new Map();
 let nextToolId = 0;
 
+process.once('SIGTERM', () => {
+  void agent.unloadModel().finally(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+});
+
 process.on('message', async (message) => {
   if (message?.type === 'tool-result' && typeof message.id === 'number' && typeof message.toolId === 'number') {
     const key = `${message.id}:${message.toolId}`;

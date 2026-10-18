@@ -1,6 +1,8 @@
 import path from 'node:path';
 import process from 'node:process';
 import fs from 'node:fs/promises';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import readline from 'node:readline';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatTurn = { role: ChatRole; content: string };
@@ -25,6 +27,75 @@ export interface InferenceEngine {
 }
 
 declare const __dirname: string;
+
+/** Native Apple Silicon backend. It keeps one MLX Python process alive for the whole chat task. */
+export class MlxInferenceEngine implements InferenceEngine {
+  readonly modelId = process.env.AGENT_MODEL || 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit';
+  readonly cacheDir = process.env.AGENT_MODEL_CACHE || path.resolve(__dirname, '../../../models/.hf');
+  private child: ChildProcessWithoutNullStreams | null = null;
+  private ready: Promise<void> | null = null;
+  private pending: { resolve: (value: string) => void; reject: (error: Error) => void } | null = null;
+  private state: ModelStatus['state'] = 'unloaded';
+  private memory: MemoryUsage = { residentBytes: 0, heapBytes: 0, externalBytes: 0 };
+
+  async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {
+    if (this.state === 'ready') return;
+    if (this.ready) return this.ready;
+    this.state = 'loading';
+    this.ready = new Promise<void>((resolve, reject) => {
+      const python = process.env.AGENT_MLX_PYTHON;
+      const modelPath = process.env.AGENT_MLX_MODEL_PATH;
+      if (!python || !modelPath) { reject(new Error('No s’ha configurat el runtime MLX ni la carpeta del model.')); return; }
+      onStatus('Iniciant el runtime MLX d’Apple…');
+      const child = spawn(python, ['-u', path.join(__dirname, 'mlx-worker.py'), modelPath], { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
+      this.child = child;
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-8000); });
+      const lines = readline.createInterface({ input: child.stdout });
+      lines.on('line', (line) => {
+        let message: Record<string, unknown>;
+        try { message = JSON.parse(line); } catch { return; }
+        if (message.type === 'ready') { this.state = 'ready'; onStatus('Qwen2.5-Coder 7B carregat amb MLX.'); resolve(); return; }
+        if (message.type === 'result' && this.pending) {
+          const pending = this.pending; this.pending = null;
+          if (typeof message.error === 'string') pending.reject(new Error(message.error));
+          else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));
+        }
+      });
+      child.once('error', (error) => { this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/MLX: ${error.message}`)); });
+      child.once('exit', (code) => {
+        const wasReady = this.state === 'ready';
+        this.state = 'unloaded'; this.child = null;
+        const error = new Error(`El procés MLX s’ha aturat (${code ?? 'sense codi'}). ${stderr.trim()}`);
+        if (!wasReady) reject(error);
+        this.pending?.reject(error); this.pending = null;
+      });
+      onStatus('Carregant Qwen2.5-Coder 7B a la memòria unificada…');
+    }).catch((error) => { this.state = 'unloaded'; throw error; }).finally(() => { this.ready = null; });
+    return this.ready;
+  }
+
+  async generateResponse(messages: ChatTurn[], options: GenerationOptions): Promise<string> {
+    if (!this.child || this.state !== 'ready') throw new Error('El model MLX encara no està carregat.');
+    if (this.pending) throw new Error('El runtime MLX ja està generant una resposta.');
+    return new Promise((resolve, reject) => {
+      this.pending = { resolve, reject };
+      this.child!.stdin.write(`${JSON.stringify({ messages, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0 })}\n`, (error) => {
+        if (!error) return;
+        this.pending = null; reject(error);
+      });
+    });
+  }
+
+  async unloadModel(): Promise<void> {
+    const child = this.child; this.child = null; this.state = 'unloaded';
+    this.pending?.reject(new Error('S’ha aturat el runtime MLX.'));
+    this.pending = null;
+    if (child && !child.killed) child.kill('SIGTERM');
+  }
+  getModelStatus(): ModelStatus { return { modelId: this.modelId, state: this.state, cacheDir: this.cacheDir }; }
+  getMemoryUsage(): MemoryUsage { return this.memory; }
+}
 
 export class TransformersJsInferenceEngine implements InferenceEngine {
   readonly modelId: string;

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ChatSession, DeletedBackup, ElectronWebviewTag, GitSnapshot, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, DeletedBackup, ElectronWebviewTag, GitSnapshot, LocalModelOption, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
 import { recoverCompletedHistory } from './history-recovery';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
-  Spinner, Splitter, Text, Textarea
+  Spinner, Splitter, Text, Textarea, NativeSelect
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -87,6 +87,9 @@ export function App(): React.JSX.Element {
   const messages = activeSession?.messages || [];
   const [draft, setDraft] = useState(() => localStorage.getItem(`${DRAFT_KEY}:${activeSessionId}`) || localStorage.getItem(DRAFT_KEY) || '');
   const [status, setStatus] = useState('Preparat · model encara no carregat');
+  const [modelOptions, setModelOptions] = useState<LocalModelOption[]>([]);
+  const [selectedModel, setSelectedModel] = useState('qwen-1.5b');
+  const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
   const [workspacePanel, setWorkspacePanel] = useState<WorkspacePanel | null>(null);
@@ -183,6 +186,12 @@ export function App(): React.JSX.Element {
     const offTerminal = window.agentic.onTerminalOutput((chunk: string) => setTerminalOutput((prev) => (prev + chunk).slice(-100000)));
     let cancelled = false;
     (async () => {
+      try {
+        const available = await window.agentic.listModels();
+        if (!cancelled) { setModelOptions(available.models); setSelectedModel(available.selectedModel); }
+      } catch (error) {
+        if (!cancelled) setStatus(`No s’ha pogut carregar la llista de models: ${errorText(error)}`);
+      }
       try {
         const savedSessions = await window.agentic.loadChatSessions();
         if (cancelled) return;
@@ -471,11 +480,21 @@ export function App(): React.JSX.Element {
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
       <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
-        <Heading size="sm" fontWeight="500">Agentic Coder</Heading>
+        <HStack minW="0" gap="3"><Heading size="sm" fontWeight="500" flex="none">Agentic Coder</Heading><NativeSelect.Root size="sm" width="290px" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model local" value={selectedModel} onChange={async (event) => {
+          const nextModel = event.currentTarget.value;
+          setModelChanging(true);
+          try {
+            const result = await window.agentic.selectModel(nextModel);
+            setSelectedModel(result.selectedModel); setModelOptions(result.models);
+            const model = result.models.find((item) => item.id === result.selectedModel);
+            setStatus(`Seleccionat: ${model?.label || nextModel}. Envia una tasca per provar-lo.`);
+          } catch (error) { setStatus(`No s’ha pogut canviar el model: ${errorText(error)}`); }
+          finally { setModelChanging(false); }
+        }}>{modelOptions.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root></HStack>
         <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
-        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
+        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
           const experienceKey = `${activeSessionId}:${index}`;
           return <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>
@@ -664,7 +683,7 @@ export function App(): React.JSX.Element {
           </Box>}
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
-          <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
+          <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}<br/>S’executa al Mac.</Box>
         </Flex>
         </Splitter.Panel>
         <SplitterHandle id={'navigation:main' as SplitterHandleId}/>
