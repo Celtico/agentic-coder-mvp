@@ -1,5 +1,6 @@
 import path from 'node:path';
 import process from 'node:process';
+import fs from 'node:fs/promises';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatTurn = { role: ChatRole; content: string };
@@ -28,6 +29,7 @@ declare const __dirname: string;
 export class TransformersJsInferenceEngine implements InferenceEngine {
   readonly modelId: string;
   readonly cacheDir: string;
+  readonly modelPath: string;
   private generator: TextGenerationPipeline | null = null;
   private loading: Promise<void> | null = null;
   private state: ModelStatus['state'] = 'unloaded';
@@ -35,6 +37,7 @@ export class TransformersJsInferenceEngine implements InferenceEngine {
   constructor(modelId = process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct') {
     this.modelId = modelId;
     this.cacheDir = process.env.AGENT_MODEL_CACHE || path.resolve(__dirname, '../../../models');
+    this.modelPath = process.env.AGENT_MODEL_PATH || path.resolve(this.cacheDir, 'onnx-community/Qwen2.5-Coder-1.5B-Instruct');
   }
 
   async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {
@@ -42,10 +45,17 @@ export class TransformersJsInferenceEngine implements InferenceEngine {
     if (this.loading) return this.loading;
     this.state = 'loading';
     this.loading = (async () => {
-      onStatus(`Carregant model local: ${this.modelId}. La primera execució descarrega els pesos.`);
+      onStatus(`Carregant el model local ${this.modelId}…`);
       const { pipeline, env } = await import('@huggingface/transformers');
       env.cacheDir = this.cacheDir;
-      const loaded = await pipeline('text-generation', this.modelId, { dtype: 'q4' });
+      env.allowRemoteModels = false;
+      try {
+        await fs.access(path.join(this.modelPath, 'config.json'));
+        await fs.access(path.join(this.modelPath, 'onnx', 'model_q4.onnx'));
+      } catch {
+        throw new Error(`No s’ha trobat el model local complet a ${this.modelPath}.`);
+      }
+      const loaded = await pipeline('text-generation', this.modelPath, { dtype: 'q4' });
       this.generator = loaded as unknown as TextGenerationPipeline;
       this.state = 'ready';
       onStatus('Model local carregat.');
