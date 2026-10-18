@@ -7,10 +7,13 @@ export type HistoryEntry = { prompt: string; answer: string; at?: string };
 export type ChatSession = { id: string; title: string; updatedAt: string; projectPath?: string | null; messages: ChatMessage[] };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
+export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
   currentProject(): Promise<ProjectInfo | null>;
+  deletedBackups(): Promise<DeletedBackup[]>;
+  restoreDeletedBackup(backupId: string): Promise<{ restored: boolean; denied?: boolean; path: string }>;
   projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;

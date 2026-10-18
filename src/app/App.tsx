@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, DeletedBackup, ElectronWebviewTag, GitSnapshot, ProjectInfo, VerifiedExperience } from '../types';
 import { recoverCompletedHistory } from './history-recovery';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
@@ -10,7 +10,7 @@ import {
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw,
-  LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
+  LuHistory as History, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -20,7 +20,7 @@ const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
-type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git';
+type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git' | 'backups';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -100,6 +100,10 @@ export function App(): React.JSX.Element {
   const [terminalStatus, setTerminalStatus] = useState('');
   const [gitSnapshot, setGitSnapshot] = useState<GitSnapshot | null>(null);
   const [gitLoading, setGitLoading] = useState(false);
+  const [deletedBackups, setDeletedBackups] = useState<DeletedBackup[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState('');
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editorContent, setEditorContent] = useState('');
   const [editorOriginal, setEditorOriginal] = useState('');
@@ -331,6 +335,30 @@ export function App(): React.JSX.Element {
     finally { setGitLoading(false); }
   }
 
+  async function openDeletedBackups() {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    if (workspacePanel === 'backups') { setWorkspacePanel(null); return; }
+    setWorkspacePanel('backups');
+    setBackupsLoading(true);
+    setBackupStatus('');
+    try { setDeletedBackups(await window.agentic.deletedBackups()); }
+    catch (error) { setBackupStatus(errorText(error)); }
+    finally { setBackupsLoading(false); }
+  }
+
+  async function restoreDeletedBackup(backup: DeletedBackup) {
+    setRestoringBackupId(backup.id);
+    setBackupStatus('');
+    try {
+      const result = await window.agentic.restoreDeletedBackup(backup.id);
+      if (result.denied) { setBackupStatus('Restauració cancel·lada.'); return; }
+      const refreshed = await window.agentic.currentProject();
+      if (refreshed) setProject(refreshed);
+      setBackupStatus(`Restaurat: ${result.path}. La còpia continua guardada.`);
+    } catch (error) { setBackupStatus(errorText(error)); }
+    finally { setRestoringBackupId(null); }
+  }
+
   async function runTests() {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
     appendMessage('assistant', 'Executant npm test…');
@@ -502,6 +530,19 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
+  const backupsPane = (
+    <Flex h="full" minH="0" direction="column" p="4" bg="bg" gap="3">
+      <Text fontSize="sm" color="fg.muted">Les còpies de fitxers eliminats es guarden fora del projecte. La restauració demana confirmació i no substitueix fitxers existents.</Text>
+      {backupsLoading ? <HStack color="fg.muted"><Spinner size="sm"/><Text>Consultant les còpies…</Text></HStack>
+        : deletedBackups.length === 0 ? <Text color="fg.muted">No hi ha còpies de fitxers eliminats per a aquest projecte.</Text>
+          : <Stack flex="1" minH="0" overflowY="auto" gap="2">{deletedBackups.map((backup) => <Flex key={backup.id} align="center" justify="space-between" gap="3" p="3" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface.subtle">
+            <Box minW="0"><Text fontSize="sm" fontWeight="medium" overflowWrap="anywhere">{backup.path}</Text><Text fontSize="xs" color="fg.muted">{backup.bytes} bytes · {Number.isNaN(Date.parse(backup.deletedAt)) ? backup.deletedAt : new Date(backup.deletedAt).toLocaleString()}</Text></Box>
+            <Button size="sm" colorPalette="agentic" variant="outline" flex="none" onClick={() => void restoreDeletedBackup(backup)} disabled={Boolean(restoringBackupId)}>{restoringBackupId === backup.id ? <Spinner size="xs"/> : <History size={14}/>}Restaura</Button>
+          </Flex>)}</Stack>}
+      {backupStatus && <Text fontSize="xs" color={backupStatus.startsWith('Restaurat:') ? 'agentic.200' : 'yellow.200'}>{backupStatus}</Text>}
+    </Flex>
+  );
+
   useEffect(() => {
     const view = webviewRef.current;
     if (!view) return;
@@ -511,8 +552,8 @@ export function App(): React.JSX.Element {
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
   }, [browserOpen, browserUrl]);
 
-  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : 'Edita fitxer';
-  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : null;
+  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : workspacePanel === 'backups' ? 'Còpies eliminades' : 'Edita fitxer';
+  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : workspacePanel === 'backups' ? backupsPane : null;
   const workspacePane = panelContent && (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
@@ -551,6 +592,7 @@ export function App(): React.JSX.Element {
           <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
           <IconButton icon={TerminalIcon} label={workspacePanel === 'terminal' ? 'Tanca la terminal del projecte' : 'Obre la terminal del projecte'} w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel((current) => current === 'terminal' ? null : 'terminal'); }}/>
           <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
+          <IconButton icon={History} label={workspacePanel === 'backups' ? 'Tanca les còpies eliminades' : 'Restaura fitxers eliminats'} w="44px" h="44px" variant={workspacePanel === 'backups' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'backups' ? 'agentic' : 'gray'} onClick={() => void openDeletedBackups()}/>
         </Flex>
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '220px', maxSize: '360px', resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '440px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(660, window.innerWidth - 64);

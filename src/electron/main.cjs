@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot } = require('./git-tools.cjs');
 const { ChatStore } = require('./chat-store.cjs');
-const { inspectFileForDeletion, deleteInspectedProjectFile } = require('./project-file-tools.cjs');
+const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
 
 let win;
 let modelWorker = null;
@@ -199,7 +199,9 @@ async function dispatchAgentTool(tool, projectRoot) {
     const snapshot = await inspectFileForDeletion(root, relativePath);
     const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
     const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
-    const backupPath = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted', stamp, relativePath);
+    const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
+    const backupPath = path.join(deletedRoot, stamp, relativePath);
+    const metadataPath = path.join(deletedRoot, stamp, '.agentic-metadata.json');
     const decision = await dialog.showMessageBox(win, {
       type: 'warning',
       buttons: ['Cancel·la', 'Elimina i desa còpia'],
@@ -210,7 +212,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       detail: `Projecte: ${root}\nFitxer: ${relativePath}\nMida: ${snapshot.size} bytes\n\nEs crearà i verificarà una còpia recuperable fora del projecte abans d’eliminar el fitxer. Si el fitxer canvia després d’aquesta confirmació, no s’eliminarà.`
     });
     if (decision.response !== 1) return { deleted: false, denied: true, path: relativePath };
-    return deleteInspectedProjectFile(snapshot, backupPath);
+    return deleteInspectedProjectFile(snapshot, backupPath, metadataPath);
   }
   if (tool.name === 'write_file' && typeof tool.arguments?.path === 'string' && typeof tool.arguments?.content === 'string') {
     const relativePath = tool.arguments.path;
@@ -483,6 +485,33 @@ async function listFiles(root, rel = '', depth = 0) {
 ipcMain.handle('project:current', async () => {
   if (!selectedProject) return null;
   return { path: selectedProject, files: await listFiles(selectedProject) };
+});
+
+ipcMain.handle('project:deleted-backups', async () => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  const root = await fs.realpath(selectedProject);
+  const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
+  return listDeletedProjectFiles(deletedRoot);
+});
+
+ipcMain.handle('project:restore-deleted-backup', async (_event, backupId) => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  if (typeof backupId !== 'string' || backupId.length > 1000) throw new Error('Identificador de còpia no vàlid.');
+  const root = await fs.realpath(selectedProject);
+  const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
+  const backups = await listDeletedProjectFiles(deletedRoot);
+  const backup = backups.find((entry) => entry.id === backupId);
+  if (!backup) throw new Error('La còpia no existeix o no ha superat la verificació.');
+  const decision = await confirmProjectAction({
+    title: 'Confirmar restauració de fitxer',
+    message: `Es restaurarà ${backup.path} al projecte.`,
+    button: 'Restaura el fitxer',
+    detail: `Projecte: ${root}\nCòpia: ${backup.id}\nMida: ${backup.bytes} bytes\n\nSi ja existeix un fitxer al destí, la restauració s’aturarà sense substituir-lo. La còpia de recuperació es conservarà.`
+  });
+  if (!decision) return { restored: false, denied: true, path: backup.path };
+  return restoreDeletedProjectFile(root, deletedRoot, backupId);
 });
 
 ipcMain.handle('project:for-chat', async (_event, sessionId) => {

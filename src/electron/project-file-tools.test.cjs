@@ -3,26 +3,52 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { inspectFileForDeletion, deleteInspectedProjectFile } = require('./project-file-tools.cjs');
+const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
 
 test('deletion saves a verified private backup before removing a project file', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-delete-test-'));
   const projectRoot = path.join(tempRoot, 'project');
   const filePath = path.join(projectRoot, 'src', 'unused.ts');
-  const backupPath = path.join(tempRoot, 'backups', 'src', 'unused.ts');
+  const deletedRoot = path.join(tempRoot, 'backups', 'deleted');
+  const backupPath = path.join(deletedRoot, 'stamp', 'src', 'unused.ts');
+  const metadataPath = path.join(deletedRoot, 'stamp', '.agentic-metadata.json');
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const original = 'export const unused = true;\n';
   await fs.writeFile(filePath, original, { mode: 0o644 });
   t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
 
   const snapshot = await inspectFileForDeletion(projectRoot, 'src/unused.ts');
-  const result = await deleteInspectedProjectFile(snapshot, backupPath);
+  const result = await deleteInspectedProjectFile(snapshot, backupPath, metadataPath);
 
   assert.equal(result.deleted, true);
   assert.equal(result.bytes, Buffer.byteLength(original));
   assert.equal(await fs.readFile(filePath).catch(() => null), null);
   assert.equal(await fs.readFile(backupPath, 'utf8'), original);
   assert.equal((await fs.stat(backupPath)).mode & 0o777, 0o600);
+
+  const backups = await listDeletedProjectFiles(deletedRoot);
+  assert.deepEqual(backups.map(({ path: relativePath, bytes }) => ({ path: relativePath, bytes })), [{ path: 'src/unused.ts', bytes: Buffer.byteLength(original) }]);
+  const restored = await restoreDeletedProjectFile(projectRoot, deletedRoot, backups[0].id);
+  assert.equal(restored.restored, true);
+  assert.equal(await fs.readFile(filePath, 'utf8'), original);
+  assert.equal((await fs.stat(filePath)).mode & 0o777, 0o644);
+});
+
+test('restoration never overwrites an existing file', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-restore-collision-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  const deletedRoot = path.join(tempRoot, 'backups', 'deleted');
+  const backupPath = path.join(deletedRoot, 'stamp', 'file.txt');
+  await fs.mkdir(projectRoot);
+  await fs.mkdir(path.dirname(backupPath), { recursive: true });
+  await fs.writeFile(backupPath, 'saved version');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const metadataPath = path.join(deletedRoot, 'stamp', '.agentic-metadata.json');
+  await fs.writeFile(metadataPath, JSON.stringify({ version: 1, relativePath: 'file.txt', sha256: require('node:crypto').createHash('sha256').update('saved version').digest('hex'), mode: 0o644, deletedAt: '2026-10-18T00:00:00.000Z' }));
+  await fs.writeFile(path.join(projectRoot, 'file.txt'), 'current version');
+  await assert.rejects(restoreDeletedProjectFile(projectRoot, deletedRoot, 'stamp/file.txt'), /Ja existeix/);
+  assert.equal(await fs.readFile(path.join(projectRoot, 'file.txt'), 'utf8'), 'current version');
 });
 
 test('deletion is cancelled if the file changes after inspection', async (t) => {

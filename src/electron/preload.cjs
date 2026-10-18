@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('agentic', {
   openProject: () => ipcRenderer.invoke('project:open'),
   currentProject: () => ipcRenderer.invoke('project:current'),
+  deletedBackups: () => ipcRenderer.invoke('project:deleted-backups'),
+  restoreDeletedBackup: (backupId) => ipcRenderer.invoke('project:restore-deleted-backup', backupId),
   projectForChat: (sessionId) => ipcRenderer.invoke('project:for-chat', sessionId),
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
