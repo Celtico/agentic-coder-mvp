@@ -410,8 +410,8 @@ export function App(): React.JSX.Element {
         <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" p="3" direction="column" gap="3.5">
           <Box fontSize="md" fontWeight="bold" px="2" py="1.5" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Box>
           <Stack gap="2">
-            <IconButton icon={MessageSquarePlus} label="Nova conversa" w="full" onClick={newChat}/>
-            <IconButton icon={FolderOpen} label="Selecciona projecte" w="full" onClick={selectProject}/>
+            <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={newChat}><IconLabel icon={MessageSquarePlus}>Nova conversa</IconLabel></Button>
+            <Button variant="ghost" w="full" justifyContent="flex-start" px="3" onClick={selectProject}><IconLabel icon={FolderOpen}>Selecciona projecte</IconLabel></Button>
           </Stack>
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
           {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
