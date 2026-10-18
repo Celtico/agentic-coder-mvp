@@ -63,14 +63,14 @@ test('starts the first tool when a small model concatenates multiple JSON action
   assert.match(answer, /he comprovat la cerca/i);
 });
 
-test('routes a requested Git commit through the confirmation gated commit tool', async (t) => {
+test('routes a requested Git commit through the commit tool', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-commit-test-'));
   await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
   t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
   const responses = [
-    '{"type":"plan","content":"Revisaré els canvis de Git i crearé el commit després de la confirmació."}',
+    '{"type":"plan","content":"Revisaré els canvis de Git i crearé el commit demanat."}',
     '{"type":"tool_call","name":"create_git_commit","arguments":{"message":"Actualitza el projecte"}}',
-    '{"type":"final","content":"El commit s’ha creat després de la confirmació."}',
+    '{"type":"final","content":"El commit s’ha creat."}',
   ];
   const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
   const agent = new LocalCodingAgent({ engine });
@@ -84,6 +84,34 @@ test('routes a requested Git commit through the confirmation gated commit tool',
 
   assert.deepEqual(calls, [{ name: 'create_git_commit', arguments: { message: 'Actualitza el projecte' } }]);
   assert.match(answer, /commit s’ha creat/i);
+});
+
+test('does not stop for an unnecessary clarification before editing a clear request', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-no-clarification-test-'));
+  await fs.mkdir(path.join(tempRoot, 'src'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  await fs.writeFile(path.join(tempRoot, 'src', 'hello.js'), 'export const title = "Hello";\n');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"final","content":"Vols que canviï només el títol o també la resta del fitxer?"}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/hello.js","content":"export const title = \\"Hello IA\\";\\n"}}',
+    '{"type":"final","content":"He canviat el títol a Hello IA."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Modifica el títol i fica Hello IA', tempRoot, async (tool) => {
+    calls.push(tool);
+    await fs.writeFile(path.join(tempRoot, tool.arguments.path), tool.arguments.content);
+    return { applied: true, path: tool.arguments.path };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'write_file');
+  assert.match(answer, /Hello IA/);
+  assert.match(await fs.readFile(path.join(tempRoot, 'src', 'hello.js'), 'utf8'), /Hello IA/);
 });
 
 test('shows a plan before requesting a package installation', async (t) => {
@@ -339,7 +367,7 @@ test('rejects package names that contain shell arguments', async (t) => {
   assert.match(answer, /no s’ha intentat/i);
 });
 
-test('routes project startup through its confirmation-gated tool', async (t) => {
+test('routes project startup through its tool', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-start-test-'));
   const projectRoot = path.join(tempRoot, 'project');
   await fs.mkdir(projectRoot);

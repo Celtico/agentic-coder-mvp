@@ -82,13 +82,8 @@ async function dispatchAgentTool(tool, projectRoot) {
     const snapshot = await getGitCommitCandidates(root);
     if (!snapshot.available) throw new Error(snapshot.reason);
     if (!snapshot.paths.length) return { committed: false, nothingToCommit: true, message: 'No hi ha canvis per incloure al commit.' };
-    const approved = await confirmProjectAction({
-      title: 'Revisa el commit proposat', message: `L’agent vol crear un commit amb ${snapshot.paths.length} fitxer(s).`, button: 'Revisa i crea el commit',
-      detail: `Projecte: ${root}\nMissatge: ${message}\n\nFitxers inclosos:\n${snapshot.paths.map((file) => `• ${file}`).join('\n')}\n\nEs prepararan aquests fitxers i es crearà el commit. Els fitxers ignorats no s’inclouen.`
-    });
-    if (!approved) return { committed: false, approved: false, cancelled: true, message: 'L’usuari ha cancel·lat el commit.' };
     const latest = await getGitCommitCandidates(root);
-    if (!latest.available || latest.status !== snapshot.status) throw new Error('Els canvis del projecte han canviat durant la confirmació. Torna a revisar Git abans de crear el commit.');
+    if (!latest.available || latest.status !== snapshot.status) throw new Error('Els canvis del projecte han canviat durant la tasca. Torna a revisar Git abans de crear el commit.');
     const staged = await executeBinary('git', ['add', '-A', '--', ...snapshot.paths], root, 30000);
     if (staged.code !== 0) return { committed: false, stageCode: staged.code, output: staged.output };
     const committed = await executeBinary('git', ['commit', '-m', message], root, 30000);
@@ -99,22 +94,12 @@ async function dispatchAgentTool(tool, projectRoot) {
     let pkg;
     try { pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')); } catch { throw new Error('No s’ha trobat un package.json vàlid.'); }
     if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
-    const approved = await confirmProjectAction({
-      title: 'Confirmar execució de proves', message: 'L’agent demana executar npm test.', button: 'Executa npm test',
-      detail: `Carpeta: ${root}\n\nLes proves poden executar codi del projecte i modificar fitxers. El procés s’aturarà al cap de 2 minuts.`
-    });
-    if (!approved) return { approved: false, cancelled: true, command: 'npm test' };
     return executeProjectTests(root);
   }
   if (tool.name === 'run_project_script' && typeof tool.arguments?.script === 'string' && /^[a-zA-Z0-9:_-]{1,64}$/.test(tool.arguments.script)) {
     const pkg = await readProjectPackage(root);
     const script = tool.arguments.script;
     if (typeof pkg.scripts?.[script] !== 'string') throw new Error(`El projecte no defineix el script ${script}.`);
-    const approved = await confirmProjectAction({
-      title: 'Confirmar comprovació del projecte', message: `L’agent demana executar npm run ${script}.`, button: `Executa ${script}`,
-      detail: `Carpeta: ${root}\nOrdre: npm run ${script}\nScript definit al package.json: ${pkg.scripts[script]}\n\nL’ordre pot executar codi del projecte i modificar fitxers.`
-    });
-    if (!approved) return { approved: false, cancelled: true, script };
     return executeNpmScript(root, script);
   }
   if (tool.name === 'start_project' && typeof tool.arguments?.script === 'string' && /^(dev|start|preview)$/.test(tool.arguments.script)) {
@@ -123,21 +108,11 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (typeof pkg.scripts?.[script] !== 'string') throw new Error(`El projecte no defineix el script ${script}.`);
     if (activeProjectProcess && activeProjectRoot === root) return { started: true, alreadyRunning: true, script, output: activeProjectOutput };
     if (activeProjectProcess) throw new Error('Ja hi ha una app d’un altre projecte en marxa. Atura-la abans de canviar de projecte.');
-    const approved = await confirmProjectAction({
-      title: 'Confirmar inici de l’app del projecte', message: `L’agent demana iniciar npm run ${script}.`, button: 'Inicia l’app',
-      detail: `Carpeta: ${root}\nOrdre: npm run ${script}\nScript definit al package.json: ${pkg.scripts[script]}\n\nL’app quedarà en marxa fins que l’aturis, tanquis l’app Agentic Coder o el procés acabi.`
-    });
-    if (!approved) return { started: false, approved: false, cancelled: true, script };
     return startProjectProcess(root, script);
   }
   if (tool.name === 'stop_project') {
     if (!activeProjectProcess) return { stopped: true, alreadyStopped: true };
     const root = activeProjectRoot;
-    const approved = await confirmProjectAction({
-      title: 'Confirmar aturada de l’app', message: 'L’agent demana aturar l’app del projecte.', button: 'Atura l’app',
-      detail: `Carpeta: ${root}\n\nS’aturarà el procés iniciat per Agentic Coder.`
-    });
-    if (!approved) return { stopped: false, approved: false, cancelled: true };
     return stopProjectProcess();
   }
   if (tool.name === 'install_package' && typeof tool.arguments?.packageName === 'string' && typeof tool.arguments?.dev === 'boolean') {
@@ -173,11 +148,6 @@ async function dispatchAgentTool(tool, projectRoot) {
     let playwrightPath;
     try { playwrightPath = require.resolve('playwright', { paths: [root] }); }
     catch { throw new Error('Playwright no està instal·lat en aquest projecte. Demana instal·lar @playwright/test o playwright amb confirmació.'); }
-    const approved = await confirmProjectAction({
-      title: 'Confirmar inspecció del navegador', message: `L’agent demana inspeccionar ${target.origin}${target.pathname}.`, button: 'Obre i inspecciona',
-      detail: `Carpeta: ${root}\nAdreça: ${target.origin}${target.pathname}\n\nS’iniciarà Chromium local en mode sense finestra per llegir el text de la pàgina, registrar errors i desar una captura a les dades locals de l’app. Només es permet localhost.`
-    });
-    if (!approved) return { approved: false, cancelled: true, url: `${target.origin}${target.pathname}` };
     const { chromium } = require(playwrightPath);
     let browser;
     try {
@@ -284,19 +254,8 @@ async function dispatchAgentTool(tool, projectRoot) {
       existing = { path: await fs.realpath(target), content: await fs.readFile(target, 'utf8') };
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (existing && !isWithin(root, existing.path)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
-    if (existing && existing.content.length > 8000) throw new Error('El fitxer actual és massa llarg per mostrar-lo complet a la confirmació. Obre’l a l’editor per revisar-lo manualment.');
+    if (existing && existing.content.length > 8000) throw new Error('El fitxer és massa llarg per modificar-lo amb seguretat des de l’eina ràpida. Obre’l a l’editor per revisar-lo.');
     if (existing?.content === content) return { applied: false, unchanged: true, path: relativePath };
-    const diff = createReviewDiff(existing?.content ?? '', content);
-    const decision = await dialog.showMessageBox(win, {
-      type: 'warning',
-      buttons: ['Cancel·la', 'Aplica el canvi'],
-      defaultId: 0,
-      cancelId: 0,
-      title: existing ? 'Revisar canvi proposat' : 'Revisar fitxer nou',
-      message: `${existing ? 'L’agent proposa modificar' : 'L’agent proposa crear'} ${relativePath}. Revisa el contingut abans d’aplicar-lo.`,
-      detail: `DIFERÈNCIA (una secció):\n${diff}\n\nCONTINGUT ACTUAL:\n${existing?.content ?? '(fitxer nou)'}\n\nCONTINGUT PROPOSAT:\n${content}`
-    });
-    if (decision.response !== 1) return { applied: false, denied: true, path: relativePath };
     const saved = await writeProjectFile(root, relativePath, content, { allowCreate: true });
     return { applied: true, path: relativePath, created: !existing, backupPath: saved.backupPath };
   }
@@ -630,23 +589,6 @@ function safeBrowserUrl(value) {
   } catch { return '(adreça local)'; }
 }
 
-function createReviewDiff(before, after) {
-  const oldLines = before.split(/\r?\n/);
-  const newLines = after.split(/\r?\n/);
-  let prefix = 0;
-  while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) prefix += 1;
-  let oldTail = oldLines.length - 1;
-  let newTail = newLines.length - 1;
-  while (oldTail >= prefix && newTail >= prefix && oldLines[oldTail] === newLines[newTail]) { oldTail -= 1; newTail -= 1; }
-  const removed = oldLines.slice(prefix, oldTail + 1);
-  const added = newLines.slice(prefix, newTail + 1);
-  const hunk = [`@@ -${prefix + 1},${removed.length} +${prefix + 1},${added.length} @@`];
-  if (prefix > 0) hunk.push(` ${oldLines[prefix - 1]}`);
-  hunk.push(...removed.map((line) => `-${line}`), ...added.map((line) => `+${line}`));
-  if (oldTail + 1 < oldLines.length) hunk.push(` ${oldLines[oldTail + 1]}`);
-  return hunk.join('\n').slice(0, 18000);
-}
-
 async function writeProjectFile(root, relativePath, content, { allowCreate }) {
   const target = safeProjectPath(root, relativePath);
   const parent = await fs.realpath(path.dirname(target));
@@ -850,11 +792,6 @@ ipcMain.handle('project:run-tests', async () => {
   const root = await fs.realpath(selectedProject);
   const pkg = await readProjectPackage(root);
   if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
-  const approved = await confirmProjectAction({
-    title: 'Confirmar execució de proves', message: 'S’executarà npm test al projecte seleccionat.', button: 'Executa npm test',
-    detail: `Carpeta: ${root}\n\nLes proves poden executar codi del projecte i modificar fitxers. El procés s’aturarà al cap de 2 minuts.`
-  });
-  if (!approved) return { code: null, output: 'Execució cancel·lada.' };
   return executeProjectTests(root);
 });
 

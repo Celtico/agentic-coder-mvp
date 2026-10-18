@@ -467,7 +467,7 @@ export function App(): React.JSX.Element {
     const command = terminalCommand.trim();
     if (!command || !project || terminalBusy) return;
     setTerminalOutput((current) => `${current}\n$ ${command}\n`);
-    setTerminalStatus('Esperant confirmació…');
+    setTerminalStatus('Executant ordre…');
     setTerminalBusy(true);
     try {
       const result = await window.agentic.runCommand(command);
@@ -509,7 +509,7 @@ export function App(): React.JSX.Element {
         <Box bg="surface" borderWidth="1px" borderColor="border" borderRadius="22px" p="3" boxShadow="composer">
           <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
-            <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">L’app demana confirmació abans d’executar o instal·lar.</Text></HStack>
+            <HStack gap="2"><Button size="xs" variant="outline" onClick={runTests}><IconLabel icon={Play}>Executa proves</IconLabel></Button><Text fontSize="xs" color="fg.muted">L’agent aplica canvis i executa proves directament. Només demana confirmació per eliminar fitxers o instal·lar paquets.</Text></HStack>
             {loading
               ? <Button aria-label="Atura la generació" title="Atura la generació" colorPalette="red" rounded="full" size="sm" onClick={cancelPrompt}><Stop size={17}/></Button>
               : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
