@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, ElectronWebviewTag, ProjectInfo } from '../types';
+import type { ChatMessage, ElectronWebviewTag, ProjectInfo, VerifiedExperience } from '../types';
 import {
   Badge, Box, Button, Flex, Grid, Heading, HStack, Input, Stack,
   Spinner, Splitter, Text, Textarea
@@ -109,6 +109,7 @@ export function App(): React.JSX.Element {
     const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
     return Number.isFinite(stored) && stored >= 220 && stored <= 360 ? stored : 252;
   });
+  const [verifiedExperienceKeys, setVerifiedExperienceKeys] = useState<Set<string>>(() => new Set());
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
@@ -237,6 +238,21 @@ export function App(): React.JSX.Element {
     } catch (error) { appendMessage('assistant', `Error: ${errorText(error)}`); }
   }
 
+  async function saveVerifiedExperience(prompt: string, answer: string, key: string) {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    const evidence = window.prompt('Quina comprovació real valida aquest exemple? Per exemple, una prova superada o un comportament comprovat al navegador.');
+    if (!evidence?.trim()) return;
+    try {
+      const input: VerifiedExperience = { prompt, answer, projectPath: project.path, evidence: evidence.trim() };
+      const result = await window.agentic.recordVerifiedExperience(input);
+      setVerifiedExperienceKeys((current) => new Set(current).add(key));
+      setStatus(result.saved ? 'Cas verificat guardat localment; el model no s’ha entrenat.' : 'Aquest cas ja era a la memòria local.');
+    } catch (error) {
+      const message = errorText(error);
+      if (!message.includes('cancel·lat')) setStatus(message);
+    }
+  }
+
   async function openEditor(relativePath: string) {
     try {
       const content = await window.agentic.readFile(relativePath);
@@ -300,7 +316,14 @@ export function App(): React.JSX.Element {
         <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
-        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>{message.text}</Box>)}</Stack>}
+        {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">Qwen2.5-Coder-1.5B-Instruct · model local</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
+          const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
+          const experienceKey = `${activeSessionId}:${index}`;
+          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace="pre-wrap" overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>
+            {message.text}
+            {previousUser && !message.error && <Button mt="2" size="xs" variant="ghost" colorPalette="gray" disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => void saveVerifiedExperience(previousUser.text, message.text, experienceKey)}>{verifiedExperienceKeys.has(experienceKey) ? 'Desat com a cas verificat' : 'Desa com a cas verificat…'}</Button>}
+          </Box>;
+        })}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text>{loadingLabel}</Text></HStack>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="4">

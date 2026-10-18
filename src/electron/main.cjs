@@ -180,6 +180,43 @@ ipcMain.handle('history:recent', async () => {
   });
 });
 
+ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
+  if (!selectedProject) throw new Error('Primer obre un projecte.');
+  if (!value || typeof value !== 'object') throw new Error('El cas d’aprenentatge no és vàlid.');
+  const { prompt, answer, projectPath, evidence } = value;
+  if ([prompt, answer, projectPath, evidence].some((item) => typeof item !== 'string') || !prompt.trim() || !answer.trim() || !evidence.trim()) {
+    throw new Error('Cal indicar la petició, la resposta i una comprovació real.');
+  }
+  if (prompt.length > 12000 || answer.length > 30000 || evidence.length > 4000) throw new Error('El cas supera el límit de mida.');
+  const root = await fs.realpath(selectedProject);
+  if (await fs.realpath(projectPath) !== root) throw new Error('El projecte actiu ha canviat; selecciona’l de nou abans de guardar el cas.');
+  const selectedText = `${prompt}\n${answer}\n${evidence}`;
+  const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b/i;
+  if (secretPattern.test(selectedText)) throw new Error('Sembla que el text conté una credencial. Treu-la abans de desar aquest cas.');
+
+  const id = createHash('sha256').update(JSON.stringify({ root, prompt, answer, evidence })).digest('hex');
+  const filePath = path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl');
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  let existing = '';
+  try { existing = await fs.readFile(filePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (existing.split(/\r?\n/).some((line) => { try { return JSON.parse(line).id === id; } catch { return false; } })) return { id, saved: false };
+
+  const decision = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Cancel·la', 'Desa localment'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Desar un cas verificat?',
+    message: 'Aquest exemple s’afegirà a la memòria local de casos verificats.',
+    detail: 'No es modifica ni s’entrena el model. El text es guarda només en aquest Mac. Comprova que no contingui credencials, dades personals ni codi que no vulguis conservar. La comprovació indicada és la procedència del cas.'
+  });
+  if (decision.response !== 1) throw new Error('Desat del cas cancel·lat.');
+  const record = { id, at: new Date().toISOString(), projectPath: root, model: process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', prompt, answer, evidence, verification: 'user-confirmed' };
+  await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
+  await fs.chmod(filePath, 0o600);
+  return { id, saved: true };
+});
+
 ipcMain.handle('agent:ask', async (_e, prompt) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   return askModel(String(prompt || ''), selectedProject);
