@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, ElectronWebviewTag, ProjectInfo } from '../types';
 import {
-  Badge, Box, Button, Dialog, Flex, Grid, Heading, HStack, Input, Stack,
+  Badge, Box, Button, Flex, Heading, HStack, Input, Stack,
   Spinner, Splitter, Text, Textarea
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
-  LuMessageSquarePlus as MessageSquarePlus, LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftOpen as PanelLeftOpen, LuPlay as Play, LuRefreshCw as RefreshCw,
   LuSend as Send, LuTerminal as TerminalIcon, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -17,7 +17,9 @@ const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
+const SIDEBAR_SPLIT_KEY = 'agentic-sidebar-split-size-v1';
 type ChatSession = { id: string; title: string; updatedAt: string; messages: ChatMessage[] };
+type WorkspacePanel = 'browser' | 'terminal' | 'editor';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova'): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -54,6 +56,13 @@ function getStoredSessions(): ChatSession[] {
 type IconButtonProps = React.ComponentProps<typeof Button> & { icon: IconType; label: string };
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="sm" px="2" {...props}><Icon size={16}/></Button>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
+type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
+const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
+  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per redimensionar o tancar el panell" title="Arrossega per redimensionar o tancar el panell" w="12px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+    <Splitter.ResizeTriggerSeparator bg="transparent"/>
+    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="border" borderWidth="0" boxShadow="none"/>
+  </Splitter.ResizeTrigger>
+);
 
 function getSplitSize(): number[] {
   try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
@@ -78,11 +87,11 @@ export function App(): React.JSX.Element {
   const [status, setStatus] = useState('Preparat · model encara no carregat');
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
-  const [browserOpen, setBrowserOpen] = useState(false);
+  const [workspacePanel, setWorkspacePanel] = useState<WorkspacePanel | null>(null);
+  const browserOpen = workspacePanel === 'browser';
   const [browserAddress, setBrowserAddress] = useState('');
   const [browserUrl, setBrowserUrl] = useState('about:blank');
   const [browserContext, setBrowserContext] = useState('');
-  const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState('');
   const [terminalOutput, setTerminalOutput] = useState('');
   const [terminalBusy, setTerminalBusy] = useState(false);
@@ -93,6 +102,15 @@ export function App(): React.JSX.Element {
   const [editorBusy, setEditorBusy] = useState(false);
   const [editorStatus, setEditorStatus] = useState('');
   const [splitSize, setSplitSize] = useState(getSplitSize);
+  const lastExpandedSplitSizeRef = useRef(splitSize);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarSplitSize, setSidebarSplitSize] = useState(() => {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(SIDEBAR_SPLIT_KEY) || 'null');
+      return Array.isArray(value) && value.length === 2 ? value as number[] : [20, 80];
+    } catch { return [20, 80]; }
+  });
+  const lastExpandedSidebarSplitSizeRef = useRef(sidebarSplitSize);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
@@ -224,7 +242,7 @@ export function App(): React.JSX.Element {
   async function openEditor(relativePath: string) {
     try {
       const content = await window.agentic.readFile(relativePath);
-      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorStatus('');
+      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorStatus(''); setWorkspacePanel('editor');
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
   }
 
@@ -235,7 +253,7 @@ export function App(): React.JSX.Element {
     setEditorBusy(true);
     try {
       await window.agentic.writeFile(editingPath, editorContent);
-      setEditorOriginal(editorContent); setEditingPath(null);
+      setEditorOriginal(editorContent); setEditingPath(null); setWorkspacePanel(null);
       appendMessage('assistant', `Canvi desat a ${editingPath}.`);
     } catch (error) { setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
@@ -257,7 +275,7 @@ export function App(): React.JSX.Element {
       const data = JSON.parse(page || '{}');
       const text = String(data.text || '').slice(0, 12000);
       setBrowserContext(`URL: ${data.url || browserAddress}\nTítol: ${data.title || ''}\n\n${text}`);
-      setBrowserOpen(false);
+      setWorkspacePanel(null);
       setStatus(text ? 'Pàgina afegida al context del xat' : 'La pàgina no conté text visible');
       promptRef.current?.focus();
     } catch (error) { setStatus(`No s’ha pogut llegir la pàgina: ${errorText(error)}`); }
@@ -280,11 +298,11 @@ export function App(): React.JSX.Element {
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
       <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
-        <Heading size="sm" fontWeight="500">Agentic Coder</Heading>
+        <HStack gap="2">{!sidebarOpen && <IconButton icon={PanelLeftOpen} label="Obre el menú del projecte" onClick={() => { setSidebarSplitSize(lastExpandedSidebarSplitSizeRef.current); setSidebarOpen(true); }}/>}<Heading size="sm" fontWeight="500">Agentic Coder</Heading></HStack>
         <HStack gap="2">
           <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
-          <Button size="sm" variant="outline" onClick={() => setBrowserOpen(true)}><IconLabel icon={Globe2}>Navegador</IconLabel></Button>
-          <Button size="sm" variant="outline" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen(true); }}><IconLabel icon={TerminalIcon}>Terminal</IconLabel></Button>
+          <IconButton icon={Globe2} label="Obre el navegador" onClick={() => setWorkspacePanel('browser')}/>
+          <IconButton icon={TerminalIcon} label="Obre la terminal del projecte" onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel('terminal'); }}/>
         </HStack>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
@@ -306,17 +324,35 @@ export function App(): React.JSX.Element {
   );
 
   const browserPane = (
-    <Flex h="full" w="full" minW="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
-      <Flex h="50px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border"><Text fontWeight="semibold">Navegador web</Text><HStack><Text fontSize="xs" color="fg.muted">Dins de l’app</Text><IconButton icon={X} label="Tanca navegador" onClick={() => setBrowserOpen(false)}/></HStack></Flex>
+    <Flex h="full" w="full" minW="0" direction="column" bg="bg">
       <Flex gap="1.5" align="center" p="2" borderBottomWidth="1px" borderColor="border" flexWrap="wrap">
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
         <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
         <Input flex="1" minW="110px" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
-        <Button size="sm" colorPalette="agentic" onClick={navigateBrowser}><ExternalLink size={15}/></Button>
+        <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
         <Button size="sm" variant="outline" onClick={usePageContext}>Afegeix pàgina al xat</Button>
       </Flex>
       <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', minHeight: 0, border: 0, background: '#fff' }}/>
+    </Flex>
+  );
+
+  const terminalPane = (
+    <Flex h="full" minH="0" direction="column" p="4" bg="bg">
+      <Text fontSize="xs" color="fg.muted" mb="2">{project?.path}</Text>
+      <Textarea flex="1" minH="0" resize="none" bg="surface.subtle" color="agentic.100" fontFamily="mono" fontSize="xs" lineHeight="1.6" whiteSpace="pre-wrap" value={terminalOutput} readOnly placeholder="La sortida de les ordres apareixerà aquí"/>
+      <HStack mt="3"><Input value={terminalCommand} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTerminalCommand(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') executeCommand(); }} placeholder="Ex.: npm run check"/><IconButton icon={Play} label="Executa l’ordre" colorPalette="agentic" onClick={executeCommand} disabled={terminalBusy || !terminalCommand.trim()}>{terminalBusy && <Spinner size="sm"/>}</IconButton></HStack>
+      <Text fontSize="xs" color="yellow.200" mt="2">Les ordres s’executen dins del projecte i poden modificar o esborrar fitxers.</Text>
+      <Text fontSize="xs" color="fg.muted" mt="2">{terminalStatus}</Text>
+    </Flex>
+  );
+
+  const editorPane = (
+    <Flex h="full" minH="0" direction="column" p="4" bg="bg">
+      <Text color="fg.muted" mb="3">Revisa els canvis abans de desar. Si el projecte està sota Git, pots guardar-los amb un commit.</Text>
+      <Textarea flex="1" minH="0" resize="none" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" lineHeight="1.6" value={editorContent} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setEditorContent(event.target.value)} spellCheck={false}/>
+      <Text color="yellow.200" mt="2">{editorStatus}</Text>
+      <HStack justify="flex-end" mt="3"><Button variant="outline" onClick={() => { setEditingPath(null); setWorkspacePanel(null); }}>Cancel·la</Button><Button colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
     </Flex>
   );
 
@@ -329,22 +365,54 @@ export function App(): React.JSX.Element {
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
   }, [browserOpen]);
 
-  const mainContent = browserOpen ? (
-    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'browser', minSize: 25 }]} defaultSize={splitSize} onResize={(details) => { setSplitSize(details.size); localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size)); }}>
+  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : 'Edita fitxer';
+  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : null;
+  const workspacePane = panelContent && (
+    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
+      <Flex h="50px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
+        <HStack gap="2"><Text fontWeight="semibold">{panelTitle}</Text>{workspacePanel === 'terminal' && <Badge colorPalette="yellow">Cada ordre demana confirmació</Badge>}{workspacePanel === 'editor' && <Badge colorPalette="agentic">Revisa abans de desar</Badge>}</HStack>
+        <IconButton icon={X} label="Tanca panell" onClick={() => { setWorkspacePanel(null); if (workspacePanel === 'editor') setEditingPath(null); }}/>
+      </Flex>
+      <Box flex="1" minH="0" overflow="hidden">{panelContent}</Box>
+    </Flex>
+  );
+
+  const mainContent = workspacePanel && workspacePane ? (
+    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'workspace', minSize: 8 }]} defaultSize={splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
+      if (details.size[1] <= 12) {
+        setWorkspacePanel(null);
+        setSplitSize(lastExpandedSplitSizeRef.current);
+        localStorage.setItem(SPLIT_KEY, JSON.stringify(lastExpandedSplitSizeRef.current));
+        return;
+      }
+      lastExpandedSplitSizeRef.current = details.size;
+      setSplitSize(details.size);
+      localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size));
+    }}>
       <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
-      <Splitter.ResizeTrigger id="chat:browser" w="7px" flex="none" bg="surface.subtle" cursor="col-resize" display="flex" alignItems="center" justifyContent="center" outline="none" _hover={{ bg: 'accent' }} _focusVisible={{ bg: 'accent' }}><Splitter.ResizeTriggerSeparator w="2px" h="42px" borderRadius="4px" bg="fg.muted"/><Splitter.ResizeTriggerIndicator/></Splitter.ResizeTrigger>
-      <Splitter.Panel id="browser" h="full" minW="0" minH="0" overflow="hidden">{browserPane}</Splitter.Panel>
+      <SplitterHandle id="chat:workspace"/>
+      <Splitter.Panel id="workspace" h="full" minW="0" minH="0" overflow="hidden">{workspacePane}</Splitter.Panel>
     </Splitter.Root>
   ) : chatPane;
 
   return (
     <>
-    <Grid h="100dvh" w="full" templateColumns="252px minmax(0, 1fr)" bg="bg" textStyle="interface">
+    sidebarOpen ? <Splitter.Root key="sidebar-open" h="100dvh" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'sidebar', minSize: 8 }, { id: 'main', minSize: 40 }]} defaultSize={sidebarSplitSize} onResize={(details) => setSidebarSplitSize(details.size)} onResizeEnd={(details) => {
+      if (details.size[0] <= 12) {
+        setSidebarOpen(false);
+        setSidebarSplitSize(lastExpandedSidebarSplitSizeRef.current);
+        return;
+      }
+      lastExpandedSidebarSplitSizeRef.current = details.size;
+      setSidebarSplitSize(details.size);
+      localStorage.setItem(SIDEBAR_SPLIT_KEY, JSON.stringify(details.size));
+    }} bg="bg" textStyle="interface">
+        <Splitter.Panel id="sidebar" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" p="3" direction="column" gap="3.5">
           <Box fontSize="md" fontWeight="bold" px="2" py="1.5" letterSpacing="0.01em">◈ Agentic <Text as="span" color="agentic.300">Coder</Text></Box>
           <Stack gap="2">
-            <Button variant="outline" onClick={newChat}><IconLabel icon={MessageSquarePlus}>Nova conversa</IconLabel></Button>
-            <Button variant="outline" onClick={selectProject}><IconLabel icon={FolderOpen}>Selecciona projecte</IconLabel></Button>
+            <IconButton icon={MessageSquarePlus} label="Nova conversa" w="full" onClick={newChat}/>
+            <IconButton icon={FolderOpen} label="Selecciona projecte" w="full" onClick={selectProject}/>
           </Stack>
           <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" px="2" py="0.5" minH="5">{project?.path || 'Cap projecte seleccionat'}</Text>
           {sessions.some((session) => session.messages.length > 0) && <Box flex="none" maxH="24vh" minH="0" overflowY="auto">
@@ -354,25 +422,11 @@ export function App(): React.JSX.Element {
           <Box flex="1" minH="0" overflowY="auto"><Text px="2" pt="3" pb="1.5" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text>{project?.files?.filter((file) => !file.directory).map((file) => <Button key={file.path} w="full" justifyContent="flex-start" variant="ghost" size="sm" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" fontSize="xs" onClick={() => openEditor(file.path)}>{file.path}</Button>)}</Box>
           <Box fontSize="xs" color="fg.muted" p="2" lineHeight="1.6">Model local Qwen · Transformers.js<br/>El model s’executa al Mac.</Box>
         </Flex>
-        <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>
-      </Grid>
+        </Splitter.Panel>
+        <SplitterHandle id={'sidebar:main' as SplitterHandleId}/>
+        <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
+      </Splitter.Root> : <Box h="100dvh" w="full" overflow="hidden" bg="bg" textStyle="interface">{mainContent}</Box>
 
-      <Dialog.Root open={terminalOpen} onOpenChange={(details) => setTerminalOpen(details.open)} size="lg" placement="center">
-        <Dialog.Backdrop/>
-        <Dialog.Positioner><Dialog.Content bg="bg" color="fg" maxH="90vh">
-          <Dialog.Header><Dialog.Title>Terminal del projecte</Dialog.Title><HStack><Badge colorPalette="yellow">Cada ordre demana confirmació</Badge><Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca terminal"/></Dialog.CloseTrigger></HStack></Dialog.Header>
-          <Dialog.Body><Text fontSize="xs" color="fg.muted" mb="2">{project?.path}</Text><Textarea w="full" minH="220px" maxH="45vh" resize="vertical" bg="surface.subtle" color="agentic.100" fontFamily="mono" fontSize="xs" lineHeight="1.6" whiteSpace="pre-wrap" value={terminalOutput} readOnly placeholder="La sortida de les ordres apareixerà aquí"/><HStack mt="3"><Input value={terminalCommand} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setTerminalCommand(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') executeCommand(); }} placeholder="Ex.: npm run check"/><Button colorPalette="agentic" onClick={executeCommand} disabled={terminalBusy || !terminalCommand.trim()}>{terminalBusy ? <Spinner size="sm"/> : <Play size={16}/>}Executa</Button></HStack><Text fontSize="xs" color="yellow.200" mt="2">Les ordres s’executen dins del projecte i poden modificar o esborrar fitxers.</Text><Text fontSize="xs" color="fg.muted" mt="2">{terminalStatus}</Text></Dialog.Body>
-        </Dialog.Content></Dialog.Positioner>
-      </Dialog.Root>
-
-      <Dialog.Root open={Boolean(editingPath)} onOpenChange={(details) => { if (!details.open) setEditingPath(null); }} size="cover" placement="center">
-        <Dialog.Backdrop/>
-        <Dialog.Positioner><Dialog.Content bg="bg" color="fg" maxH="92vh">
-          <Dialog.Header><Dialog.Title>{editingPath || 'Edita fitxer'}</Dialog.Title><HStack><Badge colorPalette="agentic">Revisa abans de desar</Badge><Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca editor"/></Dialog.CloseTrigger></HStack></Dialog.Header>
-          <Dialog.Body><Text color="fg.muted" mb="3">Revisa els canvis abans de desar. Si el projecte està sota Git, pots guardar-los amb un commit.</Text><Textarea w="full" minH="45vh" resize="vertical" bg="surface.subtle" color="fg" fontFamily="mono" fontSize="xs" lineHeight="1.6" value={editorContent} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setEditorContent(event.target.value)} spellCheck={false}/><Text color="yellow.200" mt="2">{editorStatus}</Text></Dialog.Body>
-          <Dialog.Footer><Button variant="outline" onClick={() => setEditingPath(null)}>Cancel·la</Button><Button colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></Dialog.Footer>
-        </Dialog.Content></Dialog.Positioner>
-      </Dialog.Root>
     </>
   );
 }
