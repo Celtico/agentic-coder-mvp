@@ -608,6 +608,137 @@ test('returns verified browser inspection facts without asking the model to rewr
   assert.doesNotMatch(answer, /base64|should-not-be-shown/);
 });
 
+test('runs explicit local browser inspections directly without asking the model to choose the tool', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-direct-browser-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let loads = 0;
+  let generations = 0;
+  const engine = {
+    loadModel: async () => { loads += 1; },
+    generateResponse: async () => { generations += 1; return 'He inspeccionat la pàgina.'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const statuses = [];
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Inspecciona http://localhost:5173/ i digues el títol.', projectRoot, async (tool) => {
+    calls.push(tool);
+    return { inspected: true, url: 'http://localhost:5173/', status: 200, title: 'Notes', text: 'El teu espai personal', consoleErrors: [], pageErrors: [], requestFailures: [] };
+  });
+
+  assert.deepEqual(calls, [{ name: 'inspect_browser', arguments: { url: 'http://localhost:5173/' } }]);
+  assert.equal(loads, 0);
+  assert.equal(generations, 0);
+  assert.match(answer, /HTTP 200/);
+  assert.match(answer, /Títol: Notes/);
+  assert.match(answer, /Errors de consola: cap/);
+  assert.match(statuses.join('\n'), /Inspeccionant http:\/\/localhost:5173\//);
+  const history = await fs.readFile(path.join(tempRoot, 'history', 'sessions.jsonl'), 'utf8');
+  assert.equal(JSON.parse(history).answer, answer);
+});
+
+test('requests both confirmations and retries when Playwright is missing for an explicit inspection', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-browser-install-test-'));
+  await fs.mkdir(path.join(tempRoot, 'project'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let generations = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => { generations += 1; return 'No cal instal·lar res.'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let inspections = 0;
+  const answer = await agent.ask('Inspecciona http://localhost:5173/', path.join(tempRoot, 'project'), async (tool) => {
+    calls.push(tool);
+    if (tool.name === 'inspect_browser' && inspections++ === 0) return { error: 'Playwright no està instal·lat en aquest projecte.' };
+    if (tool.name === 'install_package') return { code: 0, approved: true };
+    if (tool.name === 'install_playwright_browser') return { code: 0, approved: true };
+    return { inspected: true, status: 200, url: 'http://localhost:5173/', title: 'Notes', consoleErrors: [], pageErrors: [], requestFailures: [] };
+  });
+
+  assert.deepEqual(calls, [
+    { name: 'inspect_browser', arguments: { url: 'http://localhost:5173/' } },
+    { name: 'install_package', arguments: { packageName: 'playwright', dev: true } },
+    { name: 'install_playwright_browser' },
+    { name: 'inspect_browser', arguments: { url: 'http://localhost:5173/' } },
+  ]);
+  assert.equal(generations, 0);
+  assert.match(answer, /Inspecció completada: HTTP 200/);
+  assert.match(answer, /Títol: Notes/);
+});
+
+test('requests Chromium only when Playwright is present but its browser is missing', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-chromium-install-test-'));
+  await fs.mkdir(path.join(tempRoot, 'project'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const agent = new LocalCodingAgent({ engine: {
+    loadModel: async () => {},
+    generateResponse: async () => { throw new Error('No model generation expected'); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  } });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let inspected = false;
+  const answer = await agent.ask('Inspecciona http://localhost:5173/', path.join(tempRoot, 'project'), async (tool) => {
+    calls.push(tool);
+    if (tool.name === 'inspect_browser' && !inspected) {
+      inspected = true;
+      return { error: 'browserType.launch: Executable doesn\'t exist at /tmp/chromium' };
+    }
+    if (tool.name === 'install_playwright_browser') return { code: 0, approved: true };
+    return { inspected: true, status: 200, url: 'http://localhost:5173/', title: 'Notes', consoleErrors: [], pageErrors: [], requestFailures: [] };
+  });
+
+  assert.deepEqual(calls, [
+    { name: 'inspect_browser', arguments: { url: 'http://localhost:5173/' } },
+    { name: 'install_playwright_browser' },
+    { name: 'inspect_browser', arguments: { url: 'http://localhost:5173/' } },
+  ]);
+  assert.match(answer, /Inspecció completada: HTTP 200/);
+});
+
+test('starts the selected app directly from its existing dev script when explicitly requested', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-direct-start-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), JSON.stringify({ scripts: { dev: 'vite', build: 'vite build' } }));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  let loads = 0;
+  let generations = 0;
+  const engine = {
+    loadModel: async () => { loads += 1; },
+    generateResponse: async () => { generations += 1; return 'Ja he iniciat l’app.'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Engega l’app del projecte seleccionat.', projectRoot, async (tool) => {
+    calls.push(tool);
+    return { started: true, script: 'dev', url: 'http://localhost:5173/', output: 'VITE ready' };
+  });
+
+  assert.deepEqual(calls, [{ name: 'start_project', arguments: { script: 'dev' } }]);
+  assert.equal(loads, 0);
+  assert.equal(generations, 0);
+  assert.match(answer, /Projecte iniciat amb npm run dev/);
+  assert.match(answer, /http:\/\/localhost:5173\//);
+  const history = await fs.readFile(path.join(tempRoot, 'history', 'sessions.jsonl'), 'utf8');
+  assert.equal(JSON.parse(history).answer, answer);
+});
+
 test('uses only relevant, user-confirmed experiences from the same project', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-learning-test-'));
   const projectRoot = path.join(tempRoot, 'project');

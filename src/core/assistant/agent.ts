@@ -248,6 +248,31 @@ function formatBrowserInspection(result: unknown): string | null {
   return lines.join('\n');
 }
 
+function explicitLocalInspectionRequest(prompt: string): AgentToolCall | null {
+  if (!/\b(?:inspect(?:a|e|ion)?|inspecciona(?:r)?|revisa|comprova|comprueba|verify|verifica)\b/i.test(prompt)) return null;
+  const match = prompt.match(/https?:\/\/[^\s"'<>]+/i);
+  if (!match) return null;
+  const url = match[0].replace(/[),.;]+$/, '');
+  const action = validateToolCall({ type: 'tool_call', name: 'inspect_browser', arguments: { url } });
+  return action && action.name === 'inspect_browser' ? action : null;
+}
+
+async function explicitProjectStartRequest(prompt: string, projectRoot: string): Promise<AgentToolCall | null> {
+  if (!/^\s*(?:engega|inicia|arrenca|start|run)\b/i.test(prompt)) return null;
+  if (!/\b(?:app|application|project|projecte|proyecto|aplicaci[oó]|notes|web|servidor|server)\b/i.test(prompt)) return null;
+  const namedScript = prompt.match(/\b(?:npm\s+run|script(?:\s+de)?|amb el script|with the script|using)\s+(dev|start|preview)\b/i)?.[1]?.toLowerCase();
+  let scripts: Record<string, unknown> = {};
+  try {
+    const manifest = JSON.parse(await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8'));
+    if (manifest && typeof manifest.scripts === 'object' && manifest.scripts) scripts = manifest.scripts;
+  } catch {}
+  const script = namedScript && typeof scripts[namedScript] === 'string'
+    ? namedScript
+    : ['dev', 'start', 'preview'].find((name) => typeof scripts[name] === 'string');
+  if (!script) return null;
+  return { name: 'start_project', arguments: { script } };
+}
+
 export class LocalCodingAgent {
   private readonly onStatus: (status: AgentStatus) => void;
   private readonly engine: InferenceEngine;
@@ -273,6 +298,79 @@ export class LocalCodingAgent {
 
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = []): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
+    const directInspection = explicitLocalInspectionRequest(prompt);
+    if (directInspection) {
+      const inspectionUrl = directInspection.name === 'inspect_browser' ? directInspection.arguments.url : '';
+      this.onStatus({ type: 'status', message: `Inspeccionant ${inspectionUrl} amb Playwright…` });
+      let result: unknown;
+      try { result = await executeTool(directInspection); }
+      catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
+      const initialError = result && typeof result === 'object' ? (result as Record<string, unknown>).error : undefined;
+      const missingPackage = typeof initialError === 'string' && /Playwright no està instal·lat en aquest projecte/i.test(initialError);
+      const missingChromium = typeof initialError === 'string' && /executable.*(?:does not exist|doesn't exist|not found)|chromium.*(?:not installed|missing)|browser.*(?:not installed|missing)/i.test(initialError);
+      if (missingPackage || missingChromium) {
+        let canInstallChromium = missingChromium;
+        if (missingPackage) {
+          this.onStatus({ type: 'status', message: 'Playwright falta; demanant confirmació per instal·lar la dependència…' });
+          let packageResult: unknown;
+          try { packageResult = await executeTool({ name: 'install_package', arguments: { packageName: 'playwright', dev: true } }); }
+          catch (error) { packageResult = { error: error instanceof Error ? error.message : String(error) }; }
+          const packageInfo = packageResult && typeof packageResult === 'object' ? packageResult as Record<string, unknown> : {};
+          if (packageInfo.cancelled === true || packageInfo.approved === false) {
+            result = { error: 'La inspecció queda pendent: no s’ha autoritzat instal·lar Playwright.' };
+          } else if (typeof packageInfo.error === 'string' || packageInfo.code !== 0) {
+            result = { error: `No s’ha pogut instal·lar Playwright: ${String(packageInfo.error || packageInfo.output || JSON.stringify(packageResult))}` };
+          } else canInstallChromium = true;
+        }
+        if (canInstallChromium) {
+          this.onStatus({ type: 'status', message: 'Demanant confirmació per instal·lar Chromium…' });
+          let browserResult: unknown;
+          try { browserResult = await executeTool({ name: 'install_playwright_browser' }); }
+          catch (error) { browserResult = { error: error instanceof Error ? error.message : String(error) }; }
+          const browserInfo = browserResult && typeof browserResult === 'object' ? browserResult as Record<string, unknown> : {};
+          if (browserInfo.cancelled === true || browserInfo.approved === false) {
+            result = { error: 'La inspecció queda pendent: no s’ha autoritzat instal·lar Chromium.' };
+          } else if (typeof browserInfo.error === 'string' || browserInfo.code !== 0) {
+            result = { error: `No s’ha pogut instal·lar Chromium: ${String(browserInfo.error || browserInfo.output || JSON.stringify(browserResult))}` };
+          } else {
+            this.onStatus({ type: 'status', message: 'Inspeccionant la pàgina després de preparar Playwright…' });
+            try { result = await executeTool(directInspection); }
+            catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
+          }
+        }
+      }
+      const answer = formatBrowserInspection(result) || 'La inspecció no ha retornat cap resultat verificat.';
+      await fs.mkdir(this.historyDir, { recursive: true });
+      await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({
+        at: new Date().toISOString(), model: this.engine.getModelStatus().modelId, prompt, answer,
+      }) + '\n');
+      this.onStatus({ type: 'status', message: 'Inspecció Playwright completada amb el resultat retornat per l’eina.' });
+      return answer;
+    }
+    const directProjectStart = await explicitProjectStartRequest(prompt, projectRoot);
+    if (directProjectStart?.name === 'start_project') {
+      const startScript = directProjectStart.arguments.script;
+      this.onStatus({ type: 'status', message: `Iniciant el projecte amb npm run ${startScript}…` });
+      let result: unknown;
+      try { result = await executeTool(directProjectStart); }
+      catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
+      const value = result && typeof result === 'object' ? result as Record<string, unknown> : {};
+      const answer = typeof value.error === 'string'
+        ? `No he pogut iniciar l’app: ${value.error}`
+        : value.cancelled === true
+          ? 'L’inici s’ha cancel·lat; no s’ha iniciat cap servidor.'
+        : value.started !== true
+          ? `El projecte no s’ha iniciat. Resultat de l’eina: ${JSON.stringify(result)}`
+          : typeof value.url === 'string'
+            ? `Projecte iniciat amb npm run ${startScript}. Adreça local: ${value.url}. ${value.openedInAppBrowser === true ? 'S’ha obert al navegador integrat.' : 'L’eina no ha confirmat que s’obrís al navegador integrat.'}`
+            : `npm run ${startScript} s’ha iniciat, però la seva sortida encara no conté cap adreça local. Sortida: ${String(value.output || '(buida)').slice(0, 1500)}`;
+      await fs.mkdir(this.historyDir, { recursive: true });
+      await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({
+        at: new Date().toISOString(), model: this.engine.getModelStatus().modelId, prompt, answer,
+      }) + '\n');
+      this.onStatus({ type: 'status', message: 'Resultat real de l’inici del projecte registrat.' });
+      return answer;
+    }
     const context = await this.collectContext(projectRoot);
     const verifiedExperiences = await this.collectVerifiedExperiences(prompt, projectRoot);
     const system = [

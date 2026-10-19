@@ -307,7 +307,7 @@ function startProjectProcess(root, script) {
       const text = chunk.toString();
       activeProjectOutput = (activeProjectOutput + text).slice(-30000);
       if (win && !win.isDestroyed()) win.webContents.send('terminal:output', text);
-      if (/\b(localhost|127\.0\.0\.1|ready|listening|compiled successfully)\b/i.test(text)) {
+      if (findLocalProjectUrl(activeProjectOutput)) {
         finish({ started: true, readySignal: true, script, output: activeProjectOutput });
       }
     };
