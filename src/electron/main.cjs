@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot, getGitCommitCandidates } = require('./git-tools.cjs');
+const { findLocalProjectUrl } = require('./project-browser.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
@@ -21,6 +22,14 @@ let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
 let chatStore;
+
+function openStartedProjectInBrowser(result, projectPath) {
+  const url = result.started ? findLocalProjectUrl(result.output) : null;
+  if (!url) return result;
+  const event = { projectPath, script: result.script, url };
+  if (win && !win.isDestroyed()) win.webContents.send('project:started', event);
+  return { ...result, url, openedInAppBrowser: true };
+}
 
 function getChatStore() {
   if (!chatStore) chatStore = new ChatStore(path.join(app.getPath('userData'), 'memory', 'conversations.sqlite'));
@@ -106,9 +115,11 @@ async function dispatchAgentTool(tool, projectRoot) {
     const pkg = await readProjectPackage(root);
     const script = tool.arguments.script;
     if (typeof pkg.scripts?.[script] !== 'string') throw new Error(`El projecte no defineix el script ${script}.`);
-    if (activeProjectProcess && activeProjectRoot === root) return { started: true, alreadyRunning: true, script, output: activeProjectOutput };
+    if (activeProjectProcess && activeProjectRoot === root) {
+      return openStartedProjectInBrowser({ started: true, alreadyRunning: true, script, output: activeProjectOutput }, root);
+    }
     if (activeProjectProcess) throw new Error('Ja hi ha una app d’un altre projecte en marxa. Atura-la abans de canviar de projecte.');
-    return startProjectProcess(root, script);
+    return openStartedProjectInBrowser(await startProjectProcess(root, script), root);
   }
   if (tool.name === 'stop_project') {
     if (!activeProjectProcess) return { stopped: true, alreadyStopped: true };

@@ -34,6 +34,7 @@ export interface AgenticBridge {
   runCommand(command: string): Promise<{ code: number | null; output: string }>;
   onStatus(callback: (value: { type: string; message?: string }) => void): () => void;
   onTerminalOutput(callback: (value: string) => void): () => void;
+  onProjectStarted(callback: (value: { projectPath: string; script: string; url: string }) => void): () => void;
   onTestOutput(callback: (value: string) => void): () => void;
 }
 

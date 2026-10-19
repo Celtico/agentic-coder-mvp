@@ -25,6 +25,11 @@ contextBridge.exposeInMainWorld('agentic', {
     ipcRenderer.on('terminal:output', listener);
     return () => ipcRenderer.removeListener('terminal:output', listener);
   },
+  onProjectStarted: (callback) => {
+    const listener = (_e, value) => callback(value);
+    ipcRenderer.on('project:started', listener);
+    return () => ipcRenderer.removeListener('project:started', listener);
+  },
   onStatus: (callback) => {
     const listener = (_e, value) => callback(value);
     ipcRenderer.on('agent:status', listener);

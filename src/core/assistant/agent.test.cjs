@@ -112,6 +112,28 @@ test('starts one tool call from an explanatory JSON fence containing multiple ca
   assert.match(answer, /creat el fitxer/i);
 });
 
+test('executes a native-style named tool call inside a JSON fence without a type field', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-native-fenced-tool-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture","scripts":{"dev":"vite"}}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '```json\n{"name":"start_project","arguments":{"script":"dev"}}\n```',
+    '{"type":"final","content":"He iniciat el servidor i l’app l’ha obert al navegador."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Engega el projecte i obre’l al navegador', tempRoot, async (tool) => {
+    calls.push(tool);
+    return { started: true, url: 'http://localhost:5173/', openedInAppBrowser: true };
+  });
+
+  assert.deepEqual(calls, [{ name: 'start_project', arguments: { script: 'dev' } }]);
+  assert.match(answer, /obert al navegador/i);
+});
+
 test('routes a requested Git commit through the commit tool', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-commit-test-'));
   await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');

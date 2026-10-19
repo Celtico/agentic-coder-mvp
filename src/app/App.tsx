@@ -184,6 +184,12 @@ export function App(): React.JSX.Element {
       if (text) setLoadingLabel(text);
     });
     const offTerminal = window.agentic.onTerminalOutput((chunk: string) => setTerminalOutput((prev) => (prev + chunk).slice(-100000)));
+    const offProjectStarted = window.agentic.onProjectStarted(({ url }) => {
+      setBrowserAddress(url);
+      setBrowserUrl(url);
+      setWorkspacePanel('browser');
+      setStatus(`Projecte obert al navegador integrat: ${url}`);
+    });
     let cancelled = false;
     (async () => {
       try {
@@ -234,7 +240,7 @@ export function App(): React.JSX.Element {
       }
       catch {}
     })();
-    return () => { cancelled = true; offStatus?.(); offTerminal?.(); };
+    return () => { cancelled = true; offStatus?.(); offTerminal?.(); offProjectStarted?.(); };
   }, [persistMessages, storeSessions]);
 
   useEffect(() => { localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft); }, [draft, activeSessionId]);
