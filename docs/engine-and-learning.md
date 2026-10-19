@@ -56,6 +56,8 @@ El 19 d’octubre de 2026, una prova manual amb Qwen local sobre un projecte tem
 
 En una prova posterior des de la interfície Electron, amb un projecte temporal i una prova de suma fallida, Qwen tampoc no va completar una petició llarga que li demanava inspeccionar, provar i corregir: no va escriure cap fitxer. Amb una instrucció més concreta —canviar `return a - b` per `return a + b` només a `src/math.cjs` i executar `npm test`— sí que va aplicar el canvi correcte; la verificació posterior va confirmar que l’únic fitxer modificat era aquest i que la prova passava (1/1). Això demostra una correcció senzilla real de punta a punta, però encara no la capacitat de completar tasques obertes de manera consistent ni de combinar l’edició amb una inspecció de navegador.
 
+Playwright ara accepta fins a 12 accions limitades per inspecció: clicar, omplir, comprovar visibilitat i comprovar text. Els elements es seleccionen amb rols accessibles, etiquetes, placeholders, text exacte o test IDs. Les proves automàtiques cobreixen l’orquestració, els límits i els errors de selectors; una prova amb Chromium real a Notes ha clicat «Nova nota», omplert «Títol de la nota» i confirmat que el text apareixia. Encara falta comprovar que el model local generi aquesta crida i que travessi tota la interfície Electron i l’IPC. La lectura simple d’una URL localhost continua anant directament a Playwright.
+
 ## Fonts tècniques consultades
 
 - [Transformers.js: configuració de cache i models locals](https://huggingface.co/docs/transformers.js/api/env)

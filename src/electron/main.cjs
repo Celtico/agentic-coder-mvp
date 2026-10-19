@@ -6,6 +6,7 @@ const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot, getGitCommitCandidates } = require('./git-tools.cjs');
 const { findLocalProjectUrl } = require('./project-browser.cjs');
+const { runBrowserActions } = require('./browser-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
@@ -172,6 +173,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       page.on('requestfailed', (request) => { if (requestFailures.length < 30) requestFailures.push({ url: safeBrowserUrl(request.url()), error: (request.failure()?.errorText || 'request failed').slice(0, 300) }); });
       const response = await page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 20000 });
       await page.waitForTimeout(800);
+      const actionResults = await runBrowserActions(page, tool.arguments.actions || []);
       const pageInfo = await page.evaluate(() => ({ title: document.title, text: document.body?.innerText || '' }));
       const screenshotDirectory = path.join(app.getPath('userData'), 'browser-inspections');
       await fs.mkdir(screenshotDirectory, { recursive: true });
@@ -180,7 +182,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       return {
         inspected: true, url: safeBrowserUrl(page.url()), status: response?.status() ?? null,
         title: String(pageInfo.title || '').slice(0, 300), text: String(pageInfo.text || '').slice(0, 12000),
-        consoleErrors, pageErrors, requestFailures, screenshotPath,
+        actionResults, consoleErrors, pageErrors, requestFailures, screenshotPath,
         truncated: String(pageInfo.text || '').length > 12000,
       };
     } catch (error) {

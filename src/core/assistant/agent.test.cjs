@@ -608,6 +608,65 @@ test('returns verified browser inspection facts without asking the model to rewr
   assert.doesNotMatch(answer, /base64|should-not-be-shown/);
 });
 
+test('passes only validated browser actions to the local browser tool and reports completed actions', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-browser-actions-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => JSON.stringify({ type: 'tool_call', name: 'inspect_browser', arguments: {
+      url: 'http://localhost:5173/',
+      actions: [
+        { type: 'click', target: { by: 'role', role: 'button', value: 'New note' } },
+        { type: 'fill', target: { by: 'label', value: 'Title' }, value: 'Shopping list' },
+        { type: 'assertText', text: 'Shopping list' },
+      ],
+    } }),
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask('Prova el formulari de notes al navegador', tempRoot, async (tool) => {
+    calls.push(tool);
+    return { inspected: true, status: 200, actionResults: tool.arguments.actions.map((action, index) => ({ description: `${index + 1}. ${action.type}`, succeeded: true })) };
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].arguments.actions.length, 3);
+  assert.match(answer, /Accions de navegador: 3 completades/);
+  assert.match(answer, /3\. assertText/);
+});
+
+test('does not bypass the model when an explicit browser request asks for UI interaction', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-browser-interaction-routing-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  let generations = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => { generations += 1; return '{"type":"final","content":"No hi ha accions de navegador pendents."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('Inspecciona http://localhost:5173/ i prem el botó Nova nota.', tempRoot, async () => ({}));
+  assert.equal(generations, 1);
+});
+
+test('rejects unbounded or arbitrary browser actions before they reach the executor', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-browser-action-validation-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    JSON.stringify({ type: 'tool_call', name: 'inspect_browser', arguments: { url: 'http://localhost:5173/', actions: [{ type: 'click', target: { by: 'css', value: 'button' } }] } }),
+    JSON.stringify({ type: 'final', content: 'La petició de navegador no tenia un localitzador accessible vàlid.' }),
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Inspecciona la pàgina local', tempRoot, async (tool) => { calls.push(tool); return {}; });
+  assert.deepEqual(calls, []);
+});
+
 test('runs explicit local browser inspections directly without asking the model to choose the tool', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-direct-browser-test-'));
   const projectRoot = path.join(tempRoot, 'project');

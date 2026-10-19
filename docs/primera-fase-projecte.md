@@ -172,6 +172,8 @@ Integra Playwright per permetre:
 - Detectar fallades de càrrega i peticions.
 - Executar proves d'interfície.
 
+Les interaccions disponibles s’han de limitar a locators accessibles (rol, etiqueta, placeholder, text o test id), amb un nombre màxim d’accions per inspecció. No exposis selectors arbitraris ni JavaScript de pàgina al model.
+
 El navegador ha de retornar observacions reals a l'orquestrador.
 
 No consideris que una pàgina funciona només perquè s'ha carregat. Verifica els elements i comportaments exigits per la tasca.
