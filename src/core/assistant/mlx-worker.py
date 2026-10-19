@@ -23,7 +23,10 @@ for line in sys.stdin:
         request = json.loads(line)
         messages = request.get("messages", [])
         prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            tools=request.get("tools") or None,
         )
         answer = generate(
             model,

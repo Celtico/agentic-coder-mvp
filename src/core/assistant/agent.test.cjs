@@ -88,6 +88,30 @@ test('starts the first tool when a small model concatenates multiple JSON action
   assert.match(answer, /he comprovat la cerca/i);
 });
 
+test('starts one tool call from an explanatory JSON fence containing multiple calls', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-fenced-actions-test-'));
+  await fs.mkdir(path.join(tempRoot, 'src'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    'Per començar, faig aquesta eina:\n```json\n{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default function App() { return <main>Notes</main>; }"}}\n{"type":"tool_call","name":"install_package","arguments":{"packageName":"react","dev":false}}\n```',
+    '{"type":"final","content":"He creat el fitxer de l’app."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Crea una app de notes', tempRoot, async (tool) => {
+    calls.push(tool);
+    await fs.writeFile(path.join(tempRoot, tool.arguments.path), tool.arguments.content);
+    return { applied: true, path: tool.arguments.path };
+  });
+
+  assert.deepEqual(calls, [{ name: 'write_file', arguments: { path: 'src/App.jsx', content: 'export default function App() { return <main>Notes</main>; }' } }]);
+  assert.match(answer, /creat el fitxer/i);
+});
+
 test('routes a requested Git commit through the commit tool', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-commit-test-'));
   await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
@@ -268,6 +292,8 @@ test('reports a coding task as incomplete when the model never applies an edit',
     '{"type":"final","content":"He acabat; add ja retorna 5."}',
     '{"type":"final","content":"Tot està corregit i validat."}',
     '{"type":"final","content":"La tasca està acabada."}',
+    '{"type":"final","content":"No tinc accés per modificar el fitxer."}',
+    '{"type":"final","content":"No puc escriure al projecte."}',
   ];
   const prompts = [];
   const engine = {
@@ -288,6 +314,42 @@ test('reports a coding task as incomplete when the model never applies an edit',
   assert.ok(prompts.some((prompt) => prompt.includes('Encara no has aplicat cap canvi')));
   assert.match(answer, /no s’ha aplicat cap canvi/i);
   assert.doesNotMatch(answer, /he acabat|tot està corregit|tasca està acabada/i);
+});
+
+test('treats a new-app request as implementation work and rejects a prose-only plan', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-create-app-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    'Entenc. Crearé una aplicació amb React, Vite i Chakra UI. Primer prepararé el projecte i després les notes.',
+    '<tool_call>\n{"name":"write_file","arguments":{"path":"package.json","content":"{\\"scripts\\":{\\"dev\\":\\"vite\\"},\\"dependencies\\":{\\"@chakra-ui/react\\":\\"^3.0.0\\",\\"react\\":\\"^19.0.0\\",\\"vite\\":\\"^6.0.0\\"}}"}}\n</tool_call>',
+    '{"type":"final","content":"He creat el manifest inicial de l’app."}',
+  ];
+  const prompts = [];
+  let suppliedTools = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages, options) => { prompts.push(messages.at(-1)?.content || ''); suppliedTools = options.tools || []; return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Crea una app de cero amb React.js i Vite.js amb Chakra-UI per ficar notes.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    await fs.mkdir(path.dirname(path.join(projectRoot, tool.arguments.path)), { recursive: true });
+    await fs.writeFile(path.join(projectRoot, tool.arguments.path), tool.arguments.content);
+    return { applied: true, path: tool.arguments.path };
+  });
+
+  assert.ok(prompts.some((prompt) => prompt.includes('Encara no has escrit cap fitxer')));
+  assert.deepEqual(calls, ['write_file']);
+  assert.ok(suppliedTools.some((tool) => tool.function.name === 'write_file'));
+  assert.match(await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8'), /@chakra-ui\/react/);
+  assert.match(answer, /manifest inicial/);
 });
 
 test('keeps duplicate tool calls from bypassing the incomplete task report', async (t) => {

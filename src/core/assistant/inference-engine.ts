@@ -6,7 +6,8 @@ import readline from 'node:readline';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatTurn = { role: ChatRole; content: string };
-export type GenerationOptions = { max_new_tokens: number; temperature: number; do_sample: boolean };
+export type InferenceToolDefinition = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };
+export type GenerationOptions = { max_new_tokens: number; temperature: number; do_sample: boolean; tools?: InferenceToolDefinition[] };
 export type ModelStatus = { modelId: string; state: 'unloaded' | 'loading' | 'ready'; cacheDir: string };
 export type MemoryUsage = { residentBytes: number; heapBytes: number; externalBytes: number };
 
@@ -80,7 +81,7 @@ export class MlxInferenceEngine implements InferenceEngine {
     if (this.pending) throw new Error('El runtime MLX ja està generant una resposta.');
     return new Promise((resolve, reject) => {
       this.pending = { resolve, reject };
-      this.child!.stdin.write(`${JSON.stringify({ messages, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0 })}\n`, (error) => {
+      this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0 })}\n`, (error) => {
         if (!error) return;
         this.pending = null; reject(error);
       });
@@ -143,7 +144,7 @@ export class TransformersJsInferenceEngine implements InferenceEngine {
 
   async generateResponse(messages: ChatTurn[], options: GenerationOptions): Promise<string> {
     if (!this.generator) throw new Error('El model local encara no està carregat.');
-    const output = await this.generator(messages, options);
+    const output = await this.generator(messages, { max_new_tokens: options.max_new_tokens, temperature: options.temperature, do_sample: options.do_sample });
     const generated = output?.[0]?.generated_text;
     if (Array.isArray(generated)) {
       const response = [...generated].reverse().find((item) => item.role === 'assistant')?.content;
