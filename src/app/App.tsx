@@ -95,6 +95,12 @@ const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
   </Splitter.ResizeTrigger>
 );
 
+/** The side column can be dragged between these widths; narrower than the minimum, it closes. */
+const NAVIGATION_MIN_WIDTH = 150;
+const NAVIGATION_MAX_WIDTH = 760;
+/** The right-hand panel closes when dragged to less than this share of the width. */
+const WORKSPACE_CLOSE_BELOW = 10;
+
 function getSplitSize(): number[] {
   try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
   catch { return [62, 38]; }
@@ -222,7 +228,7 @@ export function App(): React.JSX.Element {
   const [recentConversationsExpanded, setRecentConversationsExpanded] = useState(true);
   const [navigationWidth, setNavigationWidth] = useState(() => {
     const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
-    return Number.isFinite(stored) && stored >= 220 && stored <= 360 ? stored : 252;
+    return Number.isFinite(stored) && stored >= NAVIGATION_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 252;
   });
   const [verifiedExperienceKeys, setVerifiedExperienceKeys] = useState<Set<string>>(() => new Set());
   const feedRef = useRef<HTMLDivElement | null>(null);
@@ -1005,7 +1011,7 @@ export function App(): React.JSX.Element {
       </Flex>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
         : !gitHistory?.available ? <Text p="4" color="fg.muted">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Text>
-          : <Splitter.Root flex="1" minH="0" minW="0" orientation="vertical" panels={[{ id: 'git-history', minSize: 35 }, { id: 'git-details', minSize: 25 }]} defaultSize={getGitSplitSize()} onResizeEnd={(details) => localStorage.setItem(GIT_SPLIT_KEY, JSON.stringify(details.size))}>
+          : <Splitter.Root flex="1" minH="0" minW="0" orientation="vertical" panels={[{ id: 'git-history', minSize: 12 }, { id: 'git-details', minSize: 12 }]} defaultSize={getGitSplitSize()} onResizeEnd={(details) => localStorage.setItem(GIT_SPLIT_KEY, JSON.stringify(details.size))}>
             <Splitter.Panel id="git-history" minH="0" minW="0" overflow="hidden">
               <Grid h="full" minH="0" minW="0" templateColumns="minmax(105px, 0.8fr) minmax(190px, 1.5fr)">
             <Flex minW="0" minH="0" direction="column" borderRightWidth="1px" borderColor="border" overflowY="auto">
@@ -1104,8 +1110,8 @@ export function App(): React.JSX.Element {
   );
 
   const mainContent = workspacePanel && workspacePane ? (
-    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 35 }, { id: 'workspace', minSize: 8 }]} defaultSize={splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
-      if (details.size[1] <= 12) {
+    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 18 }, { id: 'workspace', minSize: 4 }]} defaultSize={splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
+      if (details.size[1] < WORKSPACE_CLOSE_BELOW) {
         setWorkspacePanel(null);
         setSplitSize(lastExpandedSplitSizeRef.current);
         localStorage.setItem(SPLIT_KEY, JSON.stringify(lastExpandedSplitSizeRef.current));
@@ -1133,9 +1139,12 @@ export function App(): React.JSX.Element {
           <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={workspacePanel === 'learning' ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="44px" h="44px" variant={workspacePanel === 'learning' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'learning' ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
         </Flex>
-        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '220px', maxSize: '360px', resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '440px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
-          const availableWidth = Math.max(660, window.innerWidth - 64);
-          const width = Math.max(220, Math.min(360, Math.round((details.size[0] / 100) * availableWidth)));
+        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '60px', maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
+          const availableWidth = Math.max(380, window.innerWidth - 64);
+          const dragged = Math.round((details.size[0] / 100) * availableWidth);
+          // Dragged almost shut: close the column and keep its last useful width for next time.
+          if (dragged < NAVIGATION_MIN_WIDTH) { setNavigationOpen(false); return; }
+          const width = Math.min(NAVIGATION_MAX_WIDTH, dragged);
           setNavigationWidth(width);
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
