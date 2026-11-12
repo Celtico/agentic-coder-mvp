@@ -883,10 +883,31 @@ export function App(): React.JSX.Element {
     try {
       await window.agentic.writeFile(filePath, content);
       // Only if the same file is still open; what was typed meanwhile is saved by the next round.
-      if (editorStateRef.current.path === filePath) { setEditorOriginal(content); setEditorStatus(''); }
+      if (editorStateRef.current.path === filePath) { setEditorOriginal(content); setEditorStatus(''); setEditorDiskChanged(false); }
     } catch (error) { if (editorStateRef.current.path === filePath) setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
   }
+  // The open file follows the disk: when the agent (or anything else) changes it, the editor shows
+  // the new content at once. If the user has unsaved edits of their own, nothing is replaced and the
+  // badge says the file changed underneath.
+  const [editorDiskChanged, setEditorDiskChanged] = useState(false);
+  useEffect(() => {
+    setEditorDiskChanged(false);
+    if (!editorOpen || !editingPath) return;
+    let stopped = false;
+    const check = async () => {
+      const { path: filePath, content, original } = editorStateRef.current;
+      if (stopped || !filePath) return;
+      try {
+        const onDisk = await window.agentic.readFile(filePath);
+        if (stopped || editorStateRef.current.path !== filePath || onDisk === editorStateRef.current.original) return;
+        if (content === original) { setEditorOriginal(onDisk); setEditorContent(onDisk); setEditorDiskChanged(false); }
+        else setEditorDiskChanged(true);
+      } catch { /* deleted or unreadable: the editor keeps what it has */ }
+    };
+    const timer = window.setInterval(() => { void check(); }, 1500);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [editorOpen, editingPath]);
   // Nothing is written until the user says so: the small save button, or Cmd/Ctrl+S.
   function closeEditor() {
     const { path: filePath, content, original } = editorStateRef.current;
@@ -1319,7 +1340,7 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
