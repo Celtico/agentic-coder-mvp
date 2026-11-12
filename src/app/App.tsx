@@ -283,8 +283,21 @@ export function App(): React.JSX.Element {
   }, [activeSessionId, draft, persistMessages, sessions, updateSessions]);
 
   useEffect(() => {
+    // While the agent works, each status may follow a file it has just written: keep the file tree
+    // in step instead of waiting for the task to end. At most one refresh a second.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshProjectSoon = () => {
+      if (refreshTimer || !inFlightConversationRef.current) return;
+      refreshTimer = setTimeout(async () => {
+        refreshTimer = null;
+        try { const refreshed = await window.agentic.currentProject(); if (refreshed) setProject(refreshed); } catch { /* the tree keeps its last state */ }
+      }, 1000);
+    };
+    // Files added or removed outside the app show up when its window gets the focus back.
+    const refreshOnFocus = () => { void window.agentic.currentProject().then((refreshed) => { if (refreshed) setProject(refreshed); }).catch(() => {}); };
     const offStatus = window.agentic.onStatus((s) => {
       const text = s.message || s.type;
+      refreshProjectSoon();
       const planActivityPrefix = 'Qwen està triant l’acció següent segons el pla:';
       const planFromActivity = s.type === 'status' && s.message?.startsWith(planActivityPrefix)
         ? s.message.slice(planActivityPrefix.length).trim()
@@ -367,7 +380,8 @@ export function App(): React.JSX.Element {
       }
       catch {}
     })();
-    return () => { cancelled = true; offStatus?.(); offTerminal?.(); offProjectStarted?.(); };
+    window.addEventListener('focus', refreshOnFocus);
+    return () => { cancelled = true; if (refreshTimer) clearTimeout(refreshTimer); window.removeEventListener('focus', refreshOnFocus); offStatus?.(); offTerminal?.(); offProjectStarted?.(); };
   }, [persistMessages, storeSessions]);
 
   useEffect(() => { localStorage.setItem(`${DRAFT_KEY}:${activeSessionId}`, draft); }, [draft, activeSessionId]);
