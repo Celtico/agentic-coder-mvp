@@ -440,10 +440,19 @@ export class LocalCodingAgent {
       ? await this.collectContext(projectRoot, COMPACT_CONTEXT_BYTES, COMPACT_MANIFEST_ENTRIES)
       : await this.collectContext(projectRoot);
     const verifiedExperiences = compact ? '' : await this.collectVerifiedExperiences(prompt, projectRoot);
+    // Without this the model tends to assume a project already exists and looks for a way to start it.
+    const manifestFiles = context.manifest.split('\n').filter((line) => line && !line.endsWith('/') && !line.startsWith('…'));
+    const hasEntry = manifestFiles.some((file) => /^(?:index\.html|(?:src\/)?(?:index|main|app)\.(?:tsx?|jsx?|mjs|cjs|py|php|go|rs))$/i.test(file.split(path.sep).join('/')));
+    const projectState = manifestFiles.length === 0
+      ? 'Estat de la carpeta: és BUIDA. No hi ha cap projecte encara. Si l’usuari demana fer, muntar, iniciar o començar alguna cosa (per exemple «un start amb Vite»), vol dir crear el projecte des de zero: primer escriu els fitxers (package.json, index.html, el codi) amb write_file, després instal·la el que calgui i només al final arrenca’l. No intentis arrencar ni llegir res que no existeix.'
+      : !hasEntry
+        ? `Estat de la carpeta: hi ha ${manifestFiles.length} fitxers però cap punt d’entrada (no hi ha index.html ni src/main ni src/index). El projecte està a mig crear: escriu els fitxers que falten amb write_file abans d’arrencar-lo o de fer cap comprovació.`
+        : `Estat de la carpeta: ja hi ha un projecte amb ${manifestFiles.length} fitxers. Llegeix el que calgui abans de canviar-lo.`;
     const system = compact ? [
       `Ets Agentic Coder, un agent de programació local. Treballes dins la carpeta ${path.resolve(projectRoot)}.`,
       'Respon breu i en l’idioma de l’últim missatge de l’usuari. Si només saluda o fa una pregunta, respon sense eines.',
       'Quan demani crear o canviar alguna cosa, fes-ho tu amb les eines. No escriguis tutorials ni ordres de terminal perquè les faci l’usuari.',
+      projectState,
       'Eines: list_files; read_file(path); write_file(path, content) crea o substitueix un fitxer sencer; run_project_script(script) executa un script de package.json; start_project(script) inicia dev, start o preview; install_package(packageName, dev) instal·la un paquet npm.',
       'Escriu cada fitxer complet amb write_file, un per crida. La feina no està feta fins que write_file retorna applied=true. No diguis que has fet res que cap eina no hagi confirmat.',
       'Per cridar una eina respon només amb JSON, sense text al voltant: {"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<!doctype html>..."}}. Quan hagis acabat: {"type":"final","content":"resum breu del que has fet"}.',
@@ -457,6 +466,7 @@ export class LocalCodingAgent {
       'Abans de començar cada tasca, revisa els noms, descripcions i arguments de totes les eines disponibles en aquesta conversa. Decideix quines eines resolen l’objectiu i crida de seguida la primera eina necessària; no et limitis a explicar què podries fer ni a repetir les eines en prosa.',
       `Et dius Agentic Coder. Aquesta resposta la genera localment ${this.engine.getModelStatus().modelId} amb ${process.env.AGENT_MODEL_RUNTIME === 'mlx' ? 'MLX d’Apple' : 'Transformers.js'}. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder i indica el model/runtime seleccionat.`,
       `La carpeta de projecte oberta és: ${path.resolve(projectRoot)}`,
+      projectState,
       'A cada pregunta reps un mapa de fitxers del projecte i el contingut de text que s’ha pogut incloure. Utilitza aquest context per respondre sobre el projecte; no diguis que no tens accés al directori.',
       'L’accés queda limitat a la carpeta seleccionada. Fes servir les eines disponibles per consultar i modificar fitxers; cada operació es valida al procés principal. Les modificacions normals del projecte s’apliquen directament i es guarden amb còpia recuperable.',
       'No afirmis que has modificat fitxers tret que write_file retorni applied=true. No afirmis que les proves han passat tret que run_tests retorni codi 0 i no hagi expirat.',

@@ -944,8 +944,7 @@ export function App(): React.JSX.Element {
           {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar a Qwen.</Text>}
           <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
-            {/* Only offered when there is something to check: a project with a package.json. */}
-            <HStack gap="2">{project?.files.some((file) => file.path === 'package.json') && <><Button size="xs" variant="outline" disabled={testsBusy} onClick={runTests}>{testsBusy ? <Spinner size="xs"/> : <Play size={14}/>} {testsBusy ? 'Comprovant…' : 'Comprova el projecte'}</Button><Text fontSize="xs" color="fg.muted">Executa els tests o, si no n’hi ha, lint, typecheck i build.</Text></>}</HStack>
+            <Box/>
             {loading
               ? <Button aria-label="Atura la generació" title="Atura la generació" colorPalette="red" rounded="full" size="sm" onClick={cancelPrompt}><Stop size={17}/></Button>
               : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
@@ -1137,6 +1136,7 @@ export function App(): React.JSX.Element {
     <Grid flex="1" minH="0" w="full" minW="0" templateColumns="64px minmax(0, 1fr)" overflow="hidden" bg="bg">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" direction="column" align="center" gap="2">
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
           <IconButton icon={TerminalIcon} label={workspacePanel === 'terminal' ? 'Tanca la terminal del projecte' : 'Obre la terminal del projecte'} w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel((current) => current === 'terminal' ? null : 'terminal'); }}/>
           <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
@@ -1185,7 +1185,6 @@ export function App(): React.JSX.Element {
                 <Accordion.Item value="recent" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <Flex align="center" gap="1" h="36px" flex="none" position="relative">
                     <Accordion.ItemTrigger flex="1" h="36px" minH="36px" px="2" py="0"><Text flex="1" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-                    <IconButton icon={MessageSquarePlus} label="Nova conversa" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => { event.stopPropagation(); void newChat(); }}/>
                   </Flex>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" p="0" overflowY="auto"><Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>

@@ -1194,3 +1194,24 @@ test('a dev server asked for as a plain script is started in the background inst
   });
   assert.deepEqual(calls, ['start_project:dev', 'run_project_script:lint']);
 });
+
+test('the model is told whether the folder is empty, half built or an existing project', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-state-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const systems = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { systems.push(messages[0].content); return '{"type":"final","content":"Hola."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('hola', tempRoot, async () => ({}));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  await agent.ask('hola', tempRoot, async () => ({}));
+  await fs.writeFile(path.join(tempRoot, 'index.html'), '<h1>Hola</h1>');
+  await agent.ask('hola', tempRoot, async () => ({}));
+  assert.match(systems[0], /Estat de la carpeta: és BUIDA/);
+  assert.match(systems[1], /cap punt d’entrada/);
+  assert.match(systems[2], /ja hi ha un projecte amb \d+ fitxers/);
+});
