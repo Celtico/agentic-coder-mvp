@@ -208,9 +208,21 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (!['http:', 'https:'].includes(target.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname.toLowerCase()) || (target.port && (+target.port < 1 || +target.port > 65535))) {
       throw new Error('Per seguretat, Playwright només pot obrir adreces locals de localhost, 127.0.0.1 o ::1.');
     }
-    let playwrightPath;
-    try { playwrightPath = require.resolve('playwright', { paths: [root] }); }
-    catch { throw new Error('Playwright no està instal·lat en aquest projecte.'); }
+    // Looking at a page needs nothing from the project: the app opens it in a hidden window of its
+    // own. Playwright is only used when the project already has it and the call asks to click or fill.
+    const wantsActions = Array.isArray(tool.arguments.actions) && tool.arguments.actions.length > 0;
+    let playwrightPath = null;
+    if (wantsActions) { try { playwrightPath = require.resolve('playwright', { paths: [root] }); } catch { playwrightPath = null; } }
+    if (!playwrightPath) {
+      const looked = await checkStartedPage({ url: target.href });
+      if (looked.page?.error) throw new Error(`No s’ha pogut obrir la pàgina: ${looked.page.error}`);
+      return {
+        inspected: true, url: safeBrowserUrl(target.href), status: looked.page?.status ?? null,
+        title: looked.page?.title || '', text: looked.page?.text || '', consoleErrors: looked.page?.consoleErrors || [],
+        pageErrors: [], requestFailures: [], actionResults: [], verdict: looked.pageVerdict,
+        ...(wantsActions ? { actionsSkipped: true, note: 'S’ha mirat la pàgina tal com carrega; els clics i formularis demanats no s’han executat perquè el projecte no té Playwright. No cal instal·lar-lo per saber si la pàgina es veu bé.' } : {}),
+      };
+    }
     const { chromium } = require(playwrightPath);
     let browser;
     try {
