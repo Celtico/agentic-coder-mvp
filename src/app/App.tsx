@@ -414,6 +414,16 @@ export function App(): React.JSX.Element {
     } catch (error) { setStatus(errorText(error)); }
   }
 
+  async function clearProject() {
+    if (!project) { setStatus('Selecciona primer un projecte'); return; }
+    if (loading) { setStatus('Espera que l’agent acabi abans de buidar la carpeta.'); return; }
+    try {
+      const result = await window.agentic.clearProject();
+      setProject(result.project);
+      setStatus(result.cancelled ? 'No s’ha buidat res' : result.cleared ? `Carpeta buidada: ${result.cleared} elements a la paperera` : 'La carpeta ja era buida');
+    } catch (error) { setStatus(errorText(error)); }
+  }
+
   function openCreateProjectEntry(directory: boolean, initialPath?: string) {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
     setCreateEntryKind(directory ? 'directory' : 'file');
@@ -1204,6 +1214,8 @@ export function App(): React.JSX.Element {
                       <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
                         <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                         <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                        <Menu.Separator borderColor="border"/>
+                        <Menu.Item value="clear" color="red.300" disabled={!project || loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>
                   </HStack>

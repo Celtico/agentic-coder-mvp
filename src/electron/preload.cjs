@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('agentic', {
   renameProjectEntry: (relativePath, newName) => ipcRenderer.invoke('project:rename-entry', relativePath, newName),
   importProjectDirectory: (file) => ipcRenderer.invoke('project:import-directory', webUtils.getPathForFile(file)),
   currentProject: () => ipcRenderer.invoke('project:current'),
+  clearProject: () => ipcRenderer.invoke('project:clear'),
   deletedBackups: () => ipcRenderer.invoke('project:deleted-backups'),
   restoreDeletedBackup: (backupId) => ipcRenderer.invoke('project:restore-deleted-backup', backupId),
   fileHistory: (relativePath) => ipcRenderer.invoke('project:file-history', relativePath),

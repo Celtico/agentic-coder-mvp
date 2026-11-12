@@ -622,6 +622,37 @@ async function listFiles(root, rel = '', depth = 0) {
   return out;
 }
 
+/**
+ * Empties the selected project so a trial can start from zero. Everything goes to the system
+ * Trash, where it can be recovered, and only after the user confirms. Refuses folders that are
+ * plainly not a throwaway project (the home folder, a volume root, or anything too shallow).
+ */
+ipcMain.handle('project:clear', async () => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  const root = await fs.realpath(selectedProject);
+  const home = await fs.realpath(app.getPath('home'));
+  const depth = root.split(path.sep).filter(Boolean).length;
+  if (root === home || isWithin(root, home) || depth < 3 || path.dirname(root) === home && /^(Desktop|Documents|Downloads|Library)$/i.test(path.basename(root))) {
+    throw new Error('Aquesta carpeta no es pot buidar des de l’app.');
+  }
+  const entries = await fs.readdir(root);
+  if (entries.length === 0) return { cleared: 0, project: { path: selectedProject, files: [] } };
+  const options = {
+    type: 'warning', buttons: ['Buida la carpeta', 'Cancel·la'], defaultId: 1, cancelId: 1,
+    message: `Buidar «${path.basename(root)}»?`,
+    detail: `Es mouran a la paperera ${entries.length} elements de ${root}${entries.includes('.git') ? ', inclòs l’historial de Git (.git)' : ''}. Els podràs recuperar des de la paperera.`,
+  };
+  const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+  if (confirmation.response !== 0) return { cancelled: true, cleared: 0, project: { path: selectedProject, files: await listFiles(selectedProject) } };
+  if (activeProjectProcess && activeProjectRoot === root) await stopProjectProcess();
+  let cleared = 0;
+  for (const name of entries) {
+    await shell.trashItem(path.join(root, name));
+    cleared += 1;
+  }
+  return { cleared, project: { path: selectedProject, files: await listFiles(selectedProject) } };
+});
+
 ipcMain.handle('project:current', async () => {
   if (!selectedProject) return null;
   return { path: selectedProject, files: await listFiles(selectedProject) };

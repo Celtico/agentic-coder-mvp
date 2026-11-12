@@ -24,6 +24,7 @@ export interface AgenticBridge {
   importProjectDirectory(file: File): Promise<ProjectInfo>;
   currentProject(): Promise<ProjectInfo | null>;
   deletedBackups(): Promise<DeletedBackup[]>;
+  clearProject(): Promise<{ cleared: number; cancelled?: boolean; project: ProjectInfo }>;
   restoreDeletedBackup(backupId: string): Promise<{ restored: boolean; denied?: boolean; path: string }>;
   fileHistory(relativePath: string): Promise<ProjectFileHistoryVersion[]>;
   folderHistory(relativePath: string): Promise<ProjectFileHistoryVersion[]>;
