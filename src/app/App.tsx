@@ -690,7 +690,7 @@ export function App(): React.JSX.Element {
         ? 'Execució de proves cancel·lada.'
         : result.code < 0
           ? `No hi ha comprovacions disponibles.\n\n${result.output}`
-          : `${result.code === 0 ? 'Comprovacions superades' : 'Les comprovacions han fallat'} (codi ${result.code}).\n\n${result.output}`);
+          : `${result.code === 0 ? 'Comprovacions superades' : 'Les comprovacions han fallat'} (codi ${result.code}).\n\n\`\`\`\n${result.output}\n\`\`\``);
     } catch (error) { appendMessage('assistant', `No s’han pogut executar les comprovacions: ${errorText(error)}`); }
     finally { setTestsBusy(false); }
   }
@@ -944,7 +944,8 @@ export function App(): React.JSX.Element {
           {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar a Qwen.</Text>}
           <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
-            <HStack gap="2"><Button size="xs" variant="outline" disabled={!project || testsBusy} onClick={runTests}>{testsBusy ? <Spinner size="xs"/> : <Play size={14}/>} {testsBusy ? 'Executant…' : 'Executa proves'}</Button><Text fontSize="xs" color="fg.muted">{project ? 'Executa les proves o les comprovacions disponibles del projecte.' : 'Selecciona un projecte per executar-ne les comprovacions.'}</Text></HStack>
+            {/* Only offered when there is something to check: a project with a package.json. */}
+            <HStack gap="2">{project?.files.some((file) => file.path === 'package.json') && <><Button size="xs" variant="outline" disabled={testsBusy} onClick={runTests}>{testsBusy ? <Spinner size="xs"/> : <Play size={14}/>} {testsBusy ? 'Comprovant…' : 'Comprova el projecte'}</Button><Text fontSize="xs" color="fg.muted">Executa els tests o, si no n’hi ha, lint, typecheck i build.</Text></>}</HStack>
             {loading
               ? <Button aria-label="Atura la generació" title="Atura la generació" colorPalette="red" rounded="full" size="sm" onClick={cancelPrompt}><Stop size={17}/></Button>
               : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}

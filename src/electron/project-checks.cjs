@@ -19,7 +19,8 @@ async function executeProjectChecks(root, runScript) {
   for (const script of checks) {
     output += `> npm run ${script}\n`;
     const result = await runScript(root, script);
-    output += `${result.output || '(sense sortida)'}\n`;
+    // npm and build tools colour their output for a terminal; in the chat those codes are noise.
+    output += `${String(result.output || '(sense sortida)').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')}\n`;
     if (result.code !== 0) return { ...result, output: `${output}\nLa comprovació «${script}» ha fallat.`, checksAvailable: true };
   }
   return { code: 0, output: `${output}\nComprovacions superades: ${checks.join(', ')}.`, checksAvailable: true };
