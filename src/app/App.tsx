@@ -5,7 +5,6 @@ import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
-import { recoverCompletedHistory } from './history-recovery';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Text, Textarea, TreeView, NativeSelect
@@ -354,16 +353,8 @@ export function App(): React.JSX.Element {
           storeSessions(localSessions);
         }
       } catch {}
-      try {
-        const entries = await window.agentic.recentHistory();
-        if (!cancelled && entries?.length) setSessions((current) => {
-          const recovered = recoverCompletedHistory(current, entries);
-          if (recovered === current) return current;
-          localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(recovered));
-          storeSessions(recovered);
-          return recovered;
-        });
-      } catch {}
+      // Conversations live in the chat store. The agent's own log is no longer read back into the list:
+      // doing so brought deleted conversations back as «Historial recuperat» on every launch.
       try {
         const saved = await window.agentic.currentProject();
         if (!cancelled && saved) {
