@@ -1550,3 +1550,21 @@ test('a project with mcp.json: its tools are listed to the model, which can call
   assert.deepEqual(calls.filter((call) => call.name === 'call_mcp_tool'), [{ name: 'call_mcp_tool', arguments: { server: 'chakra', tool: 'get_component_example', arguments: { component: 'accordion' } } }]);
   assert.match(answer, /Accordion\.Root/);
 });
+
+test('a package.json quoted in the answer is not mistaken for a tool call', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-quoted-json-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const inputs = [];
+  const responses = [
+    '{"type":"plan","content":"Crear package.json."}',
+    'Seguiré aquest pla.\n\n```json\n{"name": "comptador", "version": "1.0.0", "scripts": {"start": "vite"}}\n```\n\n```json\n{"name": "write_file", "arguments": {"path": "package.json", "content": "{}"}}\n```',
+    '{"type":"final","content":"He creat package.json."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async (messages) => { inputs.push(messages[messages.length - 1].content); return responses.shift() ?? '{"type":"final","content":"Fet."}'; }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Crea el package.json del projecte', tempRoot, async (tool) => { calls.push(tool.name); return tool.name === 'write_file' ? { applied: true, path: tool.arguments.path } : {}; });
+  assert.ok(calls.includes('write_file'));
+  assert.ok(!inputs.some((input) => /La crida no és vàlida/.test(input)));
+});
