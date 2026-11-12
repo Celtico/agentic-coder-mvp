@@ -75,14 +75,14 @@ const noticeTones = {
   success: { bg: '#0b2a20', border: '#09543f', fg: '#91e9ca', icon: CircleCheck },
 } as const;
 const Notice = ({ tone = 'info', children }: { tone?: keyof typeof noticeTones; children: React.ReactNode }) => {
-  const { bg, border, fg, icon: Icon } = noticeTones[tone];
-  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2.5" px="3" py="2.5" borderWidth="1px" borderRadius="md" fontSize="sm" lineHeight="1.45" style={{ background: bg, borderColor: border, color: fg }}>
+  const { bg, fg, icon: Icon } = noticeTones[tone];
+  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2.5" px="3" py="2.5" borderRadius="md" fontSize="sm" lineHeight="1.45" style={{ background: bg, color: fg }}>
     <Box flex="none" mt="2px"><Icon size={15}/></Box><Box minW="0" overflowWrap="anywhere">{children}</Box>
   </Flex>;
 };
 /** One figure of the learning panel. */
 const Stat = ({ label, value, dim = false }: { label: string; value: number; dim?: boolean }) => (
-  <Box px="3" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface.subtle" minW="0">
+  <Box px="3" py="2" borderRadius="md" bg="surface.subtle" minW="0">
     <Text fontSize="xl" fontWeight="semibold" lineHeight="1.2" color={dim && value === 0 ? 'fg.muted' : 'fg'}>{value}</Text>
     <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.06em" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={label}>{label}</Text>
   </Box>
@@ -1148,7 +1148,7 @@ export function App(): React.JSX.Element {
       <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : datasetPreview ? <>
-          <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : 'Encara no hi ha prou casos per entrenar. Continua desant els que surtin bé.'}</Notice>
+          <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : `Encara no n’hi ha prou per entrenar: en tens ${datasetPreview.counts.included} de 30. Continua desant els que surtin bé.`}</Notice>
           <Box>
             <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos</Text>
             <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
