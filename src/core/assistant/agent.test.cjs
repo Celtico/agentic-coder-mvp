@@ -1527,6 +1527,7 @@ test('a broken page sends the model to the file and cause named by the console e
   const hint = pageFixHint({ page: { consoleErrors: ["Uncaught SyntaxError: The requested module '/node_modules/.vite/deps/@chakra-ui_react.js?v=4746bf31' does not provide an export named 'extendTheme' (at theme.ts:1:10)"] } });
   assert.match(hint, /Ve del fitxer theme\.ts, línia 1/);
   assert.match(hint, /«extendTheme» no existeix a la versió instal·lada/);
+  assert.match(hint, /quina versió hi ha a package\.json/);
   assert.doesNotMatch(hint, /Llegeix index\.html i el fitxer/);
   assert.match(pageFixHint({ page: { consoleErrors: [] } }), /Llegeix index\.html/);
 });

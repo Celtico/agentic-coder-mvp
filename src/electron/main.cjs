@@ -261,6 +261,21 @@ async function dispatchAgentTool(tool, projectRoot) {
     const root = activeProjectRoot;
     return stopProjectProcess();
   }
+  // Everything package.json lists, in one go (`npm install`). Same rule as installing one package.
+  if (tool.name === 'install_dependencies') {
+    await readProjectPackage(root);
+    if (permissionMode !== 'auto' && !approvedInstallRoots.has(root)) {
+      const options = {
+        type: 'question', buttons: ['Instal·la', 'Cancel·la'], defaultId: 1, cancelId: 1,
+        message: 'Instal·lar les dependències del projecte?',
+        detail: `L’agent vol executar: npm install\nCarpeta: ${root}\n\nBaixa d’internet els paquets que diu package.json i els pot executar en aquest ordinador. Si acceptes, no es tornarà a preguntar per a aquest projecte fins que tanquis l’app.`,
+      };
+      const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+      if (confirmation.response !== 0) return { cancelled: true, error: 'L’usuari ha cancel·lat la instal·lació.' };
+      approvedInstallRoots.add(root);
+    }
+    return executeNpmCommand(root, ['install'], 600000);
+  }
   // The command-line tool of an npm package, as installation guides ask for (`npx <package> <args>`).
   // It downloads and runs code like an install does, so it asks under the same rule.
   if (tool.name === 'run_npx' && typeof tool.arguments?.packageName === 'string' && Array.isArray(tool.arguments?.args)) {

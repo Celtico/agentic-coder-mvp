@@ -21,6 +21,7 @@ export type AgentToolCall =
   | { name: 'run_project_script'; arguments: { script: string } }
   | { name: 'install_package'; arguments: { packageName: string; dev: boolean } }
   | { name: 'run_npx'; arguments: { packageName: string; args: string[] } }
+  | { name: 'install_dependencies' }
   | { name: 'install_playwright_browser' }
   | { name: 'inspect_browser'; arguments: { url: string; actions?: BrowserAction[] } }
   | { name: 'start_project'; arguments: { script: string } }
@@ -49,6 +50,7 @@ const agentToolDefinitions: InferenceToolDefinition[] = [
   { type: 'function', function: { name: 'start_project', description: 'Start the existing dev, start, or preview project script. If it prints a localhost URL, the app opens it in the integrated browser.', parameters: objectParameters({ script: { type: 'string', enum: ['dev', 'start', 'preview'] } }, ['script']) } },
   { type: 'function', function: { name: 'stop_project', description: 'Stop the running project process.', parameters: objectParameters({}) } },
   { type: 'function', function: { name: 'create_git_commit', description: 'Create a Git commit in the selected project when the user has requested it.', parameters: objectParameters({ message: stringParameter('Commit message.', 200) }, ['message']) } },
+  { type: 'function', function: { name: 'install_dependencies', description: 'Install everything package.json lists (npm install). Use it after writing or changing package.json, before starting the project.', parameters: objectParameters({}) } },
   { type: 'function', function: { name: 'run_npx', description: 'Run the command-line tool of an npm package inside the project, as installation guides ask for: `npx <packageName> <args>`. Example: packageName "@chakra-ui/cli", args ["snippet", "add"].', parameters: objectParameters({ packageName: stringParameter('Package name only.', 214), args: { type: 'array', items: { type: 'string' }, description: 'Arguments after the package name.' } }, ['packageName', 'args']) } },
   { type: 'function', function: { name: 'install_package', description: 'Install one npm package by name.', parameters: objectParameters({ packageName: stringParameter('Package name only.', 214), dev: { type: 'boolean', description: 'Whether to install as a development dependency.' } }, ['packageName', 'dev']) } },
   { type: 'function', function: { name: 'install_playwright_browser', description: 'Install Playwright Chromium.', parameters: objectParameters({}) } },
@@ -290,6 +292,7 @@ function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): 
   if (action.name === 'run_project_script' && typeof args.script === 'string' && /^(dev|start|preview)$/.test(args.script)) return { name: 'start_project', arguments: { script: args.script } };
   if (action.name === 'run_project_script' && typeof args.script === 'string' && /^[a-zA-Z0-9:_-]{1,64}$/.test(args.script)) return { name: 'run_project_script', arguments: { script: args.script } };
   if (action.name === 'start_project' && typeof args.script === 'string' && /^(dev|start|preview)$/.test(args.script)) return { name: 'start_project', arguments: { script: args.script } };
+  if (action.name === 'install_dependencies') return { name: 'install_dependencies' };
   if (action.name === 'run_npx' && typeof args.packageName === 'string' && args.packageName.length <= 214 && /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(?:@[\w.^~-]{1,30})?$/i.test(args.packageName)) {
     const extra = Array.isArray(args.args) ? args.args : [];
     if (extra.length <= 10 && extra.every((item) => typeof item === 'string' && item.length <= 120 && !/[\r\n\0;&|`$<>]/.test(item))) return { name: 'run_npx', arguments: { packageName: args.packageName, args: extra as string[] } };
@@ -434,10 +437,10 @@ export function pageFixHint(result: unknown): string {
   if (file) hints.push(`Ve del fitxer ${file[1]}, línia ${file[2]}: llegeix aquest fitxer (no index.html) i corregeix-lo amb write_file.`);
   else hints.push('Llegeix el fitxer que acabes de canviar i corregeix-lo amb write_file.');
   const missingExport = /does not provide an export named '([^']+)'/.exec(first);
-  if (missingExport) hints.push(`«${missingExport[1]}» no existeix a la versió instal·lada d’aquest paquet: treu-ne l’import i no el facis servir; no el tornis a escriure amb un altre nom inventat.`);
+  if (missingExport) hints.push(`«${missingExport[1]}» no existeix a la versió instal·lada d’aquest paquet. Mira primer quina versió hi ha a package.json: si les instruccions del projecte en demanen una altra, corregeix la versió a package.json i torna a instal·lar (install_dependencies). Si la versió és la correcta, treu aquest import i no el facis servir; no el tornis a escriure amb un altre nom inventat.`);
   if (/useContext returned .?undefined|forgot to wrap/i.test(first)) hints.push('Falta embolcallar l’app amb el proveïdor de la llibreria a src/main (segueix les instruccions del projecte).');
   if (/is not defined/.test(first)) hints.push('Hi ha un nom que es fa servir sense haver-lo importat o declarat.');
-  if (/Failed to resolve import|Cannot find module/i.test(first)) hints.push('S’importa un fitxer o paquet que no existeix: crea’l, corregeix la ruta o instal·la el paquet.');
+  if (/Failed to resolve import|Cannot find module/i.test(first)) hints.push('S’importa un fitxer o paquet que no existeix: crea el fitxer, corregeix la ruta o instal·la els paquets (install_dependencies).');
   return hints.join(' ');
 }
 
@@ -1028,7 +1031,7 @@ export class LocalCodingAgent {
       }
       const args = 'arguments' in tool ? tool.arguments as Record<string, string> : {};
       if (tool.name === 'write_file') writeFileAttempted = true;
-      const activity: Record<string, string> = { list_files: 'Llegint l’estructura del projecte…', read_file: `Llegint ${args.path || 'un fitxer'}…`, search_text: `Cercant «${args.query || ''}»…`, run_npx: `Executant npx ${args.packageName || ''} ${Array.isArray(args.args) ? args.args.join(' ') : ''}…`, web_search: `Cercant a Internet «${args.query || ''}»…`, read_web_page: `Llegint ${String(args.url || 'una pàgina').slice(0, 80)}…`, call_mcp_tool: `Consultant ${args.server || 'MCP'}: ${args.tool || ''}…`, list_mcp_tools: 'Mirant els servidors MCP del projecte…', delegate_tasks: `Preparant ${Array.isArray(args.tasks) ? args.tasks.length : ''} agents delegats…`, write_file: `Aplicant el canvi a ${args.path || 'un fitxer'}…`, delete_file: `Preparant l’eliminació de ${args.path || 'un fitxer'} per revisar-la…`, run_tests: 'Executant les proves…', run_project_script: `Executant l’script ${args.script || ''}…`, start_project: `Iniciant l’app (${args.script || ''})…`, stop_project: 'Aturant l’app…', create_git_commit: 'Creant el commit de Git…', install_package: `Preparant la instal·lació de ${args.packageName || 'la llibreria'} per revisar-la…`, install_playwright_browser: 'Preparant la instal·lació de Chromium per revisar-la…', inspect_browser: `Inspeccionant ${args.url || 'la pàgina local'}…` };
+      const activity: Record<string, string> = { list_files: 'Llegint l’estructura del projecte…', read_file: `Llegint ${args.path || 'un fitxer'}…`, search_text: `Cercant «${args.query || ''}»…`, install_dependencies: 'Instal·lant les dependències de package.json…', run_npx: `Executant npx ${args.packageName || ''} ${Array.isArray(args.args) ? args.args.join(' ') : ''}…`, web_search: `Cercant a Internet «${args.query || ''}»…`, read_web_page: `Llegint ${String(args.url || 'una pàgina').slice(0, 80)}…`, call_mcp_tool: `Consultant ${args.server || 'MCP'}: ${args.tool || ''}…`, list_mcp_tools: 'Mirant els servidors MCP del projecte…', delegate_tasks: `Preparant ${Array.isArray(args.tasks) ? args.tasks.length : ''} agents delegats…`, write_file: `Aplicant el canvi a ${args.path || 'un fitxer'}…`, delete_file: `Preparant l’eliminació de ${args.path || 'un fitxer'} per revisar-la…`, run_tests: 'Executant les proves…', run_project_script: `Executant l’script ${args.script || ''}…`, start_project: `Iniciant l’app (${args.script || ''})…`, stop_project: 'Aturant l’app…', create_git_commit: 'Creant el commit de Git…', install_package: `Preparant la instal·lació de ${args.packageName || 'la llibreria'} per revisar-la…`, install_playwright_browser: 'Preparant la instal·lació de Chromium per revisar-la…', inspect_browser: `Inspeccionant ${args.url || 'la pàgina local'}…` };
       lastToolActivity = activity[tool.name] || `Executant ${tool.name}`;
       this.onStatus({ type: 'status', message: lastToolActivity });
       let result: unknown;
@@ -1062,7 +1065,8 @@ export class LocalCodingAgent {
         writeFileError = String((result as Record<string, unknown>).error).slice(0, 500);
       }
       // A package's own tool usually writes files: after it, earlier checks are stale and may be repeated.
-      if (tool.name === 'run_npx' && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) { changeApplied = true; completedToolCalls.clear(); }
+      if ((tool.name === 'run_npx' || tool.name === 'install_dependencies' || tool.name === 'install_package') && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) completedToolCalls.clear();
+      if (tool.name === 'run_npx' && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) changeApplied = true;
       if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) {
         projectChangedSinceCheck = true;
         changeApplied = true;
