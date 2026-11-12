@@ -297,6 +297,10 @@ export function App(): React.JSX.Element {
   const previousSessionIdRef = useRef(activeSessionId);
   const inFlightConversationRef = useRef<{ sessionId: string; projectPath: string; messages: ChatMessage[] } | null>(null);
   const webviewRef = useRef<ElectronWebviewTag | null>(null);
+  // The browser element itself: when panes are rearranged React builds a new one, and whatever
+  // listens to the page (address bar, console) has to follow it to the new element.
+  const [webviewNode, setWebviewNode] = useState<ElectronWebviewTag | null>(null);
+  const attachWebview = useCallback((node: ElectronWebviewTag | null) => { webviewRef.current = node; setWebviewNode(node); }, []);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
 
   const storeSessions = useCallback((value: ChatSession[]) => {
@@ -1084,7 +1088,7 @@ export function App(): React.JSX.Element {
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
-        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
+        : <webview ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
     </Flex>
   );
 
@@ -1223,7 +1227,7 @@ export function App(): React.JSX.Element {
   );
 
   useEffect(() => {
-    const view = webviewRef.current;
+    const view = webviewNode;
     if (!view) return;
     const updateAddress = (event: Event) => { const url = (event as Event & { url?: string }).url; if (url) setBrowserAddress(url); };
     // A new page starts with a clean console; every line it writes afterwards is kept (the last 300).
@@ -1238,10 +1242,11 @@ export function App(): React.JSX.Element {
     };
     view.addEventListener('did-navigate', updateAddress);
     view.addEventListener('did-navigate', clearConsole);
+    view.addEventListener('did-start-loading', clearConsole);
     view.addEventListener('did-navigate-in-page', updateAddress);
     view.addEventListener('console-message', addConsoleLine);
-    return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate', clearConsole); view.removeEventListener('did-navigate-in-page', updateAddress); view.removeEventListener('console-message', addConsoleLine); };
-  }, [browserOpen, browserUrl]);
+    return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate', clearConsole); view.removeEventListener('did-start-loading', clearConsole); view.removeEventListener('did-navigate-in-page', updateAddress); view.removeEventListener('console-message', addConsoleLine); };
+  }, [webviewNode]);
 
   function useConsoleContext() {
     const lines = consoleEntries.filter((entry) => entry.level !== 'info').slice(-40).map((entry) => `[${entry.level === 'error' ? 'error' : 'avís'}] ${entry.text}${entry.source ? ` (${entry.source})` : ''}`);
