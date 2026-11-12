@@ -750,6 +750,12 @@ export class LocalCodingAgent {
         continue;
       }
       messages.push({ role: 'assistant', content: raw });
+      // Committing is the user's call. A model that tidies up with a commit nobody asked for is told so,
+      // instead of being left to fight a folder that may not even be a repository.
+      if (tool.name === 'create_git_commit' && !/\b(?:commit|git)\b/i.test(prompt)) {
+        messages.push({ role: 'user', content: 'L’usuari no ha demanat cap commit de Git i no se’n farà cap. No creïs .gitignore ni facis res més amb Git. Si la feina demanada ja està feta, dona ara la resposta final en prosa: què has creat, si el projecte està en marxa i a quina adreça.' });
+        continue;
+      }
       const toolKey = JSON.stringify(tool);
       const previousResult = completedToolCalls.get(toolKey);
       const isCheck = tool.name === 'run_tests' || tool.name === 'run_project_script';

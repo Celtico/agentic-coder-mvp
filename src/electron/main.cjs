@@ -292,7 +292,12 @@ async function dispatchAgentTool(tool, projectRoot) {
   if (tool.name === 'write_file' && typeof tool.arguments?.path === 'string' && typeof tool.arguments?.content === 'string') {
     const relativePath = tool.arguments.path;
     const content = tool.arguments.content;
-    if (relativePath.length > 500 || content.length > 8000 || path.isAbsolute(relativePath) || relativePath.split(/[\\/]/).some((part) => part.startsWith('.'))) {
+    // Hidden folders (.git, .ssh…) and secret files (.env) stay off limits; the ordinary dot-files of a
+    // project (.gitignore, .editorconfig, linter and formatter settings) can be written like any other.
+    const parts = relativePath.split(/[\\/]/);
+    const hiddenFolder = parts.slice(0, -1).some((part) => part.startsWith('.'));
+    const hiddenFile = parts[parts.length - 1].startsWith('.') && !/^\.(?:gitignore|gitattributes|editorconfig|dockerignore|npmrc|nvmrc|prettierignore|eslintignore|env\.example|(?:prettierrc|eslintrc)(?:\.(?:json|js|cjs|yml|yaml))?)$/.test(parts[parts.length - 1]);
+    if (relativePath.length > 500 || content.length > 8000 || path.isAbsolute(relativePath) || hiddenFolder || hiddenFile) {
       throw new Error('El camí o el contingut no es pot revisar de manera segura. Usa el panell editor per a fitxers més grans.');
     }
     const target = safeProjectPath(root, relativePath);
