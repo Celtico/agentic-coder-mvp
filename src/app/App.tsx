@@ -943,10 +943,10 @@ export function App(): React.JSX.Element {
 
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex h="42px" flex="none" borderBottomWidth="1px" borderColor="border" px="3" align="center" justify="space-between" gap="3">
+      <Flex h="32px" flex="none" borderBottomWidth="1px" borderColor="border" px="3" align="center" justify="space-between" gap="3">
         <HStack minW="0" gap="3">
-          <Heading size="sm" fontWeight="500" flex="none">Agentic Coder</Heading>
-          <NativeSelect.Root size="sm" width="340px" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model local" value={selectedModel} onChange={async (event) => {
+          <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
+          <NativeSelect.Root size="xs" width="300px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={async (event) => {
           const nextModel = event.currentTarget.value;
           setModelChanging(true);
           try {
@@ -1175,15 +1175,15 @@ export function App(): React.JSX.Element {
   );
   const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex h="42px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
-        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
-        <IconButton icon={X} label={closeLabel} onClick={onClose}/>
+      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
+        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
+        <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
       </Flex>
       <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge colorPalette="agentic" maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Revisa abans de desar</Badge>) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge size="xs" colorPalette="agentic" maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Revisa abans de desar</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
@@ -1224,7 +1224,7 @@ export function App(): React.JSX.Element {
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
     <Grid flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
-          <Flex h="42px" w="full" flex="none" align="center" justify="center" fontSize="xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <Flex h="32px" w="full" flex="none" align="center" justify="center" fontSize="lg" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
