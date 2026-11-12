@@ -1129,7 +1129,6 @@ export function App(): React.JSX.Element {
             <Text>Espai de treball</Text>
             <HStack gap="1">
               <IconButton icon={MessageSquarePlus} label="Nova conversa" onClick={newChat}/>
-              <IconButton icon={FolderOpen} label="Selecciona directori" onClick={selectProject}/>
             </HStack>
           </Flex>
           <Splitter.Root
@@ -1183,8 +1182,10 @@ export function App(): React.JSX.Element {
                     <Menu.Root>
                       <Menu.Trigger asChild><IconButton icon={MoreVertical} label="Accions de fitxers del projecte" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => event.stopPropagation()}/></Menu.Trigger>
                       <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Crea un fitxer</IconLabel></Menu.Item>
-                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Crea un directori</IconLabel></Menu.Item>
+                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
+                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                        <Menu.Separator borderColor="border"/>
+                        <Menu.Item value="select-project" onClick={() => void selectProject()}><IconLabel icon={FolderOpen}>Selecciona el projecte…</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>
                   </HStack>
