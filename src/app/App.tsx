@@ -10,7 +10,7 @@ import {
   Spinner, Splitter, Text, Textarea, TreeView, NativeSelect
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
@@ -252,6 +252,10 @@ export function App(): React.JSX.Element {
   const [editorOriginal, setEditorOriginal] = useState('');
   const [editorCursor, setEditorCursor] = useState({ line: 1, column: 1 });
   const [editorBusy, setEditorBusy] = useState(false);
+  // What the page in the browser panel writes to its console, newest last.
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleEntries, setConsoleEntries] = useState<{ level: 'error' | 'warn' | 'info'; text: string; source: string }[]>([]);
+  const consoleErrorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const [permissionMode, setPermissionMode] = useState<'ask' | 'auto'>('ask');
   useEffect(() => { void window.agentic.getPermissionMode().then((mode) => setPermissionMode(mode === 'auto' ? 'auto' : 'ask')).catch(() => {}); }, []);
   const [editorStatus, setEditorStatus] = useState('');
@@ -972,7 +976,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, gitOpen, learningOpen]);
+  }, [terminalOpen, gitOpen, learningOpen, consoleOpen]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -989,7 +993,7 @@ export function App(): React.JSX.Element {
       window.removeEventListener('pointerup', up);
       setTerminalResizing(false);
       // Dragged almost shut: close it and keep the last useful height for next time.
-      if (latest < TERMINAL_MIN_HEIGHT) { setTerminalOpen(false); setGitOpen(false); setLearningOpen(false); setTerminalHeight(Math.max(startHeight, 200)); return; }
+      if (latest < TERMINAL_MIN_HEIGHT) { setTerminalOpen(false); setGitOpen(false); setLearningOpen(false); setConsoleOpen(false); setTerminalHeight(Math.max(startHeight, 200)); return; }
       localStorage.setItem(TERMINAL_HEIGHT_KEY, String(latest));
     };
     window.addEventListener('pointermove', move);
@@ -998,7 +1002,7 @@ export function App(): React.JSX.Element {
 
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex h="32px" flex="none" borderBottomWidth="1px" borderColor="border" px="3" align="center" justify="space-between" gap="3">
+      <Flex h="32px" flex="none" px="3" align="center" justify="space-between" gap="3">
         <HStack minW="0" gap="3">
           <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
           <NativeSelect.Root size="xs" width="300px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={async (event) => {
@@ -1054,6 +1058,10 @@ export function App(): React.JSX.Element {
         <Input flex="1" minW="0" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
         <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" size="sm" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
+        <Box position="relative" flex="none">
+          <IconButton icon={Bug} label={consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola'} size="sm" variant={consoleOpen ? 'subtle' : 'ghost'} colorPalette={consoleOpen ? 'agentic' : 'gray'} onClick={() => setConsoleOpen((open) => !open)}/>
+          {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.500" color="white" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
+        </Box>
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
@@ -1063,7 +1071,7 @@ export function App(): React.JSX.Element {
 
   const terminalDock = (
     <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
+      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="3">
           <Text flex="none" fontSize="xs" fontWeight="semibold">Terminal</Text>
           <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
@@ -1199,14 +1207,50 @@ export function App(): React.JSX.Element {
     const view = webviewRef.current;
     if (!view) return;
     const updateAddress = (event: Event) => { const url = (event as Event & { url?: string }).url; if (url) setBrowserAddress(url); };
+    // A new page starts with a clean console; every line it writes afterwards is kept (the last 300).
+    const clearConsole = () => setConsoleEntries([]);
+    const addConsoleLine = (event: Event) => {
+      const data = event as Event & { level?: number | string; message?: string; sourceId?: string; line?: number };
+      const level = data.level === 3 || data.level === 'error' ? 'error' : data.level === 2 || data.level === 'warning' ? 'warn' : 'info';
+      const file = String(data.sourceId || '').split('/').pop()?.split('?')[0] || '';
+      setConsoleEntries((current) => [...current.slice(-299), { level, text: String(data.message || '').slice(0, 2000), source: file ? `${file}${data.line ? `:${data.line}` : ''}` : '' }]);
+    };
     view.addEventListener('did-navigate', updateAddress);
+    view.addEventListener('did-navigate', clearConsole);
     view.addEventListener('did-navigate-in-page', updateAddress);
-    return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
+    view.addEventListener('console-message', addConsoleLine);
+    return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate', clearConsole); view.removeEventListener('did-navigate-in-page', updateAddress); view.removeEventListener('console-message', addConsoleLine); };
   }, [browserOpen, browserUrl]);
+
+  function useConsoleContext() {
+    const lines = consoleEntries.filter((entry) => entry.level !== 'info').slice(-40).map((entry) => `[${entry.level === 'error' ? 'error' : 'avís'}] ${entry.text}${entry.source ? ` (${entry.source})` : ''}`);
+    if (lines.length === 0) { setStatus('La consola no té errors ni avisos'); return; }
+    setBrowserContext(`Consola del navegador a ${browserAddress}:\n${lines.join('\n').slice(0, 8000)}`);
+    setStatus('Errors de la consola afegits al context del xat');
+    promptRef.current?.focus();
+  }
+  const consoleTone = { error: '#ff9b9b', warn: '#f0d88a', info: 'var(--chakra-colors-fg-muted)' } as const;
+  const consolePane = (
+    <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
+      <HStack flex="none" gap="2" px="3" py="1.5" borderBottomWidth="1px" borderColor="border">
+        <Text flex="1" minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={browserAddress}>{browserUrl === 'about:blank' ? 'Cap pàgina oberta' : browserAddress}</Text>
+        <Button size="xs" variant="outline" flex="none" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
+        <Button size="xs" variant="ghost" flex="none" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
+      </HStack>
+      <Box flex="1" minH="0" overflowY="auto" px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
+        {consoleEntries.length === 0
+          ? <Notice tone="info">{browserUrl === 'about:blank' ? 'Obre una pàgina al navegador i aquí hi sortirà el que escrigui a la consola.' : 'La pàgina no ha escrit res a la consola.'}</Notice>
+          : consoleEntries.map((entry, index) => <Flex key={index} gap="3" py="0.5" borderBottomWidth="1px" borderColor="border" style={{ color: consoleTone[entry.level] }}>
+            <Text flex="1" minW="0" whiteSpace="pre-wrap" overflowWrap="anywhere">{entry.text}</Text>
+            {entry.source && <Text flex="none" color="fg.muted">{entry.source}</Text>}
+          </Flex>)}
+      </Box>
+    </Flex>
+  );
 
   const dockPane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
+      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
         <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
       </Flex>
@@ -1216,6 +1260,7 @@ export function App(): React.JSX.Element {
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
     learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
+    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', 'Tanca la consola', () => setConsoleOpen(false), consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const dockKey = dockItems.map((item) => item.id).join('+');
@@ -1237,7 +1282,7 @@ export function App(): React.JSX.Element {
   );
   const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
+      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
         <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
         <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
       </Flex>

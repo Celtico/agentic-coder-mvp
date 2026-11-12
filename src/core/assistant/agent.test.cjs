@@ -1483,3 +1483,19 @@ test('a plan given as the answer to a request for action is carried out, not acc
   assert.ok(inputs.some((input) => /només el pla/.test(input)));
   assert.match(answer, /He instal·lat/);
 });
+
+test('a web address in the message is read by the app before the model starts', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-url-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  let system = '';
+  const engine = { loadModel: async () => {}, generateResponse: async (messages) => { system = messages[0].content; return '{"type":"final","content":"Entesos."}'; }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const read = [];
+  await agent.ask('Què diu https://example.com/docs/install. i http://localhost:5174/ ?', tempRoot, async (tool) => {
+    if (tool.name === 'read_web_page') { read.push(tool.arguments.url); return { title: 'Instal·lació', text: 'npm i exemple' }; }
+    return {};
+  });
+  assert.deepEqual(read, ['https://example.com/docs/install']);
+  assert.match(system, /--- https:\/\/example\.com\/docs\/install \(Instal·lació\)\nnpm i exemple/);
+});
