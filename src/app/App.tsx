@@ -282,7 +282,9 @@ export function App(): React.JSX.Element {
     setProject(next);
     setBrowserContext('');
     if (announce) {
-      const notice = `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar propostes de canvi.`;
+      const notice = next.files.length === 0
+        ? `Carpeta seleccionada: ${next.path}\nÉs buida. Demana què vols crear-hi.`
+        : `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar canvis.`;
       persistMessages([...session.messages, { role: 'assistant', text: notice }], session.id, next.path);
     }
   }, [activeSessionId, draft, persistMessages, sessions, updateSessions]);

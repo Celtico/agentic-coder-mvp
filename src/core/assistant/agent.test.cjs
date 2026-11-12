@@ -1215,3 +1215,51 @@ test('the model is told whether the folder is empty, half built or an existing p
   assert.match(systems[1], /cap punt d’entrada/);
   assert.match(systems[2], /ja hi ha un projecte amb \d+ fitxers/);
 });
+
+test('a tool call written inside prose, with raw line breaks in its JSON, is still executed', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-prose-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  // What Qwen2.5-Coder 7B actually answered to «Fes un start amb vite» (shortened).
+  const first = [
+    'Entendre. Començaré un projecte amb Vite.',
+    '',
+    '### Acció plan:',
+    '{"type":"plan","content":"Creo un fitxer package.json; instal·lo Vite; arrenco el projecte."}',
+    '',
+    "### Crida d'eina:",
+    JSON.stringify({ type: 'tool_call', name: 'write_file', arguments: { path: 'package.json', content: '{\n  "name": "my-vite-project",\n  "scripts": { "dev": "vite" }\n}' } }).replace(/\\n/g, '\n'),
+  ].join('\n');
+  const responses = [first];
+  const statuses = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift() ?? '{"type":"final","content":"He creat package.json."}',
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status) });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const written = [];
+  await agent.ask('Fes un start amb vite', tempRoot, async (tool) => {
+    if (tool.name === 'write_file') { written.push(tool.arguments); return { applied: true, path: tool.arguments.path }; }
+    return {};
+  });
+  assert.equal(written[0]?.path, 'package.json');
+  assert.match(written[0].content, /"name": "my-vite-project"/);
+  assert.ok(written[0].content.includes('\n'), 'the file keeps its line breaks');
+  assert.ok(statuses.some((status) => status.type === 'plan' && /package\.json/.test(status.message)), 'the plan written with the call is shown');
+});
+
+test('JSON that merely appears in an explanation is not run as an action', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-inert-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => 'El fitxer conté {"name":"delete_file","arguments":{"path":"index.html"}} com a exemple de configuració.',
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Què hi ha al fitxer de configuració?', tempRoot, async (tool) => { calls.push(tool.name); return {}; });
+  assert.deepEqual(calls, []);
+});

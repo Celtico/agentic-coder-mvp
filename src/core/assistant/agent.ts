@@ -23,7 +23,7 @@ export type AgentToolCall =
   | { name: 'stop_project' };
 export type AgentToolExecutor = (tool: AgentToolCall) => Promise<unknown>;
 
-type AgentAction = { type: 'final'; content: string } | { type: 'plan'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown };
+type AgentAction = { type: 'final'; content: string } | { type: 'plan'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown; plan?: string };
 type BrowserTarget = { by: 'role' | 'label' | 'placeholder' | 'text' | 'testId'; value: string; role?: 'button' | 'link' | 'checkbox' | 'radio' | 'textbox' | 'heading' | 'option' };
 type BrowserAction = { type: 'click' | 'assertVisible'; target: BrowserTarget } | { type: 'fill'; target: BrowserTarget; value: string } | { type: 'assertText'; text: string };
 type ExperienceRanker = { rank(prompt: string, values: EmbeddableExperience[], onStatus?: (message: string) => void): Promise<RankedExperience[]> };
@@ -103,6 +103,56 @@ function parseAction(raw: string): AgentAction | null {
     return null;
   };
 
+  // Models often write a file's content with real line breaks inside the JSON string, which is not
+  // valid JSON. Escape control characters that sit inside a string before parsing.
+  const repairStrings = (candidate: string): string => {
+    let out = '';
+    let inString = false;
+    let escaped = false;
+    for (const character of candidate) {
+      if (inString) {
+        if (escaped) { escaped = false; out += character; continue; }
+        if (character === '\\') { escaped = true; out += character; continue; }
+        if (character === '"') { inString = false; out += character; continue; }
+        if (character === '\n') { out += '\\n'; continue; }
+        if (character === '\r') { out += '\\r'; continue; }
+        if (character === '\t') { out += '\\t'; continue; }
+        out += character;
+        continue;
+      }
+      if (character === '"') inString = true;
+      out += character;
+    }
+    return out;
+  };
+  const parseLenient = (candidate: string): AgentAction | null => parseCandidate(candidate) || parseCandidate(repairStrings(candidate));
+  // Every complete top-level {...} in a text, in order.
+  const topLevelObjects = (text: string): string[] => {
+    const found: string[] = [];
+    for (let start = 0; start < text.length; start += 1) {
+      if (text[start] !== '{') continue;
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let end = start; end < text.length; end += 1) {
+        const character = text[end];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (character === '\\') escaped = true;
+          else if (character === '"') inString = false;
+          continue;
+        }
+        if (character === '"') inString = true;
+        else if (character === '{') depth += 1;
+        else if (character === '}') {
+          depth -= 1;
+          if (depth === 0) { found.push(text.slice(start, end + 1)); start = end; break; }
+        }
+      }
+    }
+    return found;
+  };
+
   const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   for (const match of raw.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)) {
     try {
@@ -113,7 +163,7 @@ function parseAction(raw: string): AgentAction | null {
       }
     } catch {}
   }
-  const directAction = parseCandidate(normalized);
+  const directAction = parseLenient(normalized);
   if (directAction) return directAction;
 
   // Some small models concatenate several JSON actions; accept only the first
@@ -136,7 +186,7 @@ function parseAction(raw: string): AgentAction | null {
       else if (character === '}') {
         depth -= 1;
         if (depth === 0) {
-          const leadingAction = parseCandidate(normalized.slice(0, index + 1));
+          const leadingAction = parseLenient(normalized.slice(0, index + 1));
           if (leadingAction) return leadingAction;
           break;
         }
@@ -147,7 +197,7 @@ function parseAction(raw: string): AgentAction | null {
   // Explanations before JSON remain inert unless the JSON is in an explicit fence.
   for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
     const fenced = match[1];
-    const wholeBlockAction = parseCandidate(fenced);
+    const wholeBlockAction = parseLenient(fenced);
     if (wholeBlockAction) return wholeBlockAction;
 
     // Small local models sometimes put several separate tool-call objects in
@@ -171,7 +221,7 @@ function parseAction(raw: string): AgentAction | null {
         else if (character === '}') {
           depth -= 1;
           if (depth === 0) {
-            const fencedAction = parseCandidate(fenced.slice(start, end + 1));
+            const fencedAction = parseLenient(fenced.slice(start, end + 1));
             if (fencedAction) return fencedAction;
             start = end;
             break;
@@ -180,6 +230,18 @@ function parseAction(raw: string): AgentAction | null {
       }
     }
   }
+
+  // Last resort: the model explained itself and wrote its actions in the middle of the prose, without a
+  // fence. Only objects that declare themselves ("type":"tool_call" / "plan") count, so a snippet of
+  // code or a quoted file never becomes an action; the tool call is still validated before it runs.
+  let embeddedPlan: string | undefined;
+  for (const candidate of topLevelObjects(raw)) {
+    if (!/"type"\s*:\s*"(?:tool_call|plan)"/.test(candidate)) continue;
+    const action = parseLenient(candidate);
+    if (action?.type === 'plan') embeddedPlan ??= action.content;
+    else if (action?.type === 'tool_call') return { ...action, plan: embeddedPlan };
+  }
+  if (embeddedPlan) return { type: 'plan', content: embeddedPlan };
   return null;
 }
 
@@ -659,6 +721,11 @@ export class LocalCodingAgent {
       }
       // A small model that already chose the right tool is not sent back to write a plan first: that
       // throws the call away and costs two more slow generations.
+      if (!planPublished && action.plan) {
+        plan = action.plan.slice(0, 3000);
+        planPublished = true;
+        this.onStatus({ type: 'plan', message: plan });
+      }
       if (requestedCodeChange && !planPublished && !compact) {
         messages.push({ role: 'assistant', content: raw }, { role: 'user', content: 'Abans de fer cap acció, escriu al xat el pla complet, concret i breu. Respon ara només amb l’acció plan en JSON: {"type":"plan","content":"..."}. No cridis cap eina encara.' });
         this.onStatus({ type: 'status', message: 'Qwen està escrivint el pla abans de començar…' });
