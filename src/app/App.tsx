@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Text, Textarea, TreeView, NativeSelect
+  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -107,7 +107,14 @@ const markKeyframes = `
 /** On macOS the app draws its own title bar (the main process hides the system one). */
 const ownTitleBar = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) && typeof window !== 'undefined' && 'agentic' in window;
 
-const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button>;
+/** The name of a control, shown next to it as soon as the pointer rests there. */
+const Tip = ({ label, children }: { label: string; children: React.ReactElement }) => (
+  <Tooltip.Root openDelay={250} closeDelay={0} positioning={{ gutter: 6 }}>
+    <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+    <Portal><Tooltip.Positioner><Tooltip.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1" fontSize="xs" fontWeight="medium" boxShadow="lg" maxW="280px">{label}</Tooltip.Content></Tooltip.Positioner></Portal>
+  </Tooltip.Root>
+);
+const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Tip label={label}><Button aria-label={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button></Tip>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -1057,8 +1064,8 @@ export function App(): React.JSX.Element {
           <Flex align="flex-end" gap="2">
             <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
-              ? <Button flex="none" aria-label="Atura la generació" title="Atura la generació" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" bg="fg" color="bg" _hover={{ bg: 'white' }} onClick={cancelPrompt}><Stop size={12} fill="currentColor"/></Button>
-              : <Button flex="none" aria-label="Envia" title="Envia (Retorn)" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button>}
+              ? <Tip label="Atura la generació"><Button flex="none" aria-label="Atura la generació" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" bg="fg" color="bg" _hover={{ bg: 'white' }} onClick={cancelPrompt}><Stop size={12} fill="currentColor"/></Button></Tip>
+              : <Tip label="Envia (Retorn)"><Button flex="none" aria-label="Envia" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button></Tip>}
           </Flex>
         </Box>
         <Flex align="center" gap="2" mt="1.5" px="1" minW="0">
