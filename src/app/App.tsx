@@ -10,7 +10,7 @@ import {
   Spinner, Splitter, Text, Textarea, TreeView, NativeSelect
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
@@ -68,6 +68,26 @@ function getStoredSessions(): ChatSession[] {
 type ButtonProps = React.ComponentProps<typeof ChakraButton>;
 const Button = ({ size: _size, ...props }: ButtonProps) => <ChakraButton {...props} size="xs"/>;
 type IconButtonProps = ButtonProps & { icon: IconType; label: string };
+/** A boxed note: blue for plain information, yellow for something to look at, green for done. */
+const noticeTones = {
+  info: { bg: '#10263b', border: '#1f4a73', fg: '#a9d1f7', icon: Info },
+  warning: { bg: '#33290d', border: '#6b5516', fg: '#f0d88a', icon: AlertTriangle },
+  success: { bg: '#0b2a20', border: '#09543f', fg: '#91e9ca', icon: CircleCheck },
+} as const;
+const Notice = ({ tone = 'info', children }: { tone?: keyof typeof noticeTones; children: React.ReactNode }) => {
+  const { bg, border, fg, icon: Icon } = noticeTones[tone];
+  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2.5" px="3" py="2.5" borderWidth="1px" borderRadius="md" fontSize="sm" lineHeight="1.45" style={{ background: bg, borderColor: border, color: fg }}>
+    <Box flex="none" mt="2px"><Icon size={15}/></Box><Box minW="0" overflowWrap="anywhere">{children}</Box>
+  </Flex>;
+};
+/** One figure of the learning panel. */
+const Stat = ({ label, value, dim = false }: { label: string; value: number; dim?: boolean }) => (
+  <Box px="3" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface.subtle" minW="0">
+    <Text fontSize="xl" fontWeight="semibold" lineHeight="1.2" color={dim && value === 0 ? 'fg.muted' : 'fg'}>{value}</Text>
+    <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.06em" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={label}>{label}</Text>
+  </Box>
+);
+
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
@@ -1072,7 +1092,7 @@ export function App(): React.JSX.Element {
         <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/>
       </Flex>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
-        : !gitHistory?.available ? <Text p="4" color="fg.muted">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Text>
+        : !gitHistory?.available ? <Box p="3"><Notice tone="info">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Notice></Box>
           : <Splitter.Root flex="1" minH="0" minW="0" orientation="vertical" panels={[{ id: 'git-history', minSize: 12 }, { id: 'git-details', minSize: 12 }]} defaultSize={getGitSplitSize()} onResizeEnd={(details) => localStorage.setItem(GIT_SPLIT_KEY, JSON.stringify(details.size))}>
             <Splitter.Panel id="git-history" minH="0" minW="0" overflow="hidden">
               <Grid h="full" minH="0" minW="0" templateColumns="minmax(105px, 0.8fr) minmax(190px, 1.5fr)">
@@ -1124,29 +1144,38 @@ export function App(): React.JSX.Element {
   );
 
   const learningPane = (
-    <Flex h="full" minH="0" direction="column" p="4" bg="bg" gap="3" overflowY="auto">
-        <Text fontSize="sm" color="fg.muted">Prepara un conjunt local amb casos verificats. Es descarten duplicats i credencials detectables; el contingut no es mostra aquí ni s’envia fora del Mac.</Text>
-      {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text>Revisant els casos locals…</Text></HStack>
+    <Flex h="full" minH="0" direction="column" p="3" bg="bg" gap="3" overflowY="auto">
+      <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
+      {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : datasetPreview ? <>
-          <Text fontWeight="semibold" color={datasetPreview.trainingReady ? 'agentic.200' : 'yellow.200'}>{datasetPreview.trainingReady ? 'Llindar mínim tècnic assolit; cal revisió independent' : 'Encara no hi ha prou casos per entrenar'}</Text>
-          <Stack gap="2" fontSize="sm">
-            <Text>Casos examinats: {datasetPreview.counts.input}</Text>
-            <Text>Preparats: {datasetPreview.counts.included}</Text>
-            <Text>Duplicats descartats: {datasetPreview.counts.duplicates}</Text>
-            <Text>Possibles secrets descartats: {datasetPreview.counts.secrets}</Text>
-            <Text>Sense verificació descartats: {datasetPreview.counts.unverified}</Text>
-            <Text>Invàlids descartats: {datasetPreview.counts.invalid}</Text>
-          </Stack>
-          <Box p="3" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface.subtle">
-            <Text fontWeight="medium" mb="2">Separació determinista</Text>
-            <Text fontSize="sm">Entrenament: {datasetPreview.splitCounts.train} · Validació: {datasetPreview.splitCounts.validation} · Prova final: {datasetPreview.splitCounts.test}</Text>
+          <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : 'Encara no hi ha prou casos per entrenar. Continua desant els que surtin bé.'}</Notice>
+          <Box>
+            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos</Text>
+            <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
+              <Stat label="Examinats" value={datasetPreview.counts.input}/>
+              <Stat label="Preparats" value={datasetPreview.counts.included}/>
+              <Stat label="Duplicats" value={datasetPreview.counts.duplicates} dim/>
+              <Stat label="Possibles secrets" value={datasetPreview.counts.secrets} dim/>
+              <Stat label="Sense verificar" value={datasetPreview.counts.unverified} dim/>
+              <Stat label="Invàlids" value={datasetPreview.counts.invalid} dim/>
+            </Grid>
           </Box>
-          <Button alignSelf="flex-start" colorPalette="agentic" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>
-            {learningBusy ? <Spinner size="sm"/> : <Brain size={16}/>}Prepara versió candidata
-          </Button>
-        </> : <Text color="fg.muted">No s’ha pogut llegir la memòria local.</Text>}
-      {learningStatus && <Text fontSize="xs" color={learningStatus.startsWith('Versió candidata') ? 'agentic.200' : 'yellow.200'} overflowWrap="anywhere">{learningStatus}</Text>}
-      <Text fontSize="xs" color="fg.muted">Preparar dades no entrena el model. Cap candidat no es pot activar des d’aquest panell.</Text>
+          <Box>
+            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Repartiment dels preparats</Text>
+            <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
+              <Stat label="Entrenament" value={datasetPreview.splitCounts.train} dim/>
+              <Stat label="Validació" value={datasetPreview.splitCounts.validation} dim/>
+              <Stat label="Prova final" value={datasetPreview.splitCounts.test} dim/>
+            </Grid>
+          </Box>
+          <HStack gap="3" flexWrap="wrap">
+            <Button size="sm" flex="none" colorPalette="agentic" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>
+              {learningBusy ? <Spinner size="sm"/> : <Brain size={15}/>}Prepara versió candidata
+            </Button>
+            <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Preparar dades no entrena el model, i des d’aquí no se’n pot activar cap.</Text>
+          </HStack>
+        </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
+      {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
     </Flex>
   );
 
