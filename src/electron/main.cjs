@@ -513,6 +513,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 980, minHeight: 680,
     title: 'Agentic Coder — Local',
+    icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true }
   });
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
@@ -534,6 +535,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Run from source there is no app bundle to carry the icon, so the Dock gets it here.
+  if (process.platform === 'darwin' && app.dock) { try { app.dock.setIcon(path.join(__dirname, '..', '..', 'assets', 'icon.png')); } catch { /* keeps Electron's icon */ } }
   try {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
