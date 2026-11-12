@@ -789,7 +789,7 @@ export function App(): React.JSX.Element {
 
   async function openEditor(relativePath: string) {
     try {
-      if (editingPath && editingPath !== relativePath) await saveEdit();
+      if (editingPath && editingPath !== relativePath && editorContent !== editorOriginal) setStatus(`Canvis de ${editingPath} descartats (no s’havien desat)`);
       const content = await window.agentic.readFile(relativePath);
       setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
@@ -873,8 +873,7 @@ export function App(): React.JSX.Element {
     finally { setFileHistoryBusy(false); }
   }
 
-  // The editor saves by itself: a moment after typing stops, when another file is opened and when it
-  // is closed. Each save keeps the previous version in the local history.
+  // Saving is the user's decision. Each save keeps the previous version in the local history.
   const editorStateRef = useRef({ path: null as string | null, content: '', original: '' });
   editorStateRef.current = { path: editingPath, content: editorContent, original: editorOriginal };
   async function saveEdit() {
@@ -888,13 +887,10 @@ export function App(): React.JSX.Element {
     } catch (error) { if (editorStateRef.current.path === filePath) setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
   }
-  useEffect(() => {
-    if (!editingPath || editorContent === editorOriginal) return;
-    const timer = window.setTimeout(() => { void saveEdit(); }, 900);
-    return () => window.clearTimeout(timer);
-  }, [editingPath, editorContent, editorOriginal]);
-  async function closeEditor() {
-    await saveEdit();
+  // Nothing is written until the user says so: the small save button, or Cmd/Ctrl+S.
+  function closeEditor() {
+    const { path: filePath, content, original } = editorStateRef.current;
+    if (filePath && content !== original) setStatus(`Canvis de ${filePath} descartats (no s’havien desat)`);
     setEditorOpen(false); setEditingPath(null);
   }
 
@@ -1117,8 +1113,8 @@ export function App(): React.JSX.Element {
 
   const editorPane = (
     <Flex h="full" minH="0" minW="0" direction="column" p="3" bg="bg">
-      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0"><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={editingPath ?? undefined}>{editingPath}</Text><Button size="xs" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></Flex>
-      <Box flex="1" minH="0" overflow="hidden" borderWidth="1px" borderColor="border" borderRadius="md">
+      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0"><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={editingPath ?? undefined}>{editingPath}</Text><HStack flex="none" gap="1"><IconButton icon={Check} label={editorContent === editorOriginal ? 'Sense canvis per desar' : 'Desa (⌘S)'} size="xs" variant={editorContent === editorOriginal ? 'ghost' : 'subtle'} colorPalette={editorContent === editorOriginal ? 'gray' : 'agentic'} disabled={editorBusy || editorContent === editorOriginal} onClick={() => void saveEdit()}/><Button size="xs" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></HStack></Flex>
+      <Box flex="1" minH="0" overflow="hidden" borderWidth="1px" borderColor="border" borderRadius="md" onKeyDownCapture={(event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void saveEdit(); } }}>
         <Editor
           height="100%"
           width="100%"
@@ -1323,7 +1319,7 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', () => { void closeEditor(); }, editorPane, <Badge size="xs" colorPalette={editorStatus ? 'yellow' : editorContent === editorOriginal ? 'gray' : 'agentic'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No desat' : editorBusy || editorContent !== editorOriginal ? 'Desant…' : 'Desat'}</Badge>) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
