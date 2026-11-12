@@ -27,8 +27,11 @@ const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
 const GIT_SPLIT_KEY = 'agentic-git-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
+const TERMINAL_HEIGHT_KEY = 'agentic-terminal-height-v1';
+/** Dragged shorter than this, the terminal dock closes. */
+const TERMINAL_MIN_HEIGHT = 90;
 const NAVIGATION_SECTIONS_SPLIT_KEY = 'agentic-navigation-sections-split-v1';
-type WorkspacePanel = 'browser' | 'terminal' | 'editor' | 'git' | 'learning';
+type WorkspacePanel = 'browser' | 'editor' | 'git' | 'learning';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -180,6 +183,13 @@ export function App(): React.JSX.Element {
   const [browserContext, setBrowserContext] = useState('');
   const [terminalOutput, setTerminalOutput] = useState('');
   const [terminalStatus, setTerminalStatus] = useState('');
+  // The terminal lives in its own dock at the bottom, so it stays open next to the browser or the editor.
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalResizing, setTerminalResizing] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(() => {
+    const stored = Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
+    return Number.isFinite(stored) && stored >= TERMINAL_MIN_HEIGHT ? stored : 260;
+  });
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalInstanceRef = useRef<Terminal | null>(null);
   const terminalCommandBufferRef = useRef('');
@@ -328,6 +338,8 @@ export function App(): React.JSX.Element {
       if (text) setLoadingLabel(text);
     });
     const offTerminal = window.agentic.onTerminalOutput((chunk: string) => {
+      // Whatever runs (typed here or started by the agent) brings the terminal into view.
+      setTerminalOpen(true);
       setTerminalOutput((prev) => (prev + chunk).slice(-100000));
       terminalInstanceRef.current?.write(chunk);
     });
@@ -857,7 +869,7 @@ export function App(): React.JSX.Element {
   executeTerminalCommandRef.current = (command: string) => { void executeCommand(command); };
 
   useEffect(() => {
-    if (workspacePanel !== 'terminal' || !terminalContainerRef.current) return;
+    if (!terminalOpen || !terminalContainerRef.current) return;
     const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#111111', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -901,7 +913,29 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [workspacePanel]);
+  }, [terminalOpen]);
+
+  function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = terminalHeight;
+    let latest = startHeight;
+    setTerminalResizing(true);
+    const move = (moveEvent: PointerEvent) => {
+      latest = Math.max(30, Math.min(window.innerHeight - 180, startHeight + (startY - moveEvent.clientY)));
+      setTerminalHeight(latest);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setTerminalResizing(false);
+      // Dragged almost shut: close it and keep the last useful height for next time.
+      if (latest < TERMINAL_MIN_HEIGHT) { setTerminalOpen(false); setTerminalHeight(Math.max(startHeight, 200)); return; }
+      localStorage.setItem(TERMINAL_HEIGHT_KEY, String(latest));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
 
   const chatPane = (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
@@ -970,13 +1004,20 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
-  const terminalPane = (
-    <Flex h="full" minH="0" direction="column" p="4" bg="bg">
-      <Box ref={terminalContainerRef} flex="1" minH="0" bg="#111111" borderWidth="1px" borderColor="border" borderRadius="md" p="2" aria-label="Terminal del projecte"/>
-      <Flex flex="none" minH="32px" align="center" justify="space-between" gap="3" mt="2" pt="2" borderTopWidth="1px" borderColor="border">
-        <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
-        {terminalStatus && <Text flex="none" fontSize="xs" color="fg.muted">{terminalStatus}</Text>}
+  const terminalDock = (
+    <Flex flex="none" direction="column" minH="0" minW="0" position="relative" bg="#111111" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px` }}>
+      <Box position="absolute" top="-4px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}/>
+      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" bg="surface.subtle" borderBottomWidth="1px" borderColor="border">
+        <HStack minW="0" gap="3">
+          <Text flex="none" fontSize="xs" fontWeight="semibold">Terminal</Text>
+          <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
+        </HStack>
+        <HStack flex="none" gap="2">
+          {terminalStatus && <Text fontSize="xs" color="fg.muted">{terminalStatus}</Text>}
+          <IconButton icon={X} label="Tanca el terminal" size="xs" onClick={() => setTerminalOpen(false)}/>
+        </HStack>
       </Flex>
+      <Box ref={terminalContainerRef} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
     </Flex>
   );
 
@@ -1099,8 +1140,8 @@ export function App(): React.JSX.Element {
     return () => { view.removeEventListener('did-navigate', updateAddress); view.removeEventListener('did-navigate-in-page', updateAddress); };
   }, [browserOpen, browserUrl]);
 
-  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'terminal' ? 'Terminal del projecte' : workspacePanel === 'git' ? 'Git' : workspacePanel === 'learning' ? 'Aprenentatge local' : 'Edita fitxer';
-  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'terminal' ? terminalPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : workspacePanel === 'learning' ? learningPane : null;
+  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : workspacePanel === 'git' ? 'Git' : workspacePanel === 'learning' ? 'Aprenentatge local' : 'Edita fitxer';
+  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'editor' ? editorPane : workspacePanel === 'git' ? gitPane : workspacePanel === 'learning' ? learningPane : null;
   const workspacePane = panelContent && (
     <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
@@ -1137,10 +1178,12 @@ export function App(): React.JSX.Element {
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
-          <IconButton icon={TerminalIcon} label={workspacePanel === 'terminal' ? 'Tanca la terminal del projecte' : 'Obre la terminal del projecte'} w="44px" h="44px" variant={workspacePanel === 'terminal' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'terminal' ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setWorkspacePanel((current) => current === 'terminal' ? null : 'terminal'); }}/>
+          <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="44px" h="44px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
           <IconButton icon={GitBranch} label={workspacePanel === 'git' ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={workspacePanel === 'git' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'git' ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={workspacePanel === 'learning' ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="44px" h="44px" variant={workspacePanel === 'learning' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'learning' ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
         </Flex>
+        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden">
+        <Box flex="1" minH="0" minW="0" overflow="hidden">
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '60px', maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(380, window.innerWidth - 64);
           const dragged = Math.round((details.size[0] / 100) * availableWidth);
@@ -1254,6 +1297,10 @@ export function App(): React.JSX.Element {
         <SplitterHandle id={'navigation:main' as SplitterHandleId}/>
         <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
         </Splitter.Root> : <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>}
+        </Box>
+        {terminalOpen && terminalDock}
+        {terminalResizing && <Box position="fixed" inset="0" zIndex="4000" cursor="row-resize"/>}
+        </Flex>
     </Grid>
     <Flex flex="none" minW="0" h="28px" align="center" justify="space-between" gap="2" px="2" bg="surface.subtle" borderTopWidth="1px" borderColor="border" color="fg.muted" fontSize="xs" overflow="hidden">
           <HStack minW="0" gap="1" overflow="hidden">

@@ -37,6 +37,47 @@ function openStartedProjectInBrowser(result, projectPath) {
   return { ...result, url, openedInAppBrowser: true };
 }
 
+/**
+ * After a project starts, loads its page in a hidden window and reports what a visitor would see:
+ * HTTP status, title, visible text and console errors. A server that is up but serves a blank page
+ * is not a finished task, and the model cannot know without looking. Never blocks or fails the start.
+ */
+async function checkStartedPage(result) {
+  if (!result || !result.url) return result;
+  let probe;
+  try {
+    probe = new BrowserWindow({ show: false, width: 1280, height: 800, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'started-page-check' } });
+    const consoleErrors = [];
+    let status = null;
+    probe.webContents.on('console-message', (...args) => {
+      const details = args[0] && typeof args[0].message === 'string' ? args[0] : { level: args[1], message: args[2] };
+      if ((details.level === 3 || details.level === 'error') && consoleErrors.length < 10) consoleErrors.push(String(details.message).slice(0, 400));
+    });
+    probe.webContents.on('did-navigate', (_event, _url, httpResponseCode) => { status = httpResponseCode; });
+    await Promise.race([
+      probe.webContents.loadURL(result.url),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('la pàgina no ha carregat en 10 s')), 10000)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const info = await probe.webContents.executeJavaScript('({ title: document.title, text: ((document.body && document.body.innerText) || "").trim().slice(0, 1500) })', true);
+    const problems = [];
+    if (typeof status === 'number' && status >= 400) problems.push(`el servidor respon HTTP ${status}`);
+    if (!info.text) problems.push('la pàgina no mostra cap text: està en blanc');
+    if (consoleErrors.length) problems.push(`hi ha ${consoleErrors.length} errors a la consola`);
+    return {
+      ...result,
+      page: { status, title: String(info.title || '').slice(0, 200), text: info.text, consoleErrors },
+      pageVerdict: problems.length
+        ? `PROBLEMA: el servidor ha arrencat però ${problems.join('; ')}. La tasca no està acabada.`
+        : 'La pàgina carrega i mostra contingut, sense errors de consola.',
+    };
+  } catch (error) {
+    return { ...result, page: { error: error instanceof Error ? error.message : String(error) }, pageVerdict: 'No s’ha pogut comprovar la pàgina automàticament.' };
+  } finally {
+    if (probe && !probe.isDestroyed()) probe.destroy();
+  }
+}
+
 function getChatStore() {
   if (!chatStore) chatStore = new ChatStore(path.join(app.getPath('userData'), 'memory', 'conversations.sqlite'));
   return chatStore;
@@ -123,10 +164,10 @@ async function dispatchAgentTool(tool, projectRoot) {
     const script = tool.arguments.script;
     if (typeof pkg.scripts?.[script] !== 'string') throw new Error(`El projecte no defineix el script ${script}.`);
     if (activeProjectProcess && activeProjectRoot === root) {
-      return openStartedProjectInBrowser({ started: true, alreadyRunning: true, script, output: activeProjectOutput }, root);
+      return checkStartedPage(openStartedProjectInBrowser({ started: true, alreadyRunning: true, script, output: activeProjectOutput }, root));
     }
     if (activeProjectProcess) throw new Error('Ja hi ha una app d’un altre projecte en marxa. Atura-la abans de canviar de projecte.');
-    return openStartedProjectInBrowser(await startProjectProcess(root, script), root);
+    return checkStartedPage(openStartedProjectInBrowser(await startProjectProcess(root, script), root));
   }
   if (tool.name === 'stop_project') {
     if (!activeProjectProcess) return { stopped: true, alreadyStopped: true };
@@ -476,6 +517,14 @@ function createWindow() {
     webPreferences.sandbox = true;
     if (params.src !== 'about:blank' && !/^https?:\/\//i.test(params.src)) event.preventDefault();
   });
+  // A link clicked in the chat must not replace the app itself: local addresses open in the built-in
+  // browser panel, anything else in the system browser.
+  const openOutside = (url) => {
+    if (/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?(?:[/?#]|$)/i.test(url)) win.webContents.send('project:started', { projectPath: selectedProject, script: '', url });
+    else if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  };
+  win.webContents.on('will-navigate', (event, url) => { event.preventDefault(); openOutside(url); });
+  win.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
   win.loadFile(path.join(__dirname, '..', 'index.html'));
 }
 
@@ -837,7 +886,10 @@ async function executeBinary(executable, args, root, timeoutMs) {
     let output = '';
     let settled = false;
     let timedOut = false;
-    const append = (chunk) => { output = (output + chunk.toString()).slice(-100000); };
+    // Shown in the terminal as it happens, so what the agent runs is never invisible.
+    const show = (text) => { if (win && !win.isDestroyed()) win.webContents.send('terminal:output', text); };
+    show(`\r\n$ ${path.basename(executable)} ${args.join(' ')}\r\n`);
+    const append = (chunk) => { output = (output + chunk.toString()).slice(-100000); show(chunk.toString()); };
     const timer = setTimeout(() => {
       timedOut = true;
       try { if (process.platform !== 'win32') process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); }
@@ -977,6 +1029,26 @@ ipcMain.handle('terminal:run', async (_e, rawCommand) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   const command = String(rawCommand || '').trim();
   if (!command || command.length > 2000) throw new Error('Ordre buida o massa llarga.');
+  // A dev server never ends: run here it would be cut at the two-minute limit. It is started as the
+  // project's server instead, which keeps running until «stop» or until the app closes.
+  const server = /^(?:npm|pnpm|yarn)\s+(?:run\s+)?(dev|start|preview)$/.exec(command);
+  if (server || command === 'stop') {
+    const root = await fs.realpath(selectedProject);
+    const say = (text) => { if (win && !win.isDestroyed()) win.webContents.send('terminal:output', text); };
+    try {
+      if (command === 'stop') {
+        const stopped = await dispatchAgentTool({ name: 'stop_project' }, root);
+        say(stopped.alreadyStopped ? 'No hi ha cap servidor en marxa.\r\n' : 'Servidor aturat.\r\n');
+        return { code: 0, output: '' };
+      }
+      const started = await dispatchAgentTool({ name: 'start_project', arguments: { script: server[1] } }, root);
+      if (started.started) say(`\r\n[Servidor en marxa${started.url ? ` a ${started.url}` : ''}. Escriu «stop» per aturar-lo.]\r\n`);
+      return { code: started.started ? 0 : (typeof started.code === 'number' ? started.code : 1), output: '' };
+    } catch (error) {
+      say(`${error instanceof Error ? error.message : String(error)}\r\n`);
+      return { code: 1, output: '' };
+    }
+  }
   return new Promise((resolve) => {
     const child = spawn(command, { cwd: selectedProject, shell: true, env: process.env });
     let output = '';
