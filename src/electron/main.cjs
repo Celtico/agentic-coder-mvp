@@ -595,7 +595,7 @@ ipcMain.handle('project:import-directory', async (_event, sourcePath) => {
 
 async function listFiles(root, rel = '', depth = 0) {
   if (depth > 3) return [];
-  const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', '.venv', 'venv', 'models']);
+  const ignored = new Set(['.git', '.idea', '.vscode', '.cache', 'node_modules', '.next', 'dist', 'build', '.venv', 'venv', 'models']);
   const out = [];
   let entries;
   try { entries = await fs.readdir(path.join(root, rel), { withFileTypes: true }); } catch { return out; }

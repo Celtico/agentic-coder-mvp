@@ -886,7 +886,7 @@ export function App(): React.JSX.Element {
         <HStack minW="0" gap="3">
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} size="sm" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <Heading size="sm" fontWeight="500" flex="none">Agentic Coder</Heading>
-          <NativeSelect.Root size="sm" width="290px" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model local" value={selectedModel} onChange={async (event) => {
+          <NativeSelect.Root size="sm" width="340px" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model local" value={selectedModel} onChange={async (event) => {
           const nextModel = event.currentTarget.value;
           setModelChanging(true);
           try {
@@ -1124,7 +1124,15 @@ export function App(): React.JSX.Element {
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" pt="2" direction="column" gap="3">
+        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" pt="2" direction="column" gap="2">
+          {/* The project comes first: conversations and files below both belong to it. */}
+          <Button flex="none" variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+            <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
+            <Box flex="1" minW="0" textAlign="left">
+              <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
+              <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
+            </Box>
+          </Button>
           <Splitter.Root
             h="full"
             flex="1"
@@ -1151,7 +1159,7 @@ export function App(): React.JSX.Element {
               }} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="recent" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <Flex align="center" gap="1" h="36px" flex="none" position="relative">
-                    <Accordion.ItemTrigger flex="1" h="36px" minH="36px" px="2" py="0"><Text flex="1" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger flex="1" h="36px" minH="36px" px="2" py="0"><Text flex="1" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
                     <IconButton icon={MessageSquarePlus} label="Nova conversa" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => { event.stopPropagation(); void newChat(); }}/>
                   </Flex>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" p="0" overflowY="auto"><Stack gap="0.5">
@@ -1173,23 +1181,17 @@ export function App(): React.JSX.Element {
               <Accordion.Root collapsible defaultValue={['files']} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative" style={{ width: '100%' }}>
-                    <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0" style={{ width: '100%', flex: '1 1 auto' }}><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers del projecte</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0" style={{ width: '100%', flex: '1 1 auto' }}><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
                     <Menu.Root>
                       <Menu.Trigger asChild><IconButton icon={MoreVertical} label="Accions de fitxers del projecte" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => event.stopPropagation()}/></Menu.Trigger>
                       <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
                         <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                         <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
-                        <Menu.Separator borderColor="border"/>
-                        <Menu.Item value="select-project" onClick={() => void selectProject()}><IconLabel icon={FolderOpen}>Selecciona el projecte…</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>
                   </HStack>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" px="0" py="2" overflowY="auto">
-                    <Stack gap="2" px="2" minW="0">
-                      <Text fontSize="xs" color="fg.muted" overflowWrap="anywhere" minH="5" title={project?.path}>
-                        {project?.path || 'Cap directori seleccionat'}
-                      </Text>
-                    </Stack>
+                    {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
                       event.preventDefault();
                       const droppedDirectory = event.dataTransfer.files.item(0);
@@ -1227,7 +1229,7 @@ export function App(): React.JSX.Element {
               <FolderOpen size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Cap projecte'}</Text>
             </Button>
             <Button size="xs" variant="ghost" px="2" onClick={() => void openGitPanel()} title={gitSnapshot?.reason || 'Obre l’estat de Git'}>
-              <GitBranch size={13}/><Text>{gitLoading ? 'Git…' : gitSnapshot?.available ? (gitSnapshot.branch || 'Git') : gitSnapshot ? 'Sense Git' : 'Git'}</Text>
+              <GitBranch size={13}/><Text>{gitLoading ? 'Git…' : gitSnapshot?.available ? (gitSnapshot.branch?.replace(/^## /, '').split('...')[0] || 'Git') : gitSnapshot ? 'Sense Git' : 'Git'}</Text>
             </Button>
             {editingPath && <Button size="xs" variant="ghost" minW="0" maxW="260px" px="2" onClick={() => setWorkspacePanel('editor')} title={editingPath}>
               <FileIcon size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editingPath.split(/[\\/]/).at(-1)}</Text>
