@@ -1246,15 +1246,15 @@ export function App(): React.JSX.Element {
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" minW="0" bg="bg" borderRadius="10px" overflow="hidden" px="2" pt="1" direction="column" gap="1">
+        <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
           {/* The project comes first: conversations and files below both belong to it. */}
-          <Button flex="none" variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+          <Box flex="none" bg="bg" borderTopRadius="10px" px="2" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
             <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
             <Box flex="1" minW="0" textAlign="left">
               <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
               <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
             </Box>
-          </Button>
+          </Button></Box>
           <Splitter.Root
             h="full"
             flex="1"
@@ -1272,7 +1272,7 @@ export function App(): React.JSX.Element {
             }}
           >
             <Splitter.Context>{(splitterContext) => <>
-            <Splitter.Panel id="recent-conversations" minH="0" minW="0" overflow="hidden">
+            <Splitter.Panel id="recent-conversations" minH="0" minW="0" overflow="hidden" bg="bg" borderBottomRadius="10px" px="2">
               <Accordion.Root collapsible value={recentConversationsExpanded ? ['recent'] : []} onValueChange={(details) => {
                 const expanded = details.value.includes('recent');
                 setRecentConversationsExpanded(expanded);
@@ -1297,11 +1297,11 @@ export function App(): React.JSX.Element {
                 </Accordion.Item>
               </Accordion.Root>
             </Splitter.Panel>
-            <Splitter.ResizeTrigger id="recent-conversations:project-files" aria-label="Arrossega per ajustar l’alçada de les seccions" title="Arrossega per ajustar l’alçada de les seccions" h="12px" flex="none" cursor="row-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+            <Splitter.ResizeTrigger id="recent-conversations:project-files" aria-label="Arrossega per ajustar l’alçada de les seccions" title="Arrossega per ajustar l’alçada de les seccions" h="6px" minH="6px" m="0" flex="none" cursor="row-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
               <Splitter.ResizeTriggerSeparator bg="transparent"/>
-              <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="border" borderWidth="0" boxShadow="none"/>
+              <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="transparent" borderWidth="0" boxShadow="none" css={{ '[data-part=resize-trigger]:hover &': { background: 'var(--chakra-colors-border)' } }}/>
             </Splitter.ResizeTrigger>
-            <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden">
+            <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden" bg="bg" borderRadius="10px" px="2">
               <Accordion.Root collapsible defaultValue={['files']} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative" style={{ width: '100%' }}>
