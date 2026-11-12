@@ -31,7 +31,6 @@ const TERMINAL_HEIGHT_KEY = 'agentic-terminal-height-v1';
 /** Dragged shorter than this, the terminal dock closes. */
 const TERMINAL_MIN_HEIGHT = 90;
 const NAVIGATION_SECTIONS_SPLIT_KEY = 'agentic-navigation-sections-split-v1';
-type WorkspacePanel = 'browser' | 'editor';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -176,8 +175,9 @@ export function App(): React.JSX.Element {
   const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
-  const [workspacePanel, setWorkspacePanel] = useState<WorkspacePanel | null>(null);
-  const browserOpen = workspacePanel === 'browser';
+  // The browser and the file editor are independent: each opens beside the other instead of replacing it.
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [browserAddress, setBrowserAddress] = useState('');
   const [browserUrl, setBrowserUrl] = useState('about:blank');
   const [browserContext, setBrowserContext] = useState('');
@@ -350,7 +350,7 @@ export function App(): React.JSX.Element {
     const offProjectStarted = window.agentic.onProjectStarted(({ url }) => {
       setBrowserAddress(url);
       setBrowserUrl(url);
-      setWorkspacePanel('browser');
+      setBrowserOpen(true);
       setStatus(`Projecte obert al navegador integrat: ${url}`);
     });
     let cancelled = false;
@@ -481,7 +481,7 @@ export function App(): React.JSX.Element {
     try {
       const next = await window.agentic.deleteProjectEntry(relativePath, directory);
       setProject(next);
-      if (!directory && editingPath === relativePath) { setEditingPath(null); setWorkspacePanel(null); }
+      if (!directory && editingPath === relativePath) { setEditingPath(null); setEditorOpen(false); }
       setStatus(directory ? `Carpeta buida eliminada: ${relativePath}` : `Fitxer eliminat i desat a les còpies recuperables: ${relativePath}`);
     } catch (error) { setStatus(`No s’ha pogut eliminar «${relativePath}»: ${errorText(error)}`); }
   }
@@ -729,7 +729,7 @@ export function App(): React.JSX.Element {
   async function openEditor(relativePath: string) {
     try {
       const content = await window.agentic.readFile(relativePath);
-      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setWorkspacePanel('editor');
+      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
   }
 
@@ -817,7 +817,7 @@ export function App(): React.JSX.Element {
     setEditorBusy(true);
     try {
       const saved = await window.agentic.writeFile(editingPath, editorContent);
-      setEditorOriginal(editorContent); setEditingPath(null); setWorkspacePanel(null);
+      setEditorOriginal(editorContent); setEditingPath(null); setEditorOpen(false);
       appendMessage('assistant', `Canvi desat a ${editingPath}.\nCòpia de seguretat local: ${saved.backupPath}`);
     } catch (error) { setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
@@ -839,7 +839,6 @@ export function App(): React.JSX.Element {
       const data = JSON.parse(page || '{}');
       const text = String(data.text || '').slice(0, 12000);
       setBrowserContext(`URL: ${data.url || browserAddress}\nTítol: ${data.title || ''}\n\n${text}`);
-      setWorkspacePanel(null);
       setStatus(text ? 'Pàgina afegida al context del xat' : 'La pàgina no conté text visible');
       promptRef.current?.focus();
     } catch (error) { setStatus(`No s’ha pogut llegir la pàgina: ${errorText(error)}`); }
@@ -1044,7 +1043,7 @@ export function App(): React.JSX.Element {
         />
       </Box>
       <Text color="yellow.200" mt="2">{editorStatus}</Text>
-      <HStack justify="flex-end" mt="3"><Button size="sm" variant="outline" onClick={() => { setEditingPath(null); setWorkspacePanel(null); }}>Cancel·la</Button><Button size="sm" colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
+      <HStack justify="flex-end" mt="3"><Button size="sm" variant="outline" onClick={() => { setEditingPath(null); setEditorOpen(false); }}>Cancel·la</Button><Button size="sm" colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
     </Flex>
   );
 
@@ -1170,22 +1169,33 @@ export function App(): React.JSX.Element {
       )}
     </Flex>
   );
-  const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : 'Edita fitxer';
-  const panelContent = workspacePanel === 'browser' ? browserPane : workspacePanel === 'editor' ? editorPane : null;
-  const workspacePane = panelContent && (
-    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
+  const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
+    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
-        <HStack gap="2"><Text fontWeight="semibold">{panelTitle}</Text>{workspacePanel === 'editor' && <Badge colorPalette="agentic">Revisa abans de desar</Badge>}</HStack>
-        <IconButton icon={X} label="Tanca panell" onClick={() => { setWorkspacePanel(null); if (workspacePanel === 'editor') setEditingPath(null); }}/>
+        <HStack gap="2" minW="0" overflow="hidden"><Text fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge}</HStack>
+        <IconButton icon={X} label={closeLabel} onClick={onClose}/>
       </Flex>
-      <Box flex="1" minH="0" overflow="hidden">{panelContent}</Box>
+      <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
+  const sideItems = [
+    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge colorPalette="agentic">Revisa abans de desar</Badge>) } : null,
+    browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
+  ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
+  const workspacePane = sideItems.length === 0 ? null : sideItems.length === 1 ? sideItems[0].node : (
+    <Splitter.Root key={sideItems.map((item) => item.id).join('+')} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={sideItems.map((item) => ({ id: item.id, minSize: 15 }))} defaultSize={sideItems.map(() => 100 / sideItems.length)}>
+      {sideItems.map((item, index) => <React.Fragment key={item.id}>
+        {index > 0 && <SplitterHandle id={`${sideItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
+        <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
+      </React.Fragment>)}
+    </Splitter.Root>
+  );
 
-  const mainContent = workspacePanel && workspacePane ? (
-    <Splitter.Root h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 18 }, { id: 'workspace', minSize: 4 }]} defaultSize={splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
+  const mainContent = workspacePane ? (
+    <Splitter.Root key={`main-${sideItems.length}`} h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 18 }, { id: 'workspace', minSize: 4 }]} defaultSize={sideItems.length > 1 ? [Math.min(splitSize[0], 40), 100 - Math.min(splitSize[0], 40)] : splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
       if (details.size[1] < WORKSPACE_CLOSE_BELOW) {
-        setWorkspacePanel(null);
+        setBrowserOpen(false);
+        setEditorOpen(false);
         setSplitSize(lastExpandedSplitSizeRef.current);
         localStorage.setItem(SPLIT_KEY, JSON.stringify(lastExpandedSplitSizeRef.current));
         return;
@@ -1207,7 +1217,7 @@ export function App(): React.JSX.Element {
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" pb="2" direction="column" align="center" gap="2">
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={() => void newChat()}/>
-          <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
+          <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
           {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
           <Box flex="1" minH="2"/>
           <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="44px" h="44px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
@@ -1342,7 +1352,7 @@ export function App(): React.JSX.Element {
             <Button size="xs" variant="ghost" px="2" onClick={() => void openGitPanel()} title={gitSnapshot?.reason || 'Obre l’estat de Git'}>
               <GitBranch size={13}/><Text>{gitLoading ? 'Git…' : gitSnapshot?.available ? (gitSnapshot.branch?.replace(/^## /, '').split('...')[0] || 'Git') : gitSnapshot ? 'Sense Git' : 'Git'}</Text>
             </Button>
-            {editingPath && <Button size="xs" variant="ghost" minW="0" maxW="260px" px="2" onClick={() => setWorkspacePanel('editor')} title={editingPath}>
+            {editingPath && <Button size="xs" variant="ghost" minW="0" maxW="260px" px="2" onClick={() => setEditorOpen(true)} title={editingPath}>
               <FileIcon size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editingPath.split(/[\\/]/).at(-1)}</Text>
             </Button>}
           </HStack>
