@@ -733,6 +733,7 @@ export function App(): React.JSX.Element {
 
   async function openEditor(relativePath: string) {
     try {
+      if (editingPath && editingPath !== relativePath) await saveEdit();
       const content = await window.agentic.readFile(relativePath);
       setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
@@ -816,16 +817,29 @@ export function App(): React.JSX.Element {
     finally { setFileHistoryBusy(false); }
   }
 
+  // The editor saves by itself: a moment after typing stops, when another file is opened and when it
+  // is closed. Each save keeps the previous version in the local history.
+  const editorStateRef = useRef({ path: null as string | null, content: '', original: '' });
+  editorStateRef.current = { path: editingPath, content: editorContent, original: editorOriginal };
   async function saveEdit() {
-    if (!editingPath) return;
-    if (editorContent === editorOriginal) { setEditorStatus('No hi ha canvis.'); return; }
+    const { path: filePath, content, original } = editorStateRef.current;
+    if (!filePath || content === original) return;
     setEditorBusy(true);
     try {
-      const saved = await window.agentic.writeFile(editingPath, editorContent);
-      setEditorOriginal(editorContent); setEditingPath(null); setEditorOpen(false);
-      appendMessage('assistant', `Canvi desat a ${editingPath}.\nCòpia de seguretat local: ${saved.backupPath}`);
-    } catch (error) { setEditorStatus(errorText(error)); }
+      await window.agentic.writeFile(filePath, content);
+      // Only if the same file is still open; what was typed meanwhile is saved by the next round.
+      if (editorStateRef.current.path === filePath) { setEditorOriginal(content); setEditorStatus(''); }
+    } catch (error) { if (editorStateRef.current.path === filePath) setEditorStatus(errorText(error)); }
     finally { setEditorBusy(false); }
+  }
+  useEffect(() => {
+    if (!editingPath || editorContent === editorOriginal) return;
+    const timer = window.setTimeout(() => { void saveEdit(); }, 900);
+    return () => window.clearTimeout(timer);
+  }, [editingPath, editorContent, editorOriginal]);
+  async function closeEditor() {
+    await saveEdit();
+    setEditorOpen(false); setEditingPath(null);
   }
 
   async function navigateBrowser() {
@@ -1045,8 +1059,7 @@ export function App(): React.JSX.Element {
           options={{ ariaLabel: editingPath ? `Editor de ${editingPath}` : 'Editor de codi', automaticLayout: true, fontSize: 11, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, tabSize: 2, wordWrap: 'on' }}
         />
       </Box>
-      <Text color="yellow.200" mt="2">{editorStatus}</Text>
-      <HStack justify="flex-end" mt="3" flexWrap="wrap"><Button size="sm" variant="outline" onClick={() => { setEditingPath(null); setEditorOpen(false); }}>Cancel·la</Button><Button size="sm" colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
+      {editorStatus && <Text color="yellow.200" fontSize="xs" mt="2">No s’ha pogut desar: {editorStatus}</Text>}
     </Flex>
   );
 
@@ -1185,7 +1198,7 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge size="xs" colorPalette="agentic" maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Revisa abans de desar</Badge>) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', () => { void closeEditor(); }, editorPane, <Badge size="xs" colorPalette={editorStatus ? 'yellow' : editorContent === editorOriginal ? 'gray' : 'agentic'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No desat' : editorBusy || editorContent !== editorOriginal ? 'Desant…' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
