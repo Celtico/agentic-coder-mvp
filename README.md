@@ -1,6 +1,6 @@
 # Agentic Coder MVP (macOS Apple Silicon, 16 GB RAM)
 
-Prototip local-first d'escriptori amb Electron + JavaScript + Transformers.js. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
+Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app: per defecte amb Transformers.js (Qwen2.5-Coder 1.5B) i, opcionalment, amb MLX d'Apple (Qwen2.5-Coder 7B), seleccionable a la barra superior. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
 ## Què inclou
 - Aplicació d'escriptori Electron.
@@ -33,9 +33,17 @@ npm run check
 npm start
 ```
 
-La primera inferència pot trigar i descarregar fitxers de model. La primera cerca de casos verificats també pot descarregar el model d’embeddings. No s’envia el prompt a una API remota; Transformers.js baixa els models publicats a Hugging Face per preparar la memòria cau local.
+La primera inferència pot trigar i descarregar fitxers de model. La primera cerca de casos verificats també pot descarregar el model d’embeddings. El model no envia el prompt a cap API remota; Transformers.js baixa els models publicats a Hugging Face per preparar la memòria cau local.
 
 Per executar l’avaluació sintètica de recuperació semàntica sense llegir dades personals, fes servir `npm run evaluate:memory`. Compara `Recall@3` i `MRR@3` amb la cerca per paraules; és una prova petita, no una validació suficient per entrenar ni substituir cap model.
+
+### Què surt de la màquina
+
+- La descàrrega inicial dels models des de Hugging Face.
+- L’eina de cerca web: quan l’agent la fa servir, la consulta (no el codi ni la conversa) s’envia a DuckDuckGo i en torna els enllaços.
+- Les instal·lacions de paquets npm que confirmis.
+
+Tota la resta (inferència, converses, historial de fitxers, casos verificats) es queda en local.
 
 ## Limitacions conscients del MVP
 - El model 1.5B és petit: serveix per validar la integració, però no s'ha d'esperar la qualitat d'un model de programació gran.
@@ -51,7 +59,9 @@ Utilitza només amb projectes de confiança. `npm test`, altres scripts npm i le
 Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, preparar un pla, implementar, executar comprovacions adequades i resumir els fitxers, resultats i limitacions. La inspecció amb Playwright només es pot afirmar quan l’eina l’hagi executada i retornat els resultats; si falta el paquet o Chromium, l’app demana la confirmació nativa corresponent abans d’instal·lar-los.
 
 ## Model i llicència
-El model generatiu és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat sota Apache-2.0. La cerca semàntica opcional utilitza `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, també sota Apache-2.0. Consulta els [model cards de Qwen](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct) i [MiniLM multilingüe](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2) abans de redistribuir pesos o crear un producte.
+El codi d’aquest repositori es publica sota la llicència MIT (vegeu [`LICENSE`](LICENSE)). Els models tenen la seva pròpia llicència:
+
+El model generatiu per defecte és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat sota Apache-2.0; l’opcional és `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` (consulta’n el model card). La cerca semàntica opcional utilitza `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, també sota Apache-2.0. Consulta els [model cards de Qwen](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct) i [MiniLM multilingüe](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2) abans de redistribuir pesos o crear un producte.
 
 
 ## Fases del projecte
