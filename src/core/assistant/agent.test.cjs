@@ -1442,3 +1442,24 @@ test('SKILLS.md: titles are always listed, a skill\'s text only when the message
   assert.match(system, /## Copywriter\nFrases curtes\./);
   assert.doesNotMatch(system, /Fes components petits/);
 });
+
+test('a tool call missing its last closing brace is still carried out', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-brace-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"plan","content":"Crear el comptador."}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/Counter.jsx","content":"export default function Counter() {\\n  return <button>+</button>;\\n}"}',
+    '{"type":"final","content":"He creat src/Counter.jsx."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const written = [];
+  await agent.ask('Crea un component comptador', tempRoot, async (tool) => {
+    if (tool.name === 'write_file') { written.push(tool.arguments); return { applied: true, path: tool.arguments.path }; }
+    return {};
+  });
+  assert.equal(written.length, 1);
+  assert.equal(written[0].path, 'src/Counter.jsx');
+  assert.match(written[0].content, /return <button>\+<\/button>;\n\}$/);
+});

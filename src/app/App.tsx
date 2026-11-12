@@ -878,7 +878,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainerRef.current) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#1f2023', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#212121', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainerRef.current);
@@ -961,7 +961,6 @@ export function App(): React.JSX.Element {
           finally { setModelChanging(false); }
         }}>{modelOptions.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         </HStack>
-        <Text color="fg.muted" fontSize="xs" maxW="320px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{status}</Text>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
@@ -1006,7 +1005,7 @@ export function App(): React.JSX.Element {
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
-        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#1f2023' }}/>}
+        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
     </Flex>
   );
 

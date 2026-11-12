@@ -125,7 +125,17 @@ function parseAction(raw: string): AgentAction | null {
     }
     return out;
   };
-  const parseLenient = (candidate: string): AgentAction | null => parseCandidate(candidate) || parseCandidate(repairStrings(candidate));
+  // Small models often drop the last closing brace of a long call; one or two missing ones are put back.
+  const closeBraces = (candidate: string): AgentAction | null => {
+    const text = candidate.trimEnd();
+    if (!text.startsWith('{')) return null;
+    for (const tail of ['}', '}}', '"}}', ']}', ']}}']) {
+      const action = parseCandidate(text + tail) || parseCandidate(repairStrings(text + tail));
+      if (action) return action;
+    }
+    return null;
+  };
+  const parseLenient = (candidate: string): AgentAction | null => parseCandidate(candidate) || parseCandidate(repairStrings(candidate)) || closeBraces(candidate);
   // Every complete top-level {...} in a text, in order.
   const topLevelObjects = (text: string): string[] => {
     const found: string[] = [];
