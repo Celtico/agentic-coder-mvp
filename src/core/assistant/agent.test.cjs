@@ -1520,3 +1520,12 @@ test('asked whether a button works, the app presses it and reports what changed'
   assert.deepEqual(presses[0].arguments.actions, [{ type: 'click', target: { by: 'role', role: 'button', value: 'Increment' } }]);
   assert.match(answer, /Botó «Increment»: funciona\. En prémer-lo, la pàgina passa de «Count: 0 Increment» a «Count: 1 Increment»/);
 });
+
+test('a broken page sends the model to the file and cause named by the console error', () => {
+  const { pageFixHint } = require('./agent-runtime.cjs');
+  const hint = pageFixHint({ page: { consoleErrors: ["Uncaught SyntaxError: The requested module '/node_modules/.vite/deps/@chakra-ui_react.js?v=4746bf31' does not provide an export named 'extendTheme' (at theme.ts:1:10)"] } });
+  assert.match(hint, /Ve del fitxer theme\.ts, línia 1/);
+  assert.match(hint, /«extendTheme» no existeix a la versió instal·lada/);
+  assert.doesNotMatch(hint, /Llegeix index\.html i el fitxer/);
+  assert.match(pageFixHint({ page: { consoleErrors: [] } }), /Llegeix index\.html/);
+});

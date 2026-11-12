@@ -404,6 +404,27 @@ function formatBrowserInspection(result: unknown): string | null {
   return lines.join('\n');
 }
 
+/**
+ * What to do about a page that started but does not work, read from its console: the error usually
+ * names the file and the cause, and that is where the model has to look, not at index.html.
+ */
+export function pageFixHint(result: unknown): string {
+  const page = result && typeof result === 'object' ? (result as { page?: { consoleErrors?: unknown } }).page : null;
+  const errors = Array.isArray(page?.consoleErrors) ? page.consoleErrors.filter((item): item is string => typeof item === 'string') : [];
+  if (errors.length === 0) return 'Llegeix index.html i el fitxer d’entrada amb read_file i corregeix el que impedeix que es vegi (en Vite, index.html va a l’arrel i ha de carregar el codi amb un <script type="module">).';
+  const first = errors[0];
+  const hints: string[] = [`L’error de la consola és: «${first.slice(0, 300)}».`];
+  const file = /\bat\s+([\w./-]+\.(?:tsx?|jsx?|mjs|css|html)):(\d+)/.exec(first) || /([\w./-]+\.(?:tsx?|jsx?|mjs)):(\d+)/.exec(first);
+  if (file) hints.push(`Ve del fitxer ${file[1]}, línia ${file[2]}: llegeix aquest fitxer (no index.html) i corregeix-lo amb write_file.`);
+  else hints.push('Llegeix el fitxer que acabes de canviar i corregeix-lo amb write_file.');
+  const missingExport = /does not provide an export named '([^']+)'/.exec(first);
+  if (missingExport) hints.push(`«${missingExport[1]}» no existeix a la versió instal·lada d’aquest paquet: treu-ne l’import i no el facis servir; no el tornis a escriure amb un altre nom inventat.`);
+  if (/useContext returned .?undefined|forgot to wrap/i.test(first)) hints.push('Falta embolcallar l’app amb el proveïdor de la llibreria a src/main (segueix les instruccions del projecte).');
+  if (/is not defined/.test(first)) hints.push('Hi ha un nom que es fa servir sense haver-lo importat o declarat.');
+  if (/Failed to resolve import|Cannot find module/i.test(first)) hints.push('S’importa un fitxer o paquet que no existeix: crea’l, corregeix la ruta o instal·la el paquet.');
+  return hints.join(' ');
+}
+
 function explicitLocalInspectionRequest(prompt: string): AgentToolCall | null {
   if (!/\b(?:inspect(?:a|e|ion)?|inspecciona(?:r)?|revisa|comprova|comprueba|verify|verifica)\b/i.test(prompt)) return null;
   if (/\b(?:click|clic|clica|prem|omple|fill|type|escriu|submit|envia|selecciona|select|marca|check|assert|formulari|form|bot[oó]|button|camp|field|aparegui|mostri)\b/i.test(prompt)) return null;
@@ -1063,7 +1084,7 @@ export class LocalCodingAgent {
       completedToolCalls.set(toolKey, boundedToolText || '(s’ha arribat al límit de context de les eines)');
       toolOutputSize += boundedToolText.length;
       const failedCheck = (tool.name === 'run_tests' || tool.name === 'run_project_script') && result && typeof result === 'object' && (result as Record<string, unknown>).code !== 0;
-      messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\n${pageProblem ? `${pageVerdict} No diguis que el projecte funciona. Llegeix index.html i el fitxer d’entrada amb read_file, corregeix el que impedeix que es vegi (en Vite, index.html va a l’arrel i ha de carregar el codi amb un <script type="module">), i torna a cridar start_project per comprovar-ho de nou.\n\n` : ''}${failedCheck ? 'La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.' : 'Si la tasca encara no està completa, continua amb una sola crida d’eina JSON vàlida. Si ja està completa, dona una resposta final en prosa basada en resultats reals.'}` });
+      messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\n${pageProblem ? `${pageVerdict} No diguis que el projecte funciona. ${pageFixHint(result)} Després torna a cridar start_project per comprovar-ho de nou.\n\n` : ''}${failedCheck ? 'La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.' : 'Si la tasca encara no està completa, continua amb una sola crida d’eina JSON vàlida. Si ja està completa, dona una resposta final en prosa basada en resultats reals.'}` });
       if (toolOutputSize >= 20000) {
         messages.push({ role: 'user', content: 'Límit de context de les eines assolit. Dona ara la resposta final en prosa clara i breu.' });
       }
