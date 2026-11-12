@@ -136,6 +136,15 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (packageName.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(packageName)) throw new Error('Nom de paquet npm no vàlid.');
     await readProjectPackage(root);
     const args = ['install', ...(dev ? ['--save-dev'] : []), packageName];
+    // The only agent action that asks first: installing a package downloads code from the
+    // internet and may run it on this machine, outside the selected folder.
+    const options = {
+      type: 'question', buttons: ['Instal·la', 'Cancel·la'], defaultId: 1, cancelId: 1,
+      message: `Instal·lar el paquet npm «${packageName}»?`,
+      detail: `L’agent vol executar: npm ${args.join(' ')}\nCarpeta: ${root}\n\nInstal·lar un paquet baixa codi d’internet i el pot executar en aquest ordinador.`,
+    };
+    const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    if (confirmation.response !== 0) return { cancelled: true, error: 'L’usuari ha cancel·lat la instal·lació del paquet.' };
     return executeNpmCommand(root, args, 300000);
   }
   if (tool.name === 'install_playwright_browser') {
