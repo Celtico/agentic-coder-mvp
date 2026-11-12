@@ -73,6 +73,7 @@ test('lets the model choose to search the public web and passes results back to 
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const agent = new LocalCodingAgent({ engine });
+  agent.webSearch = true;
   agent.historyDir = path.join(tempRoot, 'history');
   const calls = [];
 
@@ -1567,4 +1568,38 @@ test('a package.json quoted in the answer is not mistaken for a tool call', asyn
   await agent.ask('Crea el package.json del projecte', tempRoot, async (tool) => { calls.push(tool.name); return tool.name === 'write_file' ? { applied: true, path: tool.arguments.path } : {}; });
   assert.ok(calls.includes('write_file'));
   assert.ok(!inputs.some((input) => /La crida no és vàlida/.test(input)));
+});
+
+test('run_npx: a package tool can be run with plain arguments, nothing shell-like', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-npx-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  const responses = [
+    '{"type":"plan","content":"Afegir els snippets de Chakra."}',
+    '{"type":"tool_call","name":"run_npx","arguments":{"packageName":"@chakra-ui/cli","args":["snippet","add; rm -rf ~"]}}',
+    '{"type":"tool_call","name":"run_npx","arguments":{"packageName":"@chakra-ui/cli","args":["snippet","add"]}}',
+    '{"type":"final","content":"Snippets afegits."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift() ?? '{"type":"final","content":"Fet."}', getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Afegeix els snippets de Chakra al projecte', tempRoot, async (tool) => { calls.push(tool); return tool.name === 'run_npx' ? { code: 0, output: 'done' } : {}; });
+  assert.deepEqual(calls.filter((call) => call.name === 'run_npx'), [{ name: 'run_npx', arguments: { packageName: '@chakra-ui/cli', args: ['snippet', 'add'] } }]);
+});
+
+test('without a search engine, the model is told to read a real address instead', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-nosearch-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const inputs = []; let tools = [];
+  const responses = ['{"type":"tool_call","name":"web_search","arguments":{"query":"chakra color mode"}}', '{"type":"final","content":"No ho he pogut consultar."}'];
+  const engine = { loadModel: async () => {}, generateResponse: async (messages, options) => { tools = options.tools || []; inputs.push(messages[messages.length - 1].content); return responses.shift(); }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Com va el mode de color de Chakra?', tempRoot, async (tool) => { calls.push(tool.name); return {}; });
+  assert.ok(!calls.includes('web_search'));
+  assert.ok(tools.every((tool) => tool.function.name !== 'web_search'));
+  assert.ok(tools.some((tool) => tool.function.name === 'read_web_page'));
+  assert.ok(inputs.some((input) => /No hi ha cercador/.test(input)));
 });

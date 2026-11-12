@@ -261,6 +261,26 @@ async function dispatchAgentTool(tool, projectRoot) {
     const root = activeProjectRoot;
     return stopProjectProcess();
   }
+  // The command-line tool of an npm package, as installation guides ask for (`npx <package> <args>`).
+  // It downloads and runs code like an install does, so it asks under the same rule.
+  if (tool.name === 'run_npx' && typeof tool.arguments?.packageName === 'string' && Array.isArray(tool.arguments?.args)) {
+    const { packageName } = tool.arguments;
+    const extra = tool.arguments.args;
+    if (packageName.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(?:@[\w.^~-]{1,30})?$/i.test(packageName)) throw new Error('Nom de paquet npm no vàlid.');
+    if (extra.length > 10 || extra.some((item) => typeof item !== 'string' || item.length > 120 || /[\r\n\0;&|`$<>]/.test(item))) throw new Error('Els arguments de l’ordre no són vàlids.');
+    const args = ['-y', packageName, ...extra];
+    if (permissionMode !== 'auto' && !approvedInstallRoots.has(root)) {
+      const options = {
+        type: 'question', buttons: ['Executa', 'Cancel·la'], defaultId: 1, cancelId: 1,
+        message: `Executar l’eina del paquet «${packageName}»?`,
+        detail: `L’agent vol executar: npx ${args.join(' ')}\nCarpeta: ${root}\n\nAixò baixa el paquet d’internet i l’executa en aquest ordinador; pot crear o canviar fitxers del projecte. Si acceptes, no es tornarà a preguntar per a aquest projecte fins que tanquis l’app.`,
+      };
+      const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+      if (confirmation.response !== 0) return { cancelled: true, error: 'L’usuari ha cancel·lat l’execució.' };
+      approvedInstallRoots.add(root);
+    }
+    return executeBinary('npx', args, root, 300000);
+  }
   if (tool.name === 'install_package' && typeof tool.arguments?.packageName === 'string' && typeof tool.arguments?.dev === 'boolean') {
     const { packageName, dev } = tool.arguments;
     if (packageName.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(packageName)) throw new Error('Nom de paquet npm no vàlid.');

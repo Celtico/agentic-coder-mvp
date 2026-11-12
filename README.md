@@ -44,7 +44,8 @@ Per executar l’avaluació sintètica de recuperació semàntica sense llegir d
 ### Què surt de la màquina
 
 - La descàrrega inicial dels models des de Hugging Face.
-- L’eina de cerca web: quan l’agent la fa servir, la consulta (no el codi ni la conversa) s’envia a DuckDuckGo i en torna els enllaços.
+- L’eina de cerca web està desactivada per defecte (tornava poca cosa útil); amb `AGENT_WEB_SEARCH=1` es torna a activar, i llavors la consulta (no el codi ni la conversa) s’envia a DuckDuckGo.
+- L’eina `run_npx`: executa l’eina de línia d’ordres d’un paquet npm (`npx <paquet> <arguments>`), com demanen moltes guies d’instal·lació. Baixa i executa codi, de manera que demana permís amb la mateixa regla que instal·lar un paquet.
 - L’eina de lectura de pàgines: quan l’agent vol llegir un resultat o una documentació, l’app obre aquella adreça pública en una finestra amagada del navegador que ja porta Electron, deixa que la pàgina s’executi i n’agafa el text visible (si no pot, la baixa directament). Només surt l’adreça; no llegeix adreces locals ni de la xarxa interna.
 - Les instal·lacions de paquets npm que confirmis.
 
