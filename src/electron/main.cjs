@@ -6,7 +6,7 @@ const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
 const { getGitSnapshot, getGitHistory, getGitCommitDetails, getGitCommitCandidates } = require('./git-tools.cjs');
 const { findLocalProjectUrl } = require('./project-browser.cjs');
-const { runBrowserActions } = require('./browser-actions.cjs');
+const { pageActionsScript } = require('./page-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
@@ -44,7 +44,7 @@ function openStartedProjectInBrowser(result, projectPath) {
  * HTTP status, title, visible text and console errors. A server that is up but serves a blank page
  * is not a finished task, and the model cannot know without looking. Never blocks or fails the start.
  */
-async function checkStartedPage(result) {
+async function checkStartedPage(result, actions = []) {
   if (!result || !result.url) return result;
   let probe;
   try {
@@ -61,6 +61,12 @@ async function checkStartedPage(result) {
       new Promise((_resolve, reject) => setTimeout(() => reject(new Error('la pàgina no ha carregat en 10 s')), 10000)),
     ]);
     await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Clicks and form filling asked for by the agent, done in this same window.
+    let acted = null;
+    if (actions.length) {
+      acted = await probe.webContents.executeJavaScript(pageActionsScript(actions), true);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
     const info = await probe.webContents.executeJavaScript('({ title: document.title, text: ((document.body && document.body.innerText) || "").trim().slice(0, 1500) })', true);
     const problems = [];
     if (typeof status === 'number' && status >= 400) problems.push(`el servidor respon HTTP ${status}`);
@@ -69,6 +75,7 @@ async function checkStartedPage(result) {
     return {
       ...result,
       page: { status, title: String(info.title || '').slice(0, 200), text: info.text, consoleErrors },
+      ...(acted ? { actionResults: acted.results || [], actionError: acted.error || null } : {}),
       pageVerdict: problems.length
         ? `PROBLEMA: el servidor ha arrencat però ${problems.join('; ')}. La tasca no està acabada.`
         : 'La pàgina carrega i mostra contingut, sense errors de consola.',
@@ -206,51 +213,18 @@ async function dispatchAgentTool(tool, projectRoot) {
     let target;
     try { target = new URL(tool.arguments.url); } catch { throw new Error('L’adreça local no és vàlida.'); }
     if (!['http:', 'https:'].includes(target.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname.toLowerCase()) || (target.port && (+target.port < 1 || +target.port > 65535))) {
-      throw new Error('Per seguretat, Playwright només pot obrir adreces locals de localhost, 127.0.0.1 o ::1.');
+      throw new Error('Per seguretat, la inspecció només pot obrir adreces locals de localhost, 127.0.0.1 o ::1.');
     }
-    // Looking at a page needs nothing from the project: the app opens it in a hidden window of its
-    // own. Playwright is only used when the project already has it and the call asks to click or fill.
-    const wantsActions = Array.isArray(tool.arguments.actions) && tool.arguments.actions.length > 0;
-    let playwrightPath = null;
-    if (wantsActions) { try { playwrightPath = require.resolve('playwright', { paths: [root] }); } catch { playwrightPath = null; } }
-    if (!playwrightPath) {
-      const looked = await checkStartedPage({ url: target.href });
-      if (looked.page?.error) throw new Error(`No s’ha pogut obrir la pàgina: ${looked.page.error}`);
-      return {
-        inspected: true, url: safeBrowserUrl(target.href), status: looked.page?.status ?? null,
-        title: looked.page?.title || '', text: looked.page?.text || '', consoleErrors: looked.page?.consoleErrors || [],
-        pageErrors: [], requestFailures: [], actionResults: [], verdict: looked.pageVerdict,
-        ...(wantsActions ? { actionsSkipped: true, note: 'S’ha mirat la pàgina tal com carrega; els clics i formularis demanats no s’han executat perquè el projecte no té Playwright. No cal instal·lar-lo per saber si la pàgina es veu bé.' } : {}),
-      };
-    }
-    const { chromium } = require(playwrightPath);
-    let browser;
-    try {
-      browser = await chromium.launch({ headless: true, timeout: 20000 });
-      const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-      const consoleErrors = [];
-      const pageErrors = [];
-      const requestFailures = [];
-      page.on('console', (message) => { if (message.type() === 'error' && consoleErrors.length < 30) consoleErrors.push(message.text().slice(0, 500)); });
-      page.on('pageerror', (error) => { if (pageErrors.length < 30) pageErrors.push(error.message.slice(0, 500)); });
-      page.on('requestfailed', (request) => { if (requestFailures.length < 30) requestFailures.push({ url: safeBrowserUrl(request.url()), error: (request.failure()?.errorText || 'request failed').slice(0, 300) }); });
-      const response = await page.goto(target.href, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(800);
-      const actionResults = await runBrowserActions(page, tool.arguments.actions || []);
-      const pageInfo = await page.evaluate(() => ({ title: document.title, text: document.body?.innerText || '' }));
-      const screenshotDirectory = path.join(app.getPath('userData'), 'browser-inspections');
-      await fs.mkdir(screenshotDirectory, { recursive: true });
-      const screenshotPath = path.join(screenshotDirectory, `inspection-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true, timeout: 15000 });
-      return {
-        inspected: true, url: safeBrowserUrl(page.url()), status: response?.status() ?? null,
-        title: String(pageInfo.title || '').slice(0, 300), text: String(pageInfo.text || '').slice(0, 12000),
-        actionResults, consoleErrors, pageErrors, requestFailures, screenshotPath,
-        truncated: String(pageInfo.text || '').length > 12000,
-      };
-    } catch (error) {
-      throw new Error(`La inspecció Playwright ha fallat: ${error instanceof Error ? error.message : String(error)}. Si Chromium no està instal·lat, l’app el prepararà quan calgui.`);
-    } finally { if (browser) await browser.close().catch(() => {}); }
+    // Electron is already a browser: the app opens the page in a hidden window of its own, clicks
+    // and fills there, and reads the result. Nothing has to be installed in the project.
+    const looked = await checkStartedPage({ url: target.href }, Array.isArray(tool.arguments.actions) ? tool.arguments.actions : []);
+    if (looked.page?.error) throw new Error(`No s’ha pogut obrir la pàgina: ${looked.page.error}`);
+    if (looked.actionError) throw new Error(looked.actionError);
+    return {
+      inspected: true, url: safeBrowserUrl(target.href), status: looked.page?.status ?? null,
+      title: looked.page?.title || '', text: looked.page?.text || '', consoleErrors: looked.page?.consoleErrors || [],
+      pageErrors: [], requestFailures: [], actionResults: looked.actionResults || [], verdict: looked.pageVerdict,
+    };
   }
   if (tool.name === 'list_files') {
     const files = await listFiles(root);
