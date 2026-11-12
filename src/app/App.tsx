@@ -91,9 +91,9 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
 }
 type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
 const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
-  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="12px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
     <Splitter.ResizeTriggerSeparator bg="transparent"/>
-    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="border" borderWidth="0" boxShadow="none"/>
+    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="transparent" borderWidth="0" boxShadow="none" css={{ '[data-part=resize-trigger]:hover &': { background: 'var(--chakra-colors-border)' } }}/>
   </Splitter.ResizeTrigger>
 );
 
@@ -875,7 +875,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainerRef.current) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#111111', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#1f2023', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainerRef.current);
@@ -942,10 +942,9 @@ export function App(): React.JSX.Element {
   }
 
   const chatPane = (
-    <Flex h="full" minW="0" minH="0" direction="column" bg="bg">
-      <Flex h="58px" flex="none" borderBottomWidth="1px" borderColor="border" px="5" align="center" justify="space-between" gap="3">
+    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+      <Flex h="42px" flex="none" borderBottomWidth="1px" borderColor="border" px="3" align="center" justify="space-between" gap="3">
         <HStack minW="0" gap="3">
-          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} size="sm" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <Heading size="sm" fontWeight="500" flex="none">Agentic Coder</Heading>
           <NativeSelect.Root size="sm" width="340px" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model local" value={selectedModel} onChange={async (event) => {
           const nextModel = event.currentTarget.value;
@@ -1004,13 +1003,13 @@ export function App(): React.JSX.Element {
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
-        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
+        : <webview ref={webviewRef} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#1f2023' }}/>}
     </Flex>
   );
 
   const terminalDock = (
-    <Flex flex="1" direction="column" minH="0" minW="0" bg="#111111" borderColor="border">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" bg="surface.subtle" borderBottomWidth="1px" borderColor="border">
+    <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="10px" overflow="hidden">
+      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
         <HStack minW="0" gap="3">
           <Text flex="none" fontSize="xs" fontWeight="semibold">Terminal</Text>
           <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
@@ -1144,8 +1143,8 @@ export function App(): React.JSX.Element {
   }, [browserOpen, browserUrl]);
 
   const dockPane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
-    <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderColor="border">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" bg="surface.subtle" borderBottomWidth="1px" borderColor="border">
+    <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3" borderBottomWidth="1px" borderColor="border">
         <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
         <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
       </Flex>
@@ -1161,8 +1160,8 @@ export function App(): React.JSX.Element {
   const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
   const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
-    <Flex flex="none" minH="0" minW="0" position="relative" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 440px)' }}>
-      <Center position="absolute" top="-5px" left="0" right="0" h="10px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}><Box w="32px" h="2px" rounded="full" bg="border"/></Center>
+    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 440px)' }}>
+      <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} css={{ '&:hover > div': { background: 'var(--chakra-colors-border)' } }}><Box w="32px" h="2px" rounded="full" bg="transparent"/></Center>
       {dockItems.length === 1 ? dockItems[0].node : (
         // One splitter per arrangement of open panes; each arrangement remembers its own widths.
         <Splitter.Root key={dockKey} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockPanels} size={paneSizes[dockKey] ?? dockEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [dockKey]: details.size }))}>
@@ -1175,8 +1174,8 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
-    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
-      <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
+    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+      <Flex h="42px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
         <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
         <IconButton icon={X} label={closeLabel} onClick={onClose}/>
       </Flex>
@@ -1200,7 +1199,9 @@ export function App(): React.JSX.Element {
   );
 
   const mainContent = workspacePane ? (
-    <Splitter.Root key={`main-${sideItems.length}`} h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'chat', minSize: 18 }, { id: 'workspace', minSize: 4 }]} defaultSize={sideItems.length > 1 ? [Math.min(splitSize[0], 40), 100 - Math.min(splitSize[0], 40)] : splitSize} onResize={(details) => setSplitSize(details.size)} onResizeEnd={(details) => {
+    <Splitter.Root key={`main-${sideItems.length}`} h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'workspace', minSize: 4 }, { id: 'chat', minSize: 18 }]} defaultSize={sideItems.length > 1 ? [100 - Math.min(splitSize[0], 40), Math.min(splitSize[0], 40)] : [splitSize[1], splitSize[0]]} onResize={(details) => setSplitSize([details.size[1], details.size[0]])} onResizeEnd={(shown) => {
+      // Stored as [chat, workspace], whatever side each one is drawn on.
+      const details = { size: [shown.size[1], shown.size[0]] };
       if (details.size[1] < WORKSPACE_CLOSE_BELOW) {
         setBrowserOpen(false);
         setEditorOpen(false);
@@ -1212,30 +1213,31 @@ export function App(): React.JSX.Element {
       setSplitSize(details.size);
       localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size));
     }}>
-      <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
-      <SplitterHandle id="chat:workspace"/>
       <Splitter.Panel id="workspace" h="full" minW="0" minH="0" overflow="hidden">{workspacePane}</Splitter.Panel>
+      <SplitterHandle id={'workspace:chat' as SplitterHandleId}/>
+      <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
     </Splitter.Root>
   ) : chatPane;
 
   return (
     <>
-    <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="bg">
-    <Grid flex="1" minH="0" w="full" minW="0" templateColumns="64px minmax(0, 1fr)" overflow="hidden" bg="bg">
-        <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" pb="2" direction="column" align="center" gap="2">
-          <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
-          <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={() => void newChat()}/>
-          <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
+    <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
+    <Grid flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
+        <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
+          <Flex h="42px" w="full" flex="none" align="center" justify="center" fontSize="xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
+          <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
+          <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
           {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
           <Box flex="1" minH="2"/>
-          <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="44px" h="44px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
-          <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
-          <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="44px" h="44px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
+          <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="38px" h="38px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
+          <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
+          <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
         </Flex>
-        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden">
+        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt="6px" pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '60px', maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
-          const availableWidth = Math.max(380, window.innerWidth - 64);
+          const availableWidth = Math.max(380, window.innerWidth - 58);
           const dragged = Math.round((details.size[0] / 100) * availableWidth);
           // Dragged almost shut: close the column and keep its last useful width for next time.
           if (dragged < NAVIGATION_MIN_WIDTH) { setNavigationOpen(false); return; }
@@ -1244,7 +1246,7 @@ export function App(): React.JSX.Element {
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" pt="2" direction="column" gap="2">
+        <Flex as="aside" h="full" minH="0" minW="0" bg="bg" borderRadius="10px" overflow="hidden" px="2" pt="1" direction="column" gap="1">
           {/* The project comes first: conversations and files below both belong to it. */}
           <Button flex="none" variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
             <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
@@ -1352,7 +1354,7 @@ export function App(): React.JSX.Element {
         {terminalResizing && <Box position="fixed" inset="0" zIndex="4000" cursor="row-resize"/>}
         </Flex>
     </Grid>
-    <Flex flex="none" minW="0" h="28px" align="center" justify="space-between" gap="2" px="2" bg="surface.subtle" borderTopWidth="1px" borderColor="border" color="fg.muted" fontSize="xs" overflow="hidden">
+    <Flex flex="none" minW="0" h="28px" align="center" justify="space-between" gap="2" px="2" bg="canvas" color="fg.muted" fontSize="xs" overflow="hidden">
           <HStack minW="0" gap="1" overflow="hidden">
             <Button size="xs" variant="ghost" minW="0" maxW="220px" px="2" onClick={() => void selectProject()} title={project?.path || 'Selecciona un projecte'}>
               <FolderOpen size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Cap projecte'}</Text>
