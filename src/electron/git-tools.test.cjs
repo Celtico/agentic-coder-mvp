@@ -31,6 +31,10 @@ test('reads branch, staged changes and unstaged changes without modifying the re
 
   assert.equal(snapshot.available, true);
   assert.match(snapshot.branch, /^## /);
+  assert.ok(snapshot.localBranches.includes(snapshot.branch.slice(3).split('...')[0]));
+  assert.deepEqual(snapshot.remotes, []);
+  assert.ok(snapshot.localBranches.includes(snapshot.branch.slice(3).split('...')[0]));
+  assert.deepEqual(snapshot.remotes, []);
   assert.match(snapshot.status, /tracked\.txt/);
   assert.match(snapshot.status, /new\.txt/);
   assert.match(snapshot.stagedDiff, /version two/);

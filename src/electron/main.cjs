@@ -4,12 +4,15 @@ const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { spawn, fork } = require('node:child_process');
-const { getGitSnapshot, getGitCommitCandidates } = require('./git-tools.cjs');
+const { getGitSnapshot, getGitHistory, getGitCommitDetails, getGitCommitCandidates } = require('./git-tools.cjs');
 const { findLocalProjectUrl } = require('./project-browser.cjs');
 const { runBrowserActions } = require('./browser-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
-const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
+const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
+const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
+const { searchWeb } = require('./web-search.cjs');
+const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
 let modelWorker = null;
@@ -86,6 +89,11 @@ async function dispatchAgentTool(tool, projectRoot) {
   if (!tool || typeof tool !== 'object' || !selectedProject) throw new Error('La crida de l’eina no és vàlida.');
   const root = await fs.realpath(selectedProject);
   if (await fs.realpath(projectRoot) !== root) throw new Error('El projecte actiu ha canviat durant la tasca.');
+  if (tool.name === 'web_search' && typeof tool.arguments?.query === 'string') {
+    const query = tool.arguments.query.trim();
+    if (!query || query.length > 200 || /[\r\n\0]/.test(query)) throw new Error('La consulta de cerca no és vàlida.');
+    return searchWeb(query);
+  }
   if (tool.name === 'create_git_commit' && typeof tool.arguments?.message === 'string') {
     const message = tool.arguments.message.trim();
     if (!message || message.length > 200 || /[\r\n\0]/.test(message)) throw new Error('El missatge del commit no és vàlid.');
@@ -100,10 +108,6 @@ async function dispatchAgentTool(tool, projectRoot) {
     return { committed: committed.code === 0, code: committed.code, message, output: committed.output };
   }
   if (tool.name === 'run_tests') {
-    const pkgPath = path.join(root, 'package.json');
-    let pkg;
-    try { pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')); } catch { throw new Error('No s’ha trobat un package.json vàlid.'); }
-    if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
     return executeProjectTests(root);
   }
   if (tool.name === 'run_project_script' && typeof tool.arguments?.script === 'string' && /^[a-zA-Z0-9:_-]{1,64}$/.test(tool.arguments.script)) {
@@ -132,23 +136,12 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (packageName.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(packageName)) throw new Error('Nom de paquet npm no vàlid.');
     await readProjectPackage(root);
     const args = ['install', ...(dev ? ['--save-dev'] : []), packageName];
-    const command = `npm ${args.join(' ')}`;
-    const approved = await confirmProjectAction({
-      title: 'Confirmar instal·lació de llibreria', message: `L’agent demana instal·lar ${packageName}${dev ? ' com a dependència de desenvolupament' : ''}.`, button: 'Instal·la',
-      detail: `Carpeta: ${root}\nOrdre: ${command}\n\nAixò pot modificar package.json, package-lock.json i node_modules, i descarregar codi del registre npm. No s’executarà si cancel·les.`
-    });
-    if (!approved) return { approved: false, cancelled: true, packageName };
     return executeNpmCommand(root, args, 300000);
   }
   if (tool.name === 'install_playwright_browser') {
     const executable = path.join(root, 'node_modules', '.bin', 'playwright');
     try { await fs.access(executable, fs.constants.X_OK); }
     catch { throw new Error('Playwright no està instal·lat en aquest projecte. Demana primer instal·lar @playwright/test o playwright.'); }
-    const approved = await confirmProjectAction({
-      title: 'Confirmar instal·lació del navegador de proves', message: 'L’agent demana instal·lar Chromium per a Playwright.', button: 'Instal·la Chromium',
-      detail: `Carpeta: ${root}\nOrdre: node_modules/.bin/playwright install chromium\n\nEs descarregarà el navegador Chromium a la memòria local de Playwright; no és una llibreria npm ni modifica package.json.`
-    });
-    if (!approved) return { approved: false, cancelled: true, browser: 'chromium' };
     return executeBinary(executable, ['install', 'chromium'], root, 600000);
   }
   if (tool.name === 'inspect_browser' && typeof tool.arguments?.url === 'string') {
@@ -159,7 +152,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     }
     let playwrightPath;
     try { playwrightPath = require.resolve('playwright', { paths: [root] }); }
-    catch { throw new Error('Playwright no està instal·lat en aquest projecte. Demana instal·lar @playwright/test o playwright amb confirmació.'); }
+    catch { throw new Error('Playwright no està instal·lat en aquest projecte.'); }
     const { chromium } = require(playwrightPath);
     let browser;
     try {
@@ -186,7 +179,7 @@ async function dispatchAgentTool(tool, projectRoot) {
         truncated: String(pageInfo.text || '').length > 12000,
       };
     } catch (error) {
-      throw new Error(`La inspecció Playwright ha fallat: ${error instanceof Error ? error.message : String(error)}. Si Chromium no està instal·lat, demana instal·lar-lo amb l’eina confirmada.`);
+      throw new Error(`La inspecció Playwright ha fallat: ${error instanceof Error ? error.message : String(error)}. Si Chromium no està instal·lat, l’app el prepararà quan calgui.`);
     } finally { if (browser) await browser.close().catch(() => {}); }
   }
   if (tool.name === 'list_files') {
@@ -239,16 +232,6 @@ async function dispatchAgentTool(tool, projectRoot) {
     const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
     const backupPath = path.join(deletedRoot, stamp, relativePath);
     const metadataPath = path.join(deletedRoot, stamp, '.agentic-metadata.json');
-    const decision = await dialog.showMessageBox(win, {
-      type: 'warning',
-      buttons: ['Cancel·la', 'Elimina i desa còpia'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Revisar eliminació proposada',
-      message: `L’agent proposa eliminar ${relativePath}.`,
-      detail: `Projecte: ${root}\nFitxer: ${relativePath}\nMida: ${snapshot.size} bytes\n\nEs crearà i verificarà una còpia recuperable fora del projecte abans d’eliminar el fitxer. Si el fitxer canvia després d’aquesta confirmació, no s’eliminarà.`
-    });
-    if (decision.response !== 1) return { deleted: false, denied: true, path: relativePath };
     return deleteInspectedProjectFile(snapshot, backupPath, metadataPath);
   }
   if (tool.name === 'write_file' && typeof tool.arguments?.path === 'string' && typeof tool.arguments?.content === 'string') {
@@ -258,7 +241,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       throw new Error('El camí o el contingut no es pot revisar de manera segura. Usa el panell editor per a fitxers més grans.');
     }
     const target = safeProjectPath(root, relativePath);
-    const parent = await fs.realpath(path.dirname(target));
+    const parent = await ensureProjectDirectory(root, path.dirname(target));
     if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
     let existing = null;
     try {
@@ -280,14 +263,6 @@ async function readProjectPackage(root) {
   try { pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')); }
   catch { throw new Error('No s’ha trobat un package.json vàlid.'); }
   return pkg;
-}
-
-async function confirmProjectAction({ title, message, detail, button }) {
-  const decision = await dialog.showMessageBox(win, {
-    type: 'warning', buttons: ['Cancel·la', button], defaultId: 0, cancelId: 0,
-    title, message, detail
-  });
-  return decision.response === 1;
 }
 
 function startProjectProcess(root, script) {
@@ -423,7 +398,7 @@ function findNodeExecutable() {
 
 function cleanConversationHistory(value) {
   if (!Array.isArray(value)) return [];
-  return value.slice(-8).flatMap((message) => {
+  return value.slice(-100).flatMap((message) => {
     if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') return [];
     const content = message.content.trim();
     if (!content || content.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) return [];
@@ -454,7 +429,7 @@ function cancelModelRequest() {
   const id = activeModelRequestId;
   if (id === null) return { cancelled: false, reason: 'no-active-request' };
   if ([...activeModelToolCalls].some((key) => key.startsWith(`${id}:`))) {
-    return { cancelled: false, reason: 'confirmed-action-in-progress' };
+    return { cancelled: false, reason: 'project-action-in-progress' };
   }
   const pending = pendingModelRequests.get(id);
   if (!pending) return { cancelled: false, reason: 'no-active-request' };
@@ -511,6 +486,113 @@ ipcMain.handle('project:open', async () => {
   return { path: selectedProject, files: await listFiles(selectedProject) };
 });
 
+ipcMain.handle('project:create-entry', async (_event, relativePath, directory) => {
+  if (!selectedProject) throw new Error('Primer obre un projecte.');
+  if (typeof relativePath !== 'string' || relativePath.length > 500 || typeof directory !== 'boolean') throw new Error('La ruta no és vàlida.');
+  const parts = relativePath.split(/[\\/]/);
+  if (!relativePath.trim() || path.isAbsolute(relativePath) || /^[A-Za-z]:/.test(relativePath) || parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Indica una ruta relativa vàlida dins del projecte.');
+  }
+  const root = await fs.realpath(selectedProject);
+  const target = safeProjectPath(root, relativePath);
+  const parent = await ensureProjectDirectory(root, path.dirname(target));
+  if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
+  try { await fs.lstat(target); throw new Error('Ja existeix un fitxer o directori amb aquest nom; no s’ha substituït.'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (directory) await fs.mkdir(target);
+  else await fs.writeFile(target, '', { encoding: 'utf8', mode: 0o644, flag: 'wx' });
+  return { path: root, files: await listFiles(root) };
+});
+
+ipcMain.handle('project:delete-entry', async (_event, relativePath, directory) => {
+  if (!selectedProject) throw new Error('Primer obre un projecte.');
+  if (typeof relativePath !== 'string' || relativePath.length > 500 || typeof directory !== 'boolean') throw new Error('La ruta no és vàlida.');
+  const parts = relativePath.split(/[\\/]/);
+  if (!relativePath.trim() || path.isAbsolute(relativePath) || /^[A-Za-z]:/.test(relativePath) || parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Indica una ruta relativa vàlida dins del projecte.');
+  }
+  const root = await fs.realpath(selectedProject);
+  const entry = (await listFiles(root)).find((item) => item.path === relativePath);
+  if (!entry || entry.directory !== directory) throw new Error('L’element ja no és al tree del projecte.');
+  const target = safeProjectPath(root, relativePath);
+  const stat = await fs.lstat(target);
+  if (stat.isSymbolicLink()) throw new Error('No es poden eliminar enllaços simbòlics.');
+  if (directory) {
+    if (!stat.isDirectory()) throw new Error('L’element no és una carpeta.');
+    const resolved = await fs.realpath(target);
+    if (!isWithin(root, resolved)) throw new Error('La carpeta de destinació surt del projecte.');
+    if ((await fs.readdir(resolved)).length) throw new Error('La carpeta conté elements. Elimina o mou primer els seus elements.');
+    await fs.rmdir(resolved);
+  } else {
+    if (!stat.isFile()) throw new Error('L’element no és un fitxer normal.');
+    const snapshot = await inspectFileForDeletion(root, relativePath);
+    const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
+    const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
+    await deleteInspectedProjectFile(snapshot, path.join(deletedRoot, stamp, relativePath), path.join(deletedRoot, stamp, '.agentic-metadata.json'));
+  }
+  return { path: root, files: await listFiles(root) };
+});
+
+ipcMain.handle('project:rename-entry', async (_event, relativePath, newName) => {
+  if (!selectedProject) throw new Error('Primer obre un projecte.');
+  if (typeof relativePath !== 'string' || relativePath.length > 500 || typeof newName !== 'string' || !newName.trim() || newName.length > 255 || /[\\/]/.test(newName) || newName === '.' || newName === '..') throw new Error('El nom no és vàlid.');
+  const root = await fs.realpath(selectedProject);
+  const entry = (await listFiles(root)).find((item) => item.path === relativePath);
+  if (!entry) throw new Error('L’element ja no és al tree del projecte.');
+  const source = safeProjectPath(root, relativePath);
+  const stat = await fs.lstat(source);
+  if (stat.isSymbolicLink()) throw new Error('No es poden canviar els noms d’enllaços simbòlics.');
+  const parent = await fs.realpath(path.dirname(source));
+  if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
+  const destination = path.join(parent, newName.trim());
+  try { await fs.lstat(destination); throw new Error('Ja existeix un element amb aquest nom.'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  await fs.rename(source, destination);
+  return { path: root, files: await listFiles(root) };
+});
+
+ipcMain.handle('project:import-directory', async (_event, sourcePath) => {
+  if (!selectedProject) throw new Error('Primer obre un projecte.');
+  if (typeof sourcePath !== 'string' || !path.isAbsolute(sourcePath)) throw new Error('No s’ha pogut llegir la carpeta arrossegada.');
+  const root = await fs.realpath(selectedProject);
+  const source = await fs.realpath(sourcePath);
+  const sourceStat = await fs.lstat(sourcePath);
+  if (sourceStat.isSymbolicLink() || !sourceStat.isDirectory()) throw new Error('Arrossega una carpeta normal.');
+  if (isWithin(source, root) || isWithin(root, source)) throw new Error('No pots importar el projecte seleccionat ni una carpeta que el contingui.');
+  const name = path.basename(source);
+  if (!name || name === '.' || name === path.parse(name).root) throw new Error('El nom de la carpeta no és vàlid.');
+  const destination = safeProjectPath(root, name);
+  const parent = await ensureProjectDirectory(root, path.dirname(destination));
+  if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
+  try { await fs.lstat(destination); throw new Error(`Ja existeix «${name}» dins del projecte; no s’ha importat ni substituït res.`); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+
+  const temporary = path.join(parent, `.${name}.import-${process.pid}-${Date.now()}`);
+  let entries = 0;
+  const copyDirectory = async (from, to, depth = 0) => {
+    if (depth > 20) throw new Error('La carpeta té massa nivells niats.');
+    await fs.mkdir(to);
+    for (const entry of await fs.readdir(from, { withFileTypes: true })) {
+      if (++entries > 10000) throw new Error('La carpeta conté més de 10.000 elements.');
+      const fromPath = path.join(from, entry.name);
+      const toPath = path.join(to, entry.name);
+      if (entry.isSymbolicLink()) throw new Error('La carpeta conté enllaços simbòlics; no s’ha importat.');
+      if (entry.isDirectory()) await copyDirectory(fromPath, toPath, depth + 1);
+      else if (entry.isFile()) await fs.copyFile(fromPath, toPath, fs.constants.COPYFILE_EXCL);
+      else throw new Error('La carpeta conté un tipus de fitxer no compatible.');
+    }
+  };
+  try {
+    await copyDirectory(source, temporary);
+    await fs.rename(temporary, destination);
+  } catch (error) {
+    await fs.rm(temporary, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  return { path: root, files: await listFiles(root) };
+});
+
 async function listFiles(root, rel = '', depth = 0) {
   if (depth > 3) return [];
   const ignored = new Set(['.git', 'node_modules', '.next', 'dist', 'build', '.venv', 'venv', 'models']);
@@ -539,6 +621,50 @@ ipcMain.handle('project:deleted-backups', async () => {
   return listDeletedProjectFiles(deletedRoot);
 });
 
+function projectBackupRoot(root) {
+  const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  return path.join(app.getPath('userData'), 'backups', projectKey);
+}
+
+ipcMain.handle('project:file-history', async (_event, relativePath) => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  const root = await fs.realpath(selectedProject);
+  return listProjectFileHistory(projectBackupRoot(root), relativePath);
+});
+
+ipcMain.handle('project:folder-history', async (_event, relativePath = '') => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  if (typeof relativePath !== 'string' || relativePath.length > 500 || (relativePath && (path.isAbsolute(relativePath) || relativePath.split(/[\\/]/).some((part) => !part || part === '.' || part === '..')))) throw new Error('La ruta de la carpeta no és vàlida.');
+  const root = await fs.realpath(selectedProject);
+  if (relativePath) {
+    const directory = safeProjectPath(root, relativePath);
+    const stat = await fs.lstat(directory).catch(() => null);
+    if (!stat?.isDirectory() || stat.isSymbolicLink()) throw new Error('Selecciona una carpeta existent del projecte.');
+  }
+  return listProjectFolderHistory(projectBackupRoot(root), relativePath);
+});
+
+ipcMain.handle('project:file-history-version', async (_event, relativePath, versionId) => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  const root = await fs.realpath(selectedProject);
+  return readProjectFileHistoryVersion(projectBackupRoot(root), relativePath, versionId);
+});
+
+ipcMain.handle('project:restore-file-history', async (_event, relativePath, versionId) => {
+  if (!selectedProject) throw new Error('Obre primer un projecte.');
+  const root = await fs.realpath(selectedProject);
+  const version = await readProjectFileHistoryVersion(projectBackupRoot(root), relativePath, versionId);
+  if (!selectedProject || await fs.realpath(selectedProject) !== root) throw new Error('El projecte seleccionat ha canviat; torna a obrir l’historial.');
+  if (versionId.startsWith('deleted/')) {
+    const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    const deletedRoot = path.join(app.getPath('userData'), 'backups', projectKey, 'deleted');
+    await restoreDeletedProjectFile(root, deletedRoot, `${versionId.slice('deleted/'.length)}/${relativePath}`);
+    return { restored: true, path: relativePath };
+  }
+  await writeProjectFile(root, relativePath, version.content, { allowCreate: true });
+  return { restored: true, path: relativePath };
+});
+
 ipcMain.handle('project:restore-deleted-backup', async (_event, backupId) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   if (typeof backupId !== 'string' || backupId.length > 1000) throw new Error('Identificador de còpia no vàlid.');
@@ -548,13 +674,6 @@ ipcMain.handle('project:restore-deleted-backup', async (_event, backupId) => {
   const backups = await listDeletedProjectFiles(deletedRoot);
   const backup = backups.find((entry) => entry.id === backupId);
   if (!backup) throw new Error('La còpia no existeix o no ha superat la verificació.');
-  const decision = await confirmProjectAction({
-    title: 'Confirmar restauració de fitxer',
-    message: `Es restaurarà ${backup.path} al projecte.`,
-    button: 'Restaura el fitxer',
-    detail: `Projecte: ${root}\nCòpia: ${backup.id}\nMida: ${backup.bytes} bytes\n\nSi ja existeix un fitxer al destí, la restauració s’aturarà sense substituir-lo. La còpia de recuperació es conservarà.`
-  });
-  if (!decision) return { restored: false, denied: true, path: backup.path };
   return restoreDeletedProjectFile(root, deletedRoot, backupId);
 });
 
@@ -615,7 +734,7 @@ function safeBrowserUrl(value) {
 
 async function writeProjectFile(root, relativePath, content, { allowCreate }) {
   const target = safeProjectPath(root, relativePath);
-  const parent = await fs.realpath(path.dirname(target));
+  const parent = await ensureProjectDirectory(root, path.dirname(target));
   if (!isWithin(root, parent)) throw new Error('La carpeta de destinació surt del projecte.');
   let stat = null;
   let resolved = path.join(parent, path.basename(target));
@@ -633,10 +752,11 @@ async function writeProjectFile(root, relativePath, content, { allowCreate }) {
   if (stat) {
     const relative = path.relative(root, resolved);
     const projectKey = createHash('sha256').update(root).digest('hex').slice(0, 16);
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}`;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-') + `-${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
     backupPath = path.join(app.getPath('userData'), 'backups', projectKey, stamp, relative);
-    await fs.mkdir(path.dirname(backupPath), { recursive: true });
-    await fs.copyFile(resolved, backupPath);
+    await fs.mkdir(path.dirname(backupPath), { recursive: true, mode: 0o700 });
+    await fs.copyFile(resolved, backupPath, fs.constants.COPYFILE_EXCL);
+    await fs.chmod(backupPath, 0o600);
   }
 
   const temporaryPath = path.join(parent, `.${path.basename(resolved)}.agentic-${process.pid}-${Date.now()}.tmp`);
@@ -655,7 +775,7 @@ async function writeProjectFile(root, relativePath, content, { allowCreate }) {
 }
 
 async function executeProjectTests(root) {
-  return executeNpmScript(root, 'test');
+  return executeProjectChecks(root, executeNpmScript);
 }
 
 async function executeNpmScript(root, script) {
@@ -733,16 +853,6 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   try { existing = await fs.readFile(filePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (existing.split(/\r?\n/).some((line) => { try { return JSON.parse(line).id === id; } catch { return false; } })) return { id, saved: false };
 
-  const decision = await dialog.showMessageBox(win, {
-    type: 'warning',
-    buttons: ['Cancel·la', 'Desa localment'],
-    defaultId: 0,
-    cancelId: 0,
-    title: 'Desar un cas verificat?',
-    message: 'Aquest exemple s’afegirà a la memòria local de casos verificats.',
-    detail: 'No es modifica ni s’entrena el model. El text es guarda només en aquest Mac. Comprova que no contingui credencials, dades personals ni codi que no vulguis conservar. La comprovació indicada és la procedència del cas.'
-  });
-  if (decision.response !== 1) throw new Error('Desat del cas cancel·lat.');
   const record = { id, at: new Date().toISOString(), projectPath: root, model: process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', prompt, answer, evidence, verification: 'user-confirmed' };
   await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
   await fs.chmod(filePath, 0o600);
@@ -767,16 +877,6 @@ ipcMain.handle('learning:prepare-dataset', async () => {
   const prepared = await readPreparedExperienceDataset();
   if (prepared.counts.included === 0) throw new Error('No hi ha casos confirmats aptes per preparar.');
   const candidatesDirectory = path.join(app.getPath('userData'), 'learning', 'candidates');
-  const decision = await dialog.showMessageBox(win, {
-    type: 'warning',
-    buttons: ['Cancel·la', 'Prepara versió candidata'],
-    defaultId: 0,
-    cancelId: 0,
-    title: 'Preparar dades locals d’aprenentatge?',
-    message: `Es prepararan ${prepared.counts.included} casos confirmats en particions locals.`,
-    detail: `Origen: ${path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl')}\nDestinació: ${candidatesDirectory}/dataset-…/\nIncloses: ${prepared.counts.included}\nDuplicades descartades: ${prepared.counts.duplicates}\nPossibles secrets descartats: ${prepared.counts.secrets}\nNo confirmades descartades: ${prepared.counts.unverified}\nRegistres invàlids descartats: ${prepared.counts.invalid}\nParticions: entrenament ${prepared.splitCounts.train}, validació ${prepared.splitCounts.validation}, prova ${prepared.splitCounts.test}\n\nTot queda en aquest Mac. No s’entrena ni es canvia cap model. ${prepared.trainingReady ? 'El conjunt arriba al llindar mínim tècnic, però encara requereix revisió de qualitat.' : 'Hi ha massa pocs casos per considerar-lo llest per entrenar.'}`
-  });
-  if (decision.response !== 1) return { prepared: false, cancelled: true, counts: prepared.counts };
   const candidate = await writeTrainingCandidate(prepared, candidatesDirectory);
   return { prepared: true, directory: candidate.directory, manifest: candidate.manifest };
 });
@@ -812,11 +912,19 @@ ipcMain.handle('git:snapshot', async () => {
   return getGitSnapshot(selectedProject);
 });
 
+ipcMain.handle('git:history', async () => {
+  if (!selectedProject) return { available: false, reason: 'Selecciona primer un projecte.', commits: [], branches: [] };
+  return getGitHistory(selectedProject);
+});
+
+ipcMain.handle('git:commit-details', async (_event, hash) => {
+  if (!selectedProject) throw new Error('Selecciona primer un projecte.');
+  return getGitCommitDetails(selectedProject, hash);
+});
+
 ipcMain.handle('project:run-tests', async () => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   const root = await fs.realpath(selectedProject);
-  const pkg = await readProjectPackage(root);
-  if (!pkg.scripts || !pkg.scripts.test) throw new Error('El projecte no defineix scripts.test.');
   return executeProjectTests(root);
 });
 
@@ -824,8 +932,6 @@ ipcMain.handle('terminal:run', async (_e, rawCommand) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   const command = String(rawCommand || '').trim();
   if (!command || command.length > 2000) throw new Error('Ordre buida o massa llarga.');
-  const answer = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancel·la', 'Executa'], defaultId: 0, cancelId: 0, title: 'Executar ordre al projecte?', message: command, detail: `S’executarà al terminal dins de:\n${selectedProject}\n\nUna ordre pot crear, modificar o esborrar fitxers.` });
-  if (answer.response !== 1) return { code: null, output: 'Execució cancel·lada.' };
   return new Promise((resolve) => {
     const child = spawn(command, { cwd: selectedProject, shell: true, env: process.env });
     let output = '';

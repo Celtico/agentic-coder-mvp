@@ -5,6 +5,86 @@ const path = require('node:path');
 const test = require('node:test');
 const { LocalCodingAgent } = require('./agent-runtime.cjs');
 
+test('delegates independent subtasks sequentially through the shared local model', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-delegation-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"delegate_tasks","arguments":{"tasks":["Inspect the current UI and report the important components.","Review the project tests and report gaps."]}}',
+    '{"type":"final","content":"UI uses App.jsx and Chakra."}',
+    '{"type":"final","content":"The project has one test script."}',
+    '{"type":"final","content":"I delegated both independent inspections."}',
+  ];
+  const toolLists = [];
+  const statuses = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (_messages, options) => { toolLists.push(options.tools); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const answer = await agent.ask('Divideix aquesta revisió en dues tasques independents', tempRoot, async () => { throw new Error('read-only subtask should not call a project tool'); });
+
+  assert.equal(responses.length, 0);
+  assert.equal(toolLists.length, 4);
+  assert.ok(toolLists[0].some((tool) => tool.function.name === 'delegate_tasks'));
+  assert.ok(toolLists[1].every((tool) => tool.function.name !== 'delegate_tasks'));
+  assert.ok(toolLists[2].every((tool) => tool.function.name !== 'delegate_tasks'));
+  assert.ok(statuses.some((message) => message.includes('Agent delegat 1/2')));
+  assert.ok(statuses.some((message) => message.includes('Agent delegat 2/2')));
+  assert.match(answer, /delegated both/i);
+  const history = await fs.readFile(path.join(tempRoot, 'history', 'sessions.jsonl'), 'utf8');
+  assert.equal(history.trim().split('\n').length, 1, 'delegated runs are not saved as separate chat conversations');
+});
+
+test('rejects duplicate delegated tasks before creating agents', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-delegation-validation-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"tool_call","name":"delegate_tasks","arguments":{"tasks":["Review App.tsx","Review App.tsx"]}}',
+    '{"type":"final","content":"No s’ha iniciat cap agent duplicat."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const answer = await agent.ask('Divideix la revisió', tempRoot, async () => { throw new Error('invalid delegation must not execute'); });
+  assert.match(answer, /No s’ha iniciat cap agent duplicat/);
+});
+
+test('lets the model choose to search the public web and passes results back to the conversation', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-web-search-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const responses = [
+    '{"type":"tool_call","name":"web_search","arguments":{"query":"React latest stable release"}}',
+    '{"type":"final","content":"La cerca troba la documentació oficial: https://react.dev/."}',
+  ];
+  let toolDefinitions = [];
+  let nextMessages = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages, options) => { toolDefinitions = options.tools; nextMessages = messages; return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+
+  const answer = await agent.ask('Quina és la versió estable actual de React?', tempRoot, async (tool) => {
+    calls.push(tool);
+    return { query: tool.arguments.query, results: [{ title: 'React', url: 'https://react.dev/', snippet: 'Official documentation.' }] };
+  });
+
+  assert.deepEqual(calls, [{ name: 'web_search', arguments: { query: 'React latest stable release' } }]);
+  assert.ok(toolDefinitions.some((tool) => tool.function.name === 'web_search'));
+  assert.ok(nextMessages.some((message) => message.role === 'user' && message.content.includes('https://react.dev/')));
+  assert.match(answer, /https:\/\/react\.dev/);
+});
+
 test('executes a tool call wrapped in an explanatory Markdown response', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-test-'));
   const projectRoot = path.join(tempRoot, 'project');
@@ -94,6 +174,7 @@ test('starts one tool call from an explanatory JSON fence containing multiple ca
   await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
   t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
   const responses = [
+    '{"type":"plan","content":"Crearé la interfaz de notas en src/App.jsx."}',
     'Per començar, faig aquesta eina:\n```json\n{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default function App() { return <main>Notes</main>; }"}}\n{"type":"tool_call","name":"install_package","arguments":{"packageName":"react","dev":false}}\n```',
     '{"type":"final","content":"He creat el fitxer de l’app."}',
   ];
@@ -164,6 +245,7 @@ test('does not stop for an unnecessary clarification before editing a clear requ
   await fs.writeFile(path.join(tempRoot, 'src', 'hello.js'), 'export const title = "Hello";\n');
   t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
   const responses = [
+    '{"type":"plan","content":"Actualitzaré el títol a src/hello.js i comprovaré el resultat."}',
     '{"type":"final","content":"Vols que canviï només el títol o també la resta del fitxer?"}',
     '{"type":"tool_call","name":"write_file","arguments":{"path":"src/hello.js","content":"export const title = \\"Hello IA\\";\\n"}}',
     '{"type":"final","content":"He canviat el títol a Hello IA."}',
@@ -203,7 +285,8 @@ test('shows a plan before requesting a package installation', async (t) => {
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const statuses = [];
-  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  const statusEvents = [];
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { statuses.push(status.message); statusEvents.push(status); } });
   agent.historyDir = path.join(tempRoot, 'history');
   const calls = [];
 
@@ -212,7 +295,7 @@ test('shows a plan before requesting a package installation', async (t) => {
     return { approved: false, cancelled: true, packageName: '@playwright/test' };
   });
 
-  assert.ok(statuses.some((status) => status.includes('Pla: Comprovar Playwright')));
+  assert.ok(statusEvents.some((status) => status.type === 'plan' && status.message.includes('Comprovar Playwright')));
   assert.deepEqual(calls, [{ name: 'install_package', arguments: { packageName: '@playwright/test', dev: true } }]);
   assert.match(answer, /cancel·lat/i);
   assert.match(answer, /Comprovar Playwright/);
@@ -338,7 +421,7 @@ test('reports a coding task as incomplete when the model never applies an edit',
   assert.doesNotMatch(answer, /he acabat|tot està corregit|tasca està acabada/i);
 });
 
-test('treats a new-app request as implementation work and rejects a prose-only plan', async (t) => {
+test('treats "fes una app de un portfolia per uns diseñadors" as implementation work', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-create-app-test-'));
   const projectRoot = path.join(tempRoot, 'project');
   await fs.mkdir(projectRoot);
@@ -348,30 +431,112 @@ test('treats a new-app request as implementation work and rejects a prose-only p
     'Entenc. Crearé una aplicació amb React, Vite i Chakra UI. Primer prepararé el projecte i després les notes.',
     '<tool_call>\n{"name":"write_file","arguments":{"path":"package.json","content":"{\\"scripts\\":{\\"dev\\":\\"vite\\"},\\"dependencies\\":{\\"@chakra-ui/react\\":\\"^3.0.0\\",\\"react\\":\\"^19.0.0\\",\\"vite\\":\\"^6.0.0\\"}}"}}\n</tool_call>',
     '{"type":"final","content":"He creat el manifest inicial de l’app."}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default function App() { return <main>Notes</main>; }"}}',
+    '{"type":"final","content":"He creat el manifest i la interfície de l’app."}',
   ];
   const prompts = [];
+  const statusEvents = [];
   let suppliedTools = [];
   const engine = {
     loadModel: async () => {},
     generateResponse: async (messages, options) => { prompts.push(messages.at(-1)?.content || ''); suppliedTools = options.tools || []; return responses.shift(); },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
-  const agent = new LocalCodingAgent({ engine });
+  const agent = new LocalCodingAgent({ engine, onStatus: (event) => statusEvents.push(event) });
   agent.historyDir = path.join(tempRoot, 'history');
   const calls = [];
 
-  const answer = await agent.ask('Crea una app de cero amb React.js i Vite.js amb Chakra-UI per ficar notes.', projectRoot, async (tool) => {
+  const answer = await agent.ask('fes una app de un portfolia per uns diseñadors', projectRoot, async (tool) => {
     calls.push(tool.name);
+    if (tool.name === 'list_files') return { files: [] };
     await fs.mkdir(path.dirname(path.join(projectRoot, tool.arguments.path)), { recursive: true });
     await fs.writeFile(path.join(projectRoot, tool.arguments.path), tool.arguments.content);
     return { applied: true, path: tool.arguments.path };
   });
 
-  assert.ok(prompts.some((prompt) => prompt.includes('Encara no has escrit cap fitxer')));
-  assert.deepEqual(calls, ['write_file']);
+  assert.ok(prompts.some((prompt) => prompt.includes('Resultat real de list_files')));
+  assert.ok(prompts.some((prompt) => prompt.includes('Encara falta un punt d’entrada real de la interfície')));
+  assert.ok(statusEvents.some((event) => event.type === 'plan'));
+  assert.deepEqual(calls, ['list_files', 'write_file', 'write_file']);
   assert.ok(suppliedTools.some((tool) => tool.function.name === 'write_file'));
   assert.match(await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8'), /@chakra-ui\/react/);
-  assert.match(answer, /manifest inicial/);
+  assert.match(await fs.readFile(path.join(projectRoot, 'src/App.jsx'), 'utf8'), /<main>Notes/);
+  assert.match(answer, /manifest i la interfície/);
+});
+
+test('asks Qwen for a single visible plan when it tries a tool before planning', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-plan-first-test-'));
+  await fs.mkdir(path.join(tempRoot, 'src'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default function App() { return <main>Hello</main>; }"}}',
+    '{"type":"plan","content":"Revisaré el projecte, crearé la interfície de notes i validaré el resultat."}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default function App() { return <main>Hello</main>; }"}}',
+    '{"type":"final","content":"He creat la interfície."}',
+  ];
+  const generationOptions = [];
+  const events = [];
+  const calls = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (_messages, options) => { generationOptions.push(options); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: (event) => events.push(event) });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  const answer = await agent.ask('Crea una app de notes', tempRoot, async (tool) => {
+    calls.push(tool.name);
+    await fs.writeFile(path.join(tempRoot, tool.arguments.path), tool.arguments.content);
+    return { applied: true, path: tool.arguments.path };
+  });
+
+  assert.equal(generationOptions[1].tools.length, 0);
+  assert.ok(events.some((event) => event.type === 'plan' && /crearé la interfície/i.test(event.message)));
+  assert.deepEqual(calls, ['write_file']);
+  assert.match(answer, /He creat la interfície/);
+});
+
+test('keeps an unfinished app creation active when a follow-up says the model only explained its plan', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-follow-up-create-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"final","content":"Per completar la tasca, necessito seguir aquestes passes: inspeccionar, implementar i provar."}',
+    '{"type":"final","content":"Primer inspeccionaria els fitxers i després crearia l’app."}',
+    '{"type":"final","content":"Aquest és el pla per completar la tasca."}',
+    '{"type":"final","content":"Encara no puc continuar."}',
+    '{"type":"final","content":"Encara no puc continuar."}',
+    '{"type":"final","content":"Encara no puc continuar."}',
+  ];
+  const prompts = [];
+  const calls = [];
+  const events = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: (event) => events.push(event) });
+  agent.historyDir = path.join(tempRoot, 'history');
+
+  const answer = await agent.ask(
+    'ell mateix t’explica, tens que fer que quadro',
+    projectRoot,
+    async (tool) => { calls.push(tool.name); return { files: [] }; },
+    [
+      { role: 'user', content: 'fes una app de cuines amb Chakra UI i Next.js, utilitza les fotos del directori cuines' },
+      { role: 'assistant', content: 'Per completar la tasca, necessito seguir aquestes passes: inspeccionar, implementar i provar.' },
+    ],
+  );
+
+  assert.ok(prompts.some((prompt) => prompt.includes('Encara no has escrit cap fitxer')));
+  const planEvent = events.find((event) => event.type === 'plan');
+  assert.ok(planEvent);
+  assert.match(planEvent.message, /necessito seguir aquestes passes/);
+  assert.deepEqual(calls, ['list_files']);
+  assert.match(answer, /no s’ha aplicat cap canvi/i);
 });
 
 test('keeps duplicate tool calls from bypassing the incomplete task report', async (t) => {
@@ -418,6 +583,7 @@ test('redirects a duplicate failed test request toward reading and repairing the
   t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
 
   const responses = [
+    '{"type":"plan","content":"Llegir src/math.js, executar les proves, corregir el bug i validar-ho."}',
     '{"type":"tool_call","name":"run_tests"}',
     '{"type":"tool_call","name":"run_tests"}',
     '{"type":"tool_call","name":"read_file","arguments":{"path":"src/math.js"}}',
@@ -903,6 +1069,7 @@ test('prioritizes project instructions and manifests before alphabetically early
 
   assert.match(systemPrompt, /UNIQUE_AGENT_INSTRUCTIONS_MARKER/);
   assert.match(systemPrompt, /UNIQUE_PROJECT_README_MARKER/);
+  assert.match(systemPrompt, /Abans de començar cada tasca, revisa els noms, descripcions i arguments de totes les eines disponibles/);
   assert.match(systemPrompt, /priority-fixture/);
 });
 

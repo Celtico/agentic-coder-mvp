@@ -9,6 +9,7 @@ if (!root) throw new Error("No s’ha trobat el contenidor de l’app.")
 // La interfície usa sempre el mode fosc; Chakra també ha de conèixer el mode,
 // no n'hi ha prou amb posar `color-scheme: dark` al CSS del navegador.
 document.documentElement.classList.add("dark")
+document.body.setAttribute("data-color-mode", "dark")
 
 createRoot(root).render(
   <StrictMode>

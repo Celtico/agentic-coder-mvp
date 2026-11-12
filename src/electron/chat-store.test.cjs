@@ -22,6 +22,19 @@ test('SQLite chat store writes and restores conversations across reopen', () => 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('SQLite chat store removes conversations omitted from the saved snapshot', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-chat-store-delete-'));
+  const file = path.join(directory, 'conversations.sqlite');
+  try {
+    const store = new ChatStore(file);
+    store.saveMany([{ id: 'to-delete', title: 'Conversa', updatedAt: '2026-10-19T12:00:00.000Z', messages: [{ role: 'user', text: 'Hola' }] }]);
+    store.saveMany([]);
+    assert.deepEqual(store.list(), []);
+    assert.equal(store.get('to-delete'), null);
+    store.close();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('SQLite chat store adds project association to an existing database', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-chat-store-migration-'));
   const file = path.join(directory, 'conversations.sqlite');

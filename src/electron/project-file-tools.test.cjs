@@ -3,7 +3,22 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile } = require('./project-file-tools.cjs');
+const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
+
+test('creates missing project folders and rejects symlink folders', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-project-directory-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  const outsideRoot = path.join(tempRoot, 'outside');
+  await fs.mkdir(projectRoot);
+  await fs.mkdir(outsideRoot);
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const nested = await ensureProjectDirectory(projectRoot, path.join(projectRoot, 'src', 'components'));
+  assert.equal(nested, await fs.realpath(path.join(projectRoot, 'src', 'components')));
+  await fs.symlink(outsideRoot, path.join(projectRoot, 'linked'));
+  await assert.rejects(ensureProjectDirectory(projectRoot, path.join(projectRoot, 'linked', 'nested')), /enllaç/);
+  await assert.rejects(ensureProjectDirectory(projectRoot, path.join(tempRoot, 'outside', 'nested')), /surt del projecte/);
+});
 
 test('deletion saves a verified private backup before removing a project file', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-delete-test-'));

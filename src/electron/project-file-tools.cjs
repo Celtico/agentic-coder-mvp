@@ -6,6 +6,32 @@ function isWithin(root, target) {
   return target === root || target.startsWith(root + path.sep);
 }
 
+async function ensureProjectDirectory(projectRoot, targetDirectory) {
+  const root = await fs.realpath(projectRoot);
+  const relative = path.relative(path.resolve(projectRoot), path.resolve(targetDirectory));
+  if (path.isAbsolute(relative) || relative === '..' || relative.startsWith(`..${path.sep}`)) {
+    throw new Error('La carpeta de destinació surt del projecte.');
+  }
+
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    try {
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('El camí de destinació conté un enllaç o no és una carpeta.');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      try { await fs.mkdir(current); }
+      catch (mkdirError) { if (mkdirError.code !== 'EEXIST') throw mkdirError; }
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('El camí de destinació conté un enllaç o no és una carpeta.');
+    }
+    const resolved = await fs.realpath(current);
+    if (!isWithin(root, resolved)) throw new Error('La carpeta de destinació surt del projecte.');
+  }
+  return fs.realpath(current);
+}
+
 async function inspectFileForDeletion(projectRoot, relativePath) {
   if (typeof relativePath !== 'string' || !relativePath.trim() || relativePath.length > 500 || path.isAbsolute(relativePath)) {
     throw new Error('Ruta de fitxer no vàlida.');
@@ -45,7 +71,7 @@ async function deleteInspectedProjectFile(snapshot, backupPath, metadataPath) {
   if (isWithin(root, resolvedBackupPath)) throw new Error('La còpia de recuperació ha d’estar fora del projecte.');
 
   const current = await inspectFileForDeletion(root, relativePath);
-  if (current.target !== target || current.sha256 !== sha256) throw new Error('El fitxer ha canviat des de la confirmació; no s’ha eliminat.');
+  if (current.target !== target || current.sha256 !== sha256) throw new Error('El fitxer ha canviat durant la comprovació; no s’ha eliminat.');
   await fs.mkdir(path.dirname(resolvedBackupPath), { recursive: true, mode: 0o700 });
   await fs.copyFile(target, resolvedBackupPath, fs.constants.COPYFILE_EXCL);
   await fs.chmod(resolvedBackupPath, 0o600);
@@ -152,4 +178,4 @@ async function restoreDeletedProjectFile(projectRoot, backupRoot, backupId) {
   return { restored: true, path: record.path, backupPath };
 }
 
-module.exports = { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile };
+module.exports = { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory };
