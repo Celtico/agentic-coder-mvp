@@ -184,6 +184,9 @@ function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): 
     return { name: 'delegate_tasks', arguments: { tasks } };
   }
   if (action.name === 'write_file' && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= 500 && typeof args.content === 'string' && args.content.length <= 8000) return { name: 'write_file', arguments: { path: args.path, content: args.content } };
+  // A dev server never exits: run as a plain script it would hold the agent until the timeout.
+  // Models often pick run_project_script for it, so those scripts are started in the background instead.
+  if (action.name === 'run_project_script' && typeof args.script === 'string' && /^(dev|start|preview)$/.test(args.script)) return { name: 'start_project', arguments: { script: args.script } };
   if (action.name === 'run_project_script' && typeof args.script === 'string' && /^[a-zA-Z0-9:_-]{1,64}$/.test(args.script)) return { name: 'run_project_script', arguments: { script: args.script } };
   if (action.name === 'start_project' && typeof args.script === 'string' && /^(dev|start|preview)$/.test(args.script)) return { name: 'start_project', arguments: { script: args.script } };
   if (action.name === 'install_package' && typeof args.packageName === 'string' && args.packageName.length <= 214 && /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(args.packageName) && typeof args.dev === 'boolean') return { name: 'install_package', arguments: { packageName: args.packageName, dev: args.dev } };

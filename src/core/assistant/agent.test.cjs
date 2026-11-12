@@ -1171,3 +1171,26 @@ test('a larger model keeps the full instructions and every tool', async (t) => {
   assert.ok(seen[0].system.length > 8000);
   assert.ok(seen[0].tools > 10);
 });
+
+test('a dev server asked for as a plain script is started in the background instead', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-dev-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture","scripts":{"dev":"vite","lint":"eslint ."}}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"tool_call","name":"run_project_script","arguments":{"script":"dev"}}',
+    '{"type":"tool_call","name":"run_project_script","arguments":{"script":"lint"}}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift() ?? '{"type":"final","content":"Fet."}',
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Quin és l’estat del servidor i del lint?', tempRoot, async (tool) => {
+    calls.push(`${tool.name}:${tool.arguments?.script}`);
+    return tool.name === 'start_project' ? { started: true, url: 'http://localhost:5173' } : { code: 0, output: '' };
+  });
+  assert.deepEqual(calls, ['start_project:dev', 'run_project_script:lint']);
+});
