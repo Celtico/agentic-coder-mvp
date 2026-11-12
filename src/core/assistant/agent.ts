@@ -1046,6 +1046,8 @@ export class LocalCodingAgent {
           if (lines.length) browserAnswer += `\n\nBotons provats (cadascun en una càrrega nova de la pàgina):\n${lines.join('\n')}`;
           else if (looked.buttons.length === 0) browserAnswer += '\n\nA la pàgina no hi ha cap botó visible per provar.';
         }
+        // When the inspection closes a job that changed files, the answer says which ones first.
+        if (browserAnswer && appliedProjectFiles.size > 0) browserAnswer = `He canviat ${[...appliedProjectFiles].join(', ')} i he comprovat la pàgina.\n\n${browserAnswer}`;
         if (browserAnswer) { answer = browserAnswer; break; }
       }
       // The app looks at the started page itself; a blank or broken page sends the model back to work.
