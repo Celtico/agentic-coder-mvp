@@ -24,6 +24,7 @@ test('delegates independent subtasks sequentially through the shared local model
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  agent.allowDelegation = true;
   agent.historyDir = path.join(tempRoot, 'history');
   const answer = await agent.ask('Divideix aquesta revisió en dues tasques independents', tempRoot, async () => { throw new Error('read-only subtask should not call a project tool'); });
 
@@ -49,6 +50,7 @@ test('rejects duplicate delegated tasks before creating agents', async (t) => {
   ];
   const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift(), getModelStatus: () => ({ modelId: 'test-model' }) };
   const agent = new LocalCodingAgent({ engine });
+  agent.allowDelegation = true;
   agent.historyDir = path.join(tempRoot, 'history');
   const answer = await agent.ask('Divideix la revisió', tempRoot, async () => { throw new Error('invalid delegation must not execute'); });
   assert.match(answer, /No s’ha iniciat cap agent duplicat/);
@@ -1364,4 +1366,22 @@ test('AGENTS.md at the project root reaches the model as the user\'s instruction
   agent.historyDir = path.join(tempRoot, 'history');
   await agent.ask('Quin gestor de paquets fem servir?', tempRoot, async () => ({}));
   assert.match(system, /Instruccions de l’usuari per a aquest projecte \(fitxer AGENTS\.md\)[^\n]*\nFes servir sempre pnpm\./);
+});
+
+test('delegation is off unless switched on', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-no-delegation-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'AGENTS.md'), 'Aquest projecte és React amb Vite.');
+  let system = ''; let tools = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages, options) => { system = messages[0].content; tools = options.tools || []; return '{"type":"final","content":"Hola."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('Quin és l’estat del projecte?', tempRoot, async () => ({}));
+  assert.ok(tools.every((tool) => tool.function.name !== 'delegate_tasks'));
+  assert.match(system, /delegate_tasks no està disponible/);
+  assert.match(system, /BUIDA de codi/);
 });

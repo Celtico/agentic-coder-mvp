@@ -424,6 +424,8 @@ export class LocalCodingAgent {
   private readonly verifiedExperiencesPath?: string;
   private readonly experienceRanker: ExperienceRanker;
   private experienceEmbeddingsUnavailable = false;
+  /** Splitting a job among copies of the same local model: off unless switched on (AGENT_DELEGATION=1). */
+  allowDelegation = process.env.AGENT_DELEGATION === '1';
 
   constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'mlx' ? new MlxInferenceEngine() : new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
@@ -442,6 +444,7 @@ export class LocalCodingAgent {
 
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean } = {}): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
+    if (options.allowDelegation === undefined) options = { ...options, allowDelegation: this.allowDelegation };
     const directInspection = explicitLocalInspectionRequest(prompt);
     if (directInspection) {
       const inspectionUrl = directInspection.name === 'inspect_browser' ? directInspection.arguments.url : '';
@@ -521,8 +524,9 @@ export class LocalCodingAgent {
     // Without this the model tends to assume a project already exists and looks for a way to start it.
     const manifestFiles = context.manifest.split('\n').filter((line) => line && !line.endsWith('/') && !line.startsWith('…'));
     const hasEntry = manifestFiles.some((file) => /^(?:index\.html|(?:src\/)?(?:index|main|app)\.(?:tsx?|jsx?|mjs|cjs|py|php|go|rs))$/i.test(file.split(path.sep).join('/')));
-    const projectState = manifestFiles.length === 0
-      ? 'Estat de la carpeta: és BUIDA. No hi ha cap projecte encara. Si l’usuari demana fer, muntar, iniciar o començar alguna cosa (per exemple «un start amb Vite»), vol dir crear el projecte des de zero: primer escriu els fitxers (package.json, index.html, el codi) amb write_file, després instal·la el que calgui i només al final arrenca’l. No intentis arrencar ni llegir res que no existeix.'
+    const codeFiles = manifestFiles.filter((file) => !/\.(?:md|txt)$/i.test(file));
+    const projectState = codeFiles.length === 0
+      ? 'Estat de la carpeta: és BUIDA de codi (com a molt hi ha notes o el fitxer d’instruccions). No hi ha cap projecte encara, encara que les instruccions en parlin: no hi ha cap «fitxer principal» per actualitzar. Si l’usuari demana fer, muntar, iniciar o començar alguna cosa (per exemple «un start amb Vite»), vol dir crear el projecte des de zero: primer escriu els fitxers (package.json, index.html, el codi) amb write_file, després instal·la el que calgui i només al final arrenca’l. No intentis arrencar ni llegir res que no existeix.'
       : !hasEntry
         ? `Estat de la carpeta: hi ha ${manifestFiles.length} fitxers però cap punt d’entrada (no hi ha index.html ni src/main ni src/index). El projecte està a mig crear: escriu els fitxers que falten amb write_file abans d’arrencar-lo o de fer cap comprovació.`
         : `Estat de la carpeta: ja hi ha un projecte amb ${manifestFiles.length} fitxers. Llegeix el que calgui abans de canviar-lo.`;
@@ -640,9 +644,9 @@ export class LocalCodingAgent {
     const missingWork = () => requestedProjectCreation && !hasApplicationEntry()
       ? changeApplied
         ? 'El manifest o la configuració no són una aplicació acabada. Encara falta un punt d’entrada real de la interfície. Crea la pàgina principal de l’app amb write_file i continua amb les comprovacions i l’obertura al navegador.'
-        : `Encara no has escrit cap fitxer. La carpeta real del projecte és ${path.resolve(projectRoot)} i tens les eines write_file i list_files disponibles. No diguis que no hi tens accés si cap eina no ha retornat un error. Per crear aquesta app, usa write_file per crear o actualitzar els fitxers que calguin dins del projecte; comença pel manifest i l’entrada de l’app. No donis instruccions de terminal ni repeteixis el pla.`
+        : `Encara no has escrit cap fitxer. La carpeta real del projecte és ${path.resolve(projectRoot)} i tens les eines write_file i list_files disponibles. No diguis que no hi tens accés si cap eina no ha retornat un error. Per crear aquesta app, usa write_file per crear o actualitzar els fitxers que calguin dins del projecte; comença pel manifest i l’entrada de l’app. No donis instruccions de terminal ni repeteixis el pla. Respon ara només amb una crida d’eina en JSON, sense text al voltant ni llistes de passos, per exemple: {"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<!doctype html>..."}}. No deleguis ni tornis a escriure el pla.`
       : requestedCodeChange && !changeApplied
-        ? 'Encara no has aplicat cap canvi al codi. La carpeta seleccionada és accessible amb write_file. No afirmis que no hi tens accés sense un error real de l’eina. Llegeix el fitxer rellevant amb read_file i aplica el canvi amb write_file.'
+        ? 'Encara no has aplicat cap canvi al codi. La carpeta seleccionada és accessible amb write_file. No afirmis que no hi tens accés sense un error real de l’eina. Si el fitxer existeix, llegeix-lo amb read_file; si encara no existeix, crea’l amb write_file. Respon ara només amb una crida d’eina en JSON, sense text al voltant ni llistes de passos, per exemple: {"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<!doctype html>..."}}. No deleguis ni tornis a escriure el pla.'
         : requestedValidation && changeApplied && !checkPassed
         ? 'El canvi encara no està validat. No acabis amb un resum: executa la prova o comprovació pertinent i corregeix qualsevol fallada.'
         : null;
