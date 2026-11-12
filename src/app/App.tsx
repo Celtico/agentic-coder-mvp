@@ -189,6 +189,8 @@ export function App(): React.JSX.Element {
   // the place of the browser or of each other.
   const [gitOpen, setGitOpen] = useState(false);
   const [learningOpen, setLearningOpen] = useState(false);
+  // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
+  const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
   const [terminalResizing, setTerminalResizing] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(() => {
     const stored = Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
@@ -1155,12 +1157,15 @@ export function App(): React.JSX.Element {
     learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
+  const dockKey = dockItems.map((item) => item.id).join('+');
+  const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
+  const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
     <Flex flex="none" minH="0" minW="0" position="relative" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px` }}>
       <Center position="absolute" top="-5px" left="0" right="0" h="10px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}><Box w="32px" h="2px" rounded="full" bg="border"/></Center>
       {dockItems.length === 1 ? dockItems[0].node : (
-        // Remounted when the set of open panes changes, so the widths start even again.
-        <Splitter.Root key={dockItems.map((item) => item.id).join('+')} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockItems.map((item) => ({ id: item.id, minSize: 12 }))} defaultSize={dockItems.map(() => 100 / dockItems.length)}>
+        // One splitter per arrangement of open panes; each arrangement remembers its own widths.
+        <Splitter.Root key={dockKey} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockPanels} size={paneSizes[dockKey] ?? dockEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [dockKey]: details.size }))}>
           {dockItems.map((item, index) => <React.Fragment key={item.id}>
             {index > 0 && <SplitterHandle id={`${dockItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
             <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
@@ -1182,8 +1187,11 @@ export function App(): React.JSX.Element {
     editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge colorPalette="agentic">Revisa abans de desar</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
+  const sideKey = sideItems.map((item) => item.id).join('+');
+  const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
+  const sideEven = useMemo(() => sidePanels.map(() => 100 / Math.max(1, sidePanels.length)), [sidePanels]);
   const workspacePane = sideItems.length === 0 ? null : sideItems.length === 1 ? sideItems[0].node : (
-    <Splitter.Root key={sideItems.map((item) => item.id).join('+')} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={sideItems.map((item) => ({ id: item.id, minSize: 15 }))} defaultSize={sideItems.map(() => 100 / sideItems.length)}>
+    <Splitter.Root key={sideKey} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={sidePanels} size={paneSizes[sideKey] ?? sideEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [sideKey]: details.size }))}>
       {sideItems.map((item, index) => <React.Fragment key={item.id}>
         {index > 0 && <SplitterHandle id={`${sideItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
         <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
