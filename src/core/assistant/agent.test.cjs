@@ -1126,3 +1126,48 @@ test('does not repeat an identical browser inspection and asks for a final answe
   assert.equal(calls.length, 1);
   assert.match(answer, /HTTP 200/);
 });
+
+test('a small model gets short instructions, few tools and a small slice of the project', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-compact-test-'));
+  await fs.writeFile(path.join(tempRoot, 'notes.md'), 'x'.repeat(9000));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  const seen = [];
+  const responses = [
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<h1>Hola</h1>"}}',
+    '{"type":"final","content":"He creat index.html."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages, options) => { seen.push({ system: messages[0].content, tools: options.tools.map((tool) => tool.function.name) }); return responses.shift() ?? '{"type":"final","content":"He creat index.html."}'; },
+    getModelStatus: () => ({ modelId: 'onnx-community/Qwen2.5-Coder-1.5B-Instruct' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const written = [];
+  const answer = await agent.ask('Crea un index.html amb un títol', tempRoot, async (tool) => {
+    if (tool.name === 'write_file') { written.push(tool.arguments.path); return { applied: true, path: tool.arguments.path }; }
+    return {};
+  });
+
+  assert.deepEqual(written, ['index.html']);
+  assert.match(answer, /index\.html/);
+  assert.ok(seen[0].system.length < 7000, `compact instructions are ${seen[0].system.length} characters`);
+  assert.deepEqual([...seen[0].tools].sort(), ['install_package', 'list_files', 'read_file', 'run_project_script', 'start_project', 'write_file']);
+});
+
+test('a larger model keeps the full instructions and every tool', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-full-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const seen = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages, options) => { seen.push({ system: messages[0].content, tools: options.tools.length }); return '{"type":"final","content":"Hola."}'; },
+    getModelStatus: () => ({ modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('hola', tempRoot, async () => ({}));
+  assert.ok(seen[0].system.length > 8000);
+  assert.ok(seen[0].tools > 10);
+});

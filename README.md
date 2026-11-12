@@ -46,7 +46,7 @@ Per executar l’avaluació sintètica de recuperació semàntica sense llegir d
 Tota la resta (inferència, converses, historial de fitxers, casos verificats) es queda en local.
 
 ## Limitacions conscients del MVP
-- El model 1.5B és petit: serveix per validar la integració, però no s'ha d'esperar la qualitat d'un model de programació gran.
+- El model 1.5B és petit: serveix per validar la integració, però no s'ha d'esperar la qualitat d'un model de programació gran. Per això rep un mode reduït: instruccions curtes, sis eines (llistar, llegir i escriure fitxers, executar scripts, iniciar el projecte i instal·lar paquets) i només uns 4 KB del projecte, i executa les eines directament sense pas de planificació. Els models més grans (7B) reben les instruccions completes i totes les eines. Es pot forçar amb `AGENT_COMPACT=1` o `AGENT_COMPACT=0`.
 - El model s'executa a través del backend ONNX de Transformers.js; l'acceleració GPU en Electron/Node pot variar segons el backend i la configuració.
 - La interfície permet obrir fitxers des d’un arbre de carpetes, editar-los i revisar el contingut abans de desar. El desat requereix confirmació explícita i crea una versió a l’historial local de l’aplicació; el panell compara versions i permet restaurar-les amb confirmació. Això val per a l’edició manual. Quan l’agent fa servir les seves eines, els canvis de fitxers s’apliquen directament i en queda una còpia recuperable.
 - L'execució de tests és una acció explícita de l'usuari.
