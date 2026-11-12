@@ -926,7 +926,7 @@ export function App(): React.JSX.Element {
     let latest = startHeight;
     setTerminalResizing(true);
     const move = (moveEvent: PointerEvent) => {
-      latest = Math.max(30, Math.min(window.innerHeight - 180, startHeight + (startY - moveEvent.clientY)));
+      latest = Math.max(30, Math.min(window.innerHeight - 440, startHeight + (startY - moveEvent.clientY)));
       setTerminalHeight(latest);
     };
     const up = () => {
@@ -974,12 +974,12 @@ export function App(): React.JSX.Element {
         })}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
       </Box>
-      <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="4">
+      <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
         <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.400' : 'border'} borderRadius="22px" p="3" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="surface.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
           {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar a Qwen.</Text>}
-          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="64px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
+          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="44px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
           <Flex mt="2" align="center" justify="space-between" gap="3">
             <Box/>
             {loading
@@ -987,20 +987,20 @@ export function App(): React.JSX.Element {
               : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
           </Flex>
         </Box>
-        <Text fontSize="xs" color="fg.muted" textAlign="center" mt="2">Arrossega fitxers de text o codi aquí · Qwen cercarà a Internet quan li calgui · Revisa les respostes abans d’aplicar-les.</Text>
+        <Text fontSize="xs" color="fg.muted" textAlign="center" mt="1.5" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title="Arrossega fitxers de text o codi aquí · Qwen cercarà a Internet quan li calgui · Revisa les respostes abans d’aplicar-les.">Arrossega fitxers de text o codi aquí · Revisa les respostes abans d’aplicar-les.</Text>
       </Box>
     </Flex>
   );
 
   const browserPane = (
     <Flex h="full" w="full" minW="0" direction="column" bg="bg">
-      <Flex gap="1.5" align="center" p="2" borderBottomWidth="1px" borderColor="border" flexWrap="wrap">
+      <Flex gap="1" align="center" p="2" borderBottomWidth="1px" borderColor="border" minW="0">
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
         <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
-        <Input flex="1" minW="110px" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
+        <Input flex="1" minW="0" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
         <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
-        <Button size="sm" variant="outline" onClick={usePageContext} disabled={browserUrl === 'about:blank'}>Afegeix pàgina al xat</Button>
+        <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" size="sm" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
@@ -1025,8 +1025,8 @@ export function App(): React.JSX.Element {
   );
 
   const editorPane = (
-    <Flex h="full" minH="0" direction="column" p="4" bg="bg">
-      <Flex align="center" justify="space-between" gap="2" mb="3"><Text fontSize="xs" color="fg.muted">Revisa els canvis abans de desar. Si el projecte està sota Git, pots guardar-los amb un commit.</Text><Button size="sm" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></Flex>
+    <Flex h="full" minH="0" minW="0" direction="column" p="3" bg="bg">
+      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0"><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={editingPath ?? undefined}>{editingPath}</Text><Button size="xs" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></Flex>
       <Box flex="1" minH="0" overflow="hidden" borderWidth="1px" borderColor="border" borderRadius="md">
         <Editor
           height="100%"
@@ -1045,7 +1045,7 @@ export function App(): React.JSX.Element {
         />
       </Box>
       <Text color="yellow.200" mt="2">{editorStatus}</Text>
-      <HStack justify="flex-end" mt="3"><Button size="sm" variant="outline" onClick={() => { setEditingPath(null); setEditorOpen(false); }}>Cancel·la</Button><Button size="sm" colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
+      <HStack justify="flex-end" mt="3" flexWrap="wrap"><Button size="sm" variant="outline" onClick={() => { setEditingPath(null); setEditorOpen(false); }}>Cancel·la</Button><Button size="sm" colorPalette="agentic" onClick={saveEdit} disabled={editorBusy}>{editorBusy ? <Spinner size="sm"/> : <Check size={16}/>}Desa el canvi</Button></HStack>
     </Flex>
   );
 
@@ -1161,7 +1161,7 @@ export function App(): React.JSX.Element {
   const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
   const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
-    <Flex flex="none" minH="0" minW="0" position="relative" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px` }}>
+    <Flex flex="none" minH="0" minW="0" position="relative" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 440px)' }}>
       <Center position="absolute" top="-5px" left="0" right="0" h="10px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}><Box w="32px" h="2px" rounded="full" bg="border"/></Center>
       {dockItems.length === 1 ? dockItems[0].node : (
         // One splitter per arrangement of open panes; each arrangement remembers its own widths.
@@ -1177,14 +1177,14 @@ export function App(): React.JSX.Element {
   const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderLeftWidth="1px" borderColor="border">
       <Flex h="58px" flex="none" align="center" justify="space-between" px="3.5" borderBottomWidth="1px" borderColor="border">
-        <HStack gap="2" minW="0" overflow="hidden"><Text fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge}</HStack>
+        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
         <IconButton icon={X} label={closeLabel} onClick={onClose}/>
       </Flex>
       <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge colorPalette="agentic">Revisa abans de desar</Badge>) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Edita fitxer', 'Tanca l’editor', () => { setEditorOpen(false); setEditingPath(null); }, editorPane, <Badge colorPalette="agentic" maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Revisa abans de desar</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
