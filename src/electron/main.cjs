@@ -11,11 +11,49 @@ const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
-const { searchWeb, readWebPage } = require('./web-search.cjs');
+const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
+/**
+ * Reads a public page with the browser the app already carries: it opens the address in a hidden,
+ * sandboxed window, lets its scripts run and takes the text a person would see. Pages that build
+ * their content with JavaScript come back empty from a plain download; here they do not. If the
+ * window cannot load the page, the plain download is the fallback.
+ */
+async function readRenderedWebPage(address) {
+  const url = publicWebUrl(address);
+  let reader;
+  try {
+    reader = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'web-page-reader', javascript: true } });
+    reader.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    reader.webContents.session.on('will-download', (event) => event.preventDefault());
+    reader.webContents.setAudioMuted(true);
+    await Promise.race([
+      reader.webContents.loadURL(url.href),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('la pàgina no ha carregat en 15 s')), 15000)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const info = await reader.webContents.executeJavaScript(`(() => {
+      const main = document.querySelector('main, article, [role=main]') || document.body;
+      const clone = main.cloneNode(true);
+      clone.querySelectorAll('script,style,noscript,svg,nav,footer,header,form,iframe,aside').forEach((node) => node.remove());
+      document.body.appendChild(clone); clone.style.position = 'absolute'; clone.style.left = '-99999px';
+      const text = (clone.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim();
+      clone.remove();
+      return { title: document.title, text };
+    })()`, true);
+    const text = String(info.text || '');
+    if (text.length < 80) throw new Error('la pàgina renderitzada gairebé no té text');
+    return { url: url.href, title: String(info.title || '').slice(0, 300), text: text.slice(0, 9000), truncated: text.length > 9000, rendered: true };
+  } catch {
+    return readWebPage(url.href);
+  } finally {
+    if (reader && !reader.isDestroyed()) reader.destroy();
+  }
+}
+
 /** MCP servers started in this session, by project folder and server name. */
 const mcpConnections = new Map();
 function stopMcpServers() { for (const connection of mcpConnections.values()) connection.stop(); mcpConnections.clear(); }
@@ -173,7 +211,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (!query || query.length > 200 || /[\r\n\0]/.test(query)) throw new Error('La consulta de cerca no és vàlida.');
     return searchWeb(query);
   }
-  if (tool.name === 'read_web_page' && typeof tool.arguments?.url === 'string') return readWebPage(tool.arguments.url);
+  if (tool.name === 'read_web_page' && typeof tool.arguments?.url === 'string') return readRenderedWebPage(tool.arguments.url);
   if (tool.name === 'list_mcp_tools') {
     const servers = [];
     for (const name of Object.keys(await readMcpConfig(root))) {
