@@ -1195,10 +1195,12 @@ export function App(): React.JSX.Element {
     <>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="bg">
     <Grid flex="1" minH="0" w="full" minW="0" templateColumns="64px minmax(0, 1fr)" overflow="hidden" bg="bg">
-        <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" direction="column" align="center" gap="2">
+        <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="2" pb="2" direction="column" align="center" gap="2">
           <Flex h="58px" w="full" flex="none" align="center" justify="center" borderBottomWidth="1px" borderColor="border" fontSize="2xl" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="44px" h="44px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={workspacePanel === 'browser' ? 'Tanca el navegador' : 'Obre el navegador'} w="44px" h="44px" variant={workspacePanel === 'browser' ? 'subtle' : 'ghost'} colorPalette={workspacePanel === 'browser' ? 'agentic' : 'gray'} onClick={() => setWorkspacePanel((current) => current === 'browser' ? null : 'browser')}/>
+          {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
+          <Box flex="1" minH="2"/>
           <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="44px" h="44px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
           <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="44px" h="44px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="44px" h="44px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
