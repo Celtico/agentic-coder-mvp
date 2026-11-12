@@ -582,7 +582,10 @@ export function App(): React.JSX.Element {
       const history = messages.slice(-100).map((message) => ({ role: message.role, content: message.text }));
       const answer = await window.agentic.ask({ prompt: request, history });
       const latestMessages = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current.messages : pendingMessages;
-      persistMessages([...latestMessages, { role: 'assistant', text: answer }], requestSessionId, project.path);
+      // The plan is already on screen as its own message; the answer does not repeat it.
+      const planShown = latestMessages.some((message) => message.role === 'assistant' && message.text.startsWith('Pla abans de començar:\n'));
+      const finalText = planShown ? answer.replace(/^Pla: [^\n]*\n\n(?=\S)/, '') : answer;
+      persistMessages([...latestMessages, { role: 'assistant', text: finalText }], requestSessionId, project.path);
     } catch (error) {
       const message = errorText(error);
       const cancelled = message.includes('Generació cancel·lada.');
@@ -968,7 +971,7 @@ export function App(): React.JSX.Element {
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode="dark" style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
-            {previousUser && !message.error && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { setVerifiedEvidence(''); setVerifiedExperienceDraft({ prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
+            {previousUser && !message.error && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { setVerifiedEvidence(''); setVerifiedExperienceDraft({ prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
