@@ -9,3 +9,4 @@ src/app.bundle.css
 src/core/assistant/agent-runtime.cjs
 models/
 *.before-*
+logs/

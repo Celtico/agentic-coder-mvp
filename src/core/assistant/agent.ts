@@ -75,6 +75,20 @@ export function isSmallModel(modelId: string): boolean {
   return size ? Number(size[1]) <= 3 : false;
 }
 
+/**
+ * What the model actually answered at each step, for working out why a task was not completed. Local
+ * only: written under the app's own logs/ folder (ignored by Git), or wherever AGENT_TURN_LOG points;
+ * AGENT_TURN_LOG=off disables it.
+ */
+const TURN_LOG = process.env.AGENT_TURN_LOG === 'off' ? null : process.env.AGENT_TURN_LOG || path.resolve(__dirname, '../../../logs/agent-turns.jsonl');
+async function logTurn(entry: Record<string, unknown>): Promise<void> {
+  if (!TURN_LOG || process.env.NODE_TEST_CONTEXT) return;
+  try {
+    await fs.mkdir(path.dirname(TURN_LOG), { recursive: true });
+    await fs.appendFile(TURN_LOG, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n');
+  } catch { /* a log that cannot be written must not break the task */ }
+}
+
 function parseAction(raw: string): AgentAction | null {
   const parseCandidate = (candidate: string): AgentAction | null => {
     try {
@@ -584,8 +598,10 @@ export class LocalCodingAgent {
       const availableTools = compact
         ? agentToolDefinitions.filter((item) => COMPACT_TOOL_NAMES.has(item.function.name))
         : options.allowDelegation === false ? agentToolDefinitions.filter((item) => item.function.name !== 'delegate_tasks') : agentToolDefinitions;
+      const startedAt = Date.now();
       const raw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false, tools: availableTools });
       const action = parseAction(raw);
+      await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed' });
       if (!action) {
         if (requestedCodeChange && !planPublished && /\b(?:pla|passos|pass|primer|abans de|per completar|plan|steps|first|to complete)\b/i.test(raw)) {
           planPublished = true;
