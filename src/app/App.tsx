@@ -1135,7 +1135,7 @@ export function App(): React.JSX.Element {
   const editorPane = (
     <Flex h="full" minH="0" minW="0" direction="column" p="3" bg="bg">
       <Flex align="center" justify="space-between" gap="2" mb="3" minW="0"><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={editingPath ?? undefined}>{editingPath}</Text><HStack flex="none" gap="1"><IconButton icon={Check} label={editorContent === editorOriginal ? 'Sense canvis per desar' : 'Desa (⌘S)'} size="xs" variant={editorContent === editorOriginal ? 'ghost' : 'subtle'} colorPalette={editorContent === editorOriginal ? 'gray' : 'agentic'} disabled={editorBusy || editorContent === editorOriginal} onClick={() => void saveEdit()}/><Button size="xs" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></HStack></Flex>
-      <Box flex="1" minH="0" overflow="hidden" borderWidth="1px" borderColor="border" borderRadius="md" onKeyDownCapture={(event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void saveEdit(); } }}>
+      <Box flex="1" minH="0" overflow="hidden" onKeyDownCapture={(event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void saveEdit(); } }}>
         <Editor
           height="100%"
           width="100%"
@@ -1216,10 +1216,8 @@ export function App(): React.JSX.Element {
 
   const learningPane = (
     <Flex h="full" minH="0" direction="column" p="3" bg="bg" gap="3" overflowY="auto" css={{ '& > *': { flexShrink: 0 } }}>
-      <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : datasetPreview ? <>
-          <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : `Encara no n’hi ha prou per entrenar: en tens ${datasetPreview.counts.included} de 30. Continua desant els que surtin bé.`}</Notice>
           <Box>
             <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos</Text>
             <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
@@ -1245,8 +1243,10 @@ export function App(): React.JSX.Element {
             </Button>
             <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Preparar dades no entrena el model, i des d’aquí no se’n pot activar cap.</Text>
           </HStack>
+            <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : `Encara no n’hi ha prou per entrenar: en tens ${datasetPreview.counts.included} de 30. Continua desant els que surtin bé.`}</Notice>
         </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
+      <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
     </Flex>
   );
 
