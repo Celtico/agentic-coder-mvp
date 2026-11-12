@@ -9,7 +9,7 @@ test('page actions are validated before they reach the page', () => {
     { type: 'assertText', text: 'Count: 1' },
   ]);
   assert.equal(actions.length, 3);
-  assert.match(pageActionsScript(actions), /"Count: 1"\]\)$/);
+  assert.match(pageActionsScript(actions), /"Count: 1"\}\]\)$/);
   assert.throws(() => checkedActions([{ type: 'click', target: { by: 'css', value: 'button' } }]), /no és vàlid/);
   assert.throws(() => checkedActions([{ type: 'click', target: { by: 'role', role: 'document', value: '' } }]), /rol/);
   assert.throws(() => checkedActions([{ type: 'eval', target: { by: 'text', value: 'x' } }]), /no és admès/);
