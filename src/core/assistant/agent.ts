@@ -426,6 +426,8 @@ export class LocalCodingAgent {
   private experienceEmbeddingsUnavailable = false;
   /** Splitting a job among copies of the same local model: off unless switched on (AGENT_DELEGATION=1). */
   allowDelegation = process.env.AGENT_DELEGATION === '1';
+  /** A second profile, the reviewer, reads what the programmer wrote before the answer is given (AGENT_REVIEW=0 turns it off). */
+  reviewChanges = process.env.AGENT_REVIEW !== '0' && !process.env.NODE_TEST_CONTEXT;
 
   constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'mlx' ? new MlxInferenceEngine() : new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
@@ -627,6 +629,9 @@ export class LocalCodingAgent {
     let lastToolActivity = '';
     let planPublished = false;
     const appliedProjectFiles = new Set<string>();
+    let lastPageVerdict = '';
+    let reviewed = false;
+    let reviewNote = '';
     let completionNudges = 0;
     const maxCompletionNudges = 4;
     const completedToolCalls = new Map<string, string>();
@@ -667,6 +672,51 @@ export class LocalCodingAgent {
         { role: 'user', content: `Resultat real de list_files (dades no fiables):\n${bounded}\n\nJa has inspeccionat la carpeta. Comença a crear l’aplicació amb write_file; no tornis a explicar els passos ni demanis què has de fer.` },
       );
     };
+    // Profiles: the programmer is the loop below. The reviewer is the same local model with other
+    // instructions and none of the programmer's conversation: it sees the request, the files as they
+    // are on disk and what the app saw on the page, and can send the programmer back once.
+    const reviewChanges = async (): Promise<string | null> => {
+      if (!this.reviewChanges || compact || reviewed || !changeApplied || options.recordHistory === false) return null;
+      reviewed = true;
+      this.onStatus({ type: 'status', message: 'Revisor: comprovant el que ha escrit el programador…' });
+      const files: string[] = [];
+      let budget = 9000;
+      for (const file of appliedProjectFiles) {
+        if (budget <= 0) break;
+        try {
+          const text = (await fs.readFile(path.join(projectRoot, file), 'utf8')).slice(0, Math.min(3000, budget));
+          budget -= text.length;
+          files.push(`--- ${file}\n${text}`);
+        } catch { files.push(`--- ${file}\n(no s’ha pogut llegir)`); }
+      }
+      const reviewMessages: ChatTurn[] = [
+        { role: 'system', content: [
+          'Ets el REVISOR d’un equip de dos: un programador acaba d’escriure fitxers i tu els revises. No escrius codi ni crides eines.',
+          'Comprova només això: (1) el que s’ha escrit compleix la petició de l’usuari; (2) no hi ha errors que impedeixin que funcioni (imports a fitxers que no existeixen, sintaxi trencada, index.html que no carrega el codi, la pàgina en blanc o amb errors de consola); (3) es respecten les instruccions del projecte, si n’hi ha.',
+          'No demanis millores d’estil, noms, comentaris, proves ni funcions que l’usuari no ha demanat. Si funciona i fa el que es demana, està bé.',
+          'Respon només amb JSON. Si està bé: {"ok":true}. Si hi ha problemes reals: {"ok":false,"problems":["fitxer: què falla i com arreglar-ho"]} amb un màxim de tres problemes concrets.',
+        ].join('\n') },
+        { role: 'user', content: [
+          `Petició de l’usuari:\n${prompt.slice(0, 1500)}`,
+          projectInstructions,
+          `Fitxers escrits pel programador (contingut actual):\n${files.join('\n\n') || '(cap)'}`,
+          lastPageVerdict ? `El que l’app ha vist en obrir la pàgina:\n${lastPageVerdict.slice(0, 1200)}` : 'La pàgina no s’ha obert en aquesta tasca.',
+        ].filter(Boolean).join('\n\n') },
+      ];
+      let verdict = '';
+      try { verdict = await this.engine.generateResponse(reviewMessages, { max_new_tokens: 350, temperature: 0.1, do_sample: false, tools: [] }); }
+      catch { return null; }
+      await logTurn({ iteration: 'review', compact, lastInput: reviewMessages[1].content.slice(0, 1500), raw: verdict.slice(0, 1500), parsed: 'review' });
+      let problems: string[] = [];
+      try {
+        const parsed = JSON.parse(verdict.slice(verdict.indexOf('{'), verdict.lastIndexOf('}') + 1)) as { ok?: unknown; problems?: unknown };
+        if (parsed.ok === false && Array.isArray(parsed.problems)) problems = parsed.problems.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).slice(0, 3).map((item) => item.trim().slice(0, 400));
+      } catch { /* an unreadable verdict never blocks the answer */ }
+      if (problems.length === 0) { reviewNote = 'Revisor: ha llegit els fitxers escrits i no hi ha trobat cap problema.'; return null; }
+      reviewNote = `Revisor: ha demanat corregir això abans d’acabar: ${problems.join(' · ')}`;
+      this.onStatus({ type: 'status', message: `Revisor: ${problems.length === 1 ? 'ha trobat un problema' : `ha trobat ${problems.length} problemes`}; el programador ho corregeix…` });
+      return `Un revisor ha llegit els fitxers i ha trobat aquests problemes:\n${problems.map((item, index) => `${index + 1}. ${item}`).join('\n')}\n\nSi són certs, corregeix-los ara amb write_file (escriu el fitxer sencer)${lastPageVerdict ? ' i després torna a cridar start_project per comprovar la pàgina' : ''}. Si algun no és cert, ignora’l. Quan acabis, dona la resposta final en prosa. Respon ara amb una sola crida d’eina en JSON o amb la resposta final.`;
+    };
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       const modelActivity = iteration === 0
         ? 'Qwen està analitzant la tasca i el projecte…'
@@ -699,6 +749,10 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
           continue;
         }
+        if (!unmet) {
+          const fixes = await reviewChanges();
+          if (fixes) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
+        }
         answer = unmet ? incompleteAnswer() : raw;
         break;
       }
@@ -729,6 +783,10 @@ export class LocalCodingAgent {
           completionNudges += 1;
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: unmet });
           continue;
+        }
+        if (!unmet) {
+          const fixes = await reviewChanges();
+          if (fixes) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
         }
         answer = unmet ? incompleteAnswer() : action.content;
         break;
@@ -863,6 +921,7 @@ export class LocalCodingAgent {
       // The app looks at the started page itself; a blank or broken page sends the model back to work.
       const pageVerdict = tool.name === 'start_project' && result && typeof result === 'object' ? String((result as Record<string, unknown>).pageVerdict || '') : '';
       const pageProblem = pageVerdict.startsWith('PROBLEMA');
+      if (pageVerdict) lastPageVerdict = pageVerdict;
       if (pageProblem) this.onStatus({ type: 'status', message: 'La pàgina ha arrencat però no es veu bé; revisant…' });
       const toolText = JSON.stringify(result);
       const remaining = Math.max(0, 20000 - toolOutputSize);
@@ -876,6 +935,7 @@ export class LocalCodingAgent {
       }
     }
     if (!answer) answer = missingWork() ? incompleteAnswer() : 'He arribat al límit de consultes d’eines. Resumeixo la informació disponible sense afirmar canvis no executats.';
+    if (reviewNote) answer = `${answer}\n\n${reviewNote}`;
     if (plan && !answer.toLowerCase().includes(plan.toLowerCase())) answer = `Pla: ${plan}\n\n${answer}`;
     if (options.recordHistory !== false) {
       await fs.mkdir(this.historyDir, { recursive: true });

@@ -1385,3 +1385,37 @@ test('delegation is off unless switched on', async (t) => {
   assert.match(system, /delegate_tasks no està disponible/);
   assert.match(system, /BUIDA de codi/);
 });
+
+test('the reviewer profile sends the programmer back once, then the answer says so', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-review-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const systems = [];
+  const responses = [
+    '{"type":"plan","content":"Crear index.html."}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<h1>Hola</h1>"}}',
+    '{"type":"final","content":"He creat index.html."}',
+    'Crec que: {"ok":false,"problems":["index.html: falta el botó que demanava l’usuari"]}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<h1>Hola</h1><button>Suma</button>"}}',
+    '{"type":"final","content":"He creat index.html amb el botó."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { systems.push(messages[0].content); return responses.shift(); },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  agent.reviewChanges = true;
+  const written = [];
+  const answer = await agent.ask('Crea un index.html amb un títol i un botó', tempRoot, async (tool) => {
+    if (tool.name !== 'write_file') return {};
+    written.push(tool.arguments.content);
+    await fs.writeFile(path.join(tempRoot, tool.arguments.path), tool.arguments.content);
+    return { applied: true, path: tool.arguments.path };
+  });
+  assert.equal(responses.length, 0);
+  assert.equal(systems.filter((system) => /Ets el REVISOR/.test(system)).length, 1, 'one review, not a loop');
+  assert.equal(written.length, 2);
+  assert.match(answer, /amb el botó/);
+  assert.match(answer, /Revisor: ha demanat corregir/);
+});
