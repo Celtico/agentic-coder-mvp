@@ -251,7 +251,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     const stat = await fs.stat(resolved);
     if (!stat.isFile() || stat.size > 1_000_000) throw new Error('Fitxer no vàlid o massa gran (límit 1 MB).');
     const content = await fs.readFile(resolved, 'utf8');
-    return { path: relativePath, content: content.slice(0, 12000), truncated: content.length > 12000 };
+    return { path: relativePath, content: content.slice(0, 24000), truncated: content.length > 24000 };
   }
   if (tool.name === 'search_text' && typeof tool.arguments?.query === 'string' && tool.arguments.query.trim() && tool.arguments.query.length <= 200) {
     const query = tool.arguments.query.trim().toLowerCase();
@@ -297,7 +297,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     const parts = relativePath.split(/[\\/]/);
     const hiddenFolder = parts.slice(0, -1).some((part) => part.startsWith('.'));
     const hiddenFile = parts[parts.length - 1].startsWith('.') && !/^\.(?:gitignore|gitattributes|editorconfig|dockerignore|npmrc|nvmrc|prettierignore|eslintignore|env\.example|(?:prettierrc|eslintrc)(?:\.(?:json|js|cjs|yml|yaml))?)$/.test(parts[parts.length - 1]);
-    if (relativePath.length > 500 || content.length > 8000 || path.isAbsolute(relativePath) || hiddenFolder || hiddenFile) {
+    if (relativePath.length > 500 || content.length > 24000 || path.isAbsolute(relativePath) || hiddenFolder || hiddenFile) {
       throw new Error('El camí o el contingut no es pot revisar de manera segura. Usa el panell editor per a fitxers més grans.');
     }
     const target = safeProjectPath(root, relativePath);
@@ -310,7 +310,7 @@ async function dispatchAgentTool(tool, projectRoot) {
       existing = { path: await fs.realpath(target), content: await fs.readFile(target, 'utf8') };
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (existing && !isWithin(root, existing.path)) throw new Error('La ruta resolta surt de la carpeta del projecte.');
-    if (existing && existing.content.length > 8000) throw new Error('El fitxer és massa llarg per modificar-lo amb seguretat des de l’eina ràpida. Obre’l a l’editor per revisar-lo.');
+    if (existing && existing.content.length > 24000) throw new Error('El fitxer és massa llarg per modificar-lo amb seguretat des de l’eina ràpida. Obre’l a l’editor per revisar-lo.');
     if (existing?.content === content) return { applied: false, unchanged: true, path: relativePath };
     const saved = await writeProjectFile(root, relativePath, content, { allowCreate: true });
     return { applied: true, path: relativePath, created: !existing, backupPath: saved.backupPath };

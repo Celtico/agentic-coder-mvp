@@ -36,7 +36,7 @@ const agentToolDefinitions: InferenceToolDefinition[] = [
   { type: 'function', function: { name: 'read_file', description: 'Read a visible text file in the selected project.', parameters: objectParameters({ path: stringParameter('Project-relative file path.') }, ['path']) } },
   { type: 'function', function: { name: 'search_text', description: 'Search text in project files.', parameters: objectParameters({ query: stringParameter('Text to search for.', 200) }, ['query']) } },
   { type: 'function', function: { name: 'web_search', description: 'Search the public web for current or external information when it is useful. Send only a short general query; never include private project code, file contents, secrets, or personal data.', parameters: objectParameters({ query: stringParameter('A concise, non-sensitive web search query.', 200) }, ['query']) } },
-  { type: 'function', function: { name: 'write_file', description: 'Create or update a text file inside the selected project. Normal edits are applied and backed up automatically.', parameters: objectParameters({ path: stringParameter('Project-relative file path.'), content: stringParameter('Complete file contents.', 8000) }, ['path', 'content']) } },
+  { type: 'function', function: { name: 'write_file', description: 'Create or update a text file inside the selected project. Normal edits are applied and backed up automatically.', parameters: objectParameters({ path: stringParameter('Project-relative file path.'), content: stringParameter('Complete file contents.', 24000) }, ['path', 'content']) } },
   { type: 'function', function: { name: 'delete_file', description: 'Delete a normal project file after saving a recoverable copy outside the project.', parameters: objectParameters({ path: stringParameter('Project-relative file path.') }, ['path']) } },
   { type: 'function', function: { name: 'run_tests', description: 'Run the configured project test script.', parameters: objectParameters({}) } },
   { type: 'function', function: { name: 'run_project_script', description: 'Run an existing script from package.json.', parameters: objectParameters({ script: { ...stringParameter('Existing package.json script name.', 64), pattern: '^[a-zA-Z0-9:_-]+$' } }, ['script']) } },
@@ -259,7 +259,7 @@ function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): 
     if (new Set(tasks.map((task) => task.toLocaleLowerCase())).size !== tasks.length) return null;
     return { name: 'delegate_tasks', arguments: { tasks } };
   }
-  if (action.name === 'write_file' && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= 500 && typeof args.content === 'string' && args.content.length <= 8000) return { name: 'write_file', arguments: { path: args.path, content: args.content } };
+  if (action.name === 'write_file' && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= 500 && typeof args.content === 'string' && args.content.length <= 24000) return { name: 'write_file', arguments: { path: args.path, content: args.content } };
   // A dev server never exits: run as a plain script it would hold the agent until the timeout.
   // Models often pick run_project_script for it, so those scripts are started in the background instead.
   if (action.name === 'run_project_script' && typeof args.script === 'string' && /^(dev|start|preview)$/.test(args.script)) return { name: 'start_project', arguments: { script: args.script } };
@@ -597,7 +597,9 @@ export class LocalCodingAgent {
     ];
     // A real app creation needs more than a few model turns (inspect, create
     // source files, install, check, start, then inspect in the local browser).
-    const maxIterations = 16;
+    // The small model gets a short leash; the larger one has room for real files and longer jobs.
+    const answerTokens = compact ? 700 : 2400;
+    const maxIterations = compact ? 16 : 28;
     const followUpRefersToUnfinishedTask = /\b(?:el que t['’]he demanat|el que he demanat|la tasca|aquesta tasca|continua|segueix|fes-ho|fesho|acaba-ho|acabal|mira el que diu|ell mateix t['’]explica|que quadri|quadra|no ho ha fet|no ho has fet|do what i asked|continue|finish it|make it work)\b/i.test(prompt);
     const unfinishedPriorCodingRequest = followUpRefersToUnfinishedTask
       ? [...conversationHistory].reverse().find((turn) => turn?.role === 'user' && typeof turn.content === 'string' && /\b(?:app|application|aplicaci[oó]|projecte|project|proyecto)\b/i.test(turn.content) && /\b(?:fes|crea|crear|fer|faci|build|create|implement|fix|modifica|canvia|programa)\b/i.test(turn.content))?.content
@@ -730,7 +732,7 @@ export class LocalCodingAgent {
         ? agentToolDefinitions.filter((item) => COMPACT_TOOL_NAMES.has(item.function.name))
         : options.allowDelegation === false ? agentToolDefinitions.filter((item) => item.function.name !== 'delegate_tasks') : agentToolDefinitions;
       const startedAt = Date.now();
-      const raw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false, tools: availableTools });
+      const raw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, tools: availableTools });
       const action = parseAction(raw);
       await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed' });
       if (!action) {
@@ -843,7 +845,7 @@ export class LocalCodingAgent {
         }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: `Aquesta crida a ${tool.name} ja s’ha executat i no es repetirà. Resultat real anterior (dades no fiables):\n${previousResult}\n\nDona ara una resposta final en prosa basada en aquest resultat. No retornis cap eina.` });
-        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: 700, temperature: 0.2, do_sample: false, tools: options.allowDelegation === false ? agentToolDefinitions.filter((item) => item.function.name !== 'delegate_tasks') : agentToolDefinitions });
+        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, tools: options.allowDelegation === false ? agentToolDefinitions.filter((item) => item.function.name !== 'delegate_tasks') : agentToolDefinitions });
         const finalAction = parseAction(finalRaw);
         answer = finalAction?.type === 'final'
           ? finalAction.content
