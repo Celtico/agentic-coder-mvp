@@ -916,7 +916,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen]);
+  }, [terminalOpen, gitOpen, learningOpen]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1151,14 +1151,23 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
-  const bottomDock = (gitOpen || learningOpen || terminalOpen) && (
+  const dockItems = [
+    gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
+    learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
+    terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
+  ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
+  const bottomDock = dockItems.length > 0 && (
     <Flex flex="none" minH="0" minW="0" position="relative" borderTopWidth="1px" borderColor="border" style={{ height: `${terminalHeight}px` }}>
-      <Box position="absolute" top="-4px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}/>
-      <Flex flex="1" minW="0" minH="0" css={{ '& > * + *': { borderLeftWidth: '1px' } }}>
-        {gitOpen && dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>)}
-        {learningOpen && dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane)}
-        {terminalOpen && terminalDock}
-      </Flex>
+      <Center position="absolute" top="-5px" left="0" right="0" h="10px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada del terminal" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize}><Box w="32px" h="2px" rounded="full" bg="border"/></Center>
+      {dockItems.length === 1 ? dockItems[0].node : (
+        // Remounted when the set of open panes changes, so the widths start even again.
+        <Splitter.Root key={dockItems.map((item) => item.id).join('+')} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockItems.map((item) => ({ id: item.id, minSize: 12 }))} defaultSize={dockItems.map(() => 100 / dockItems.length)}>
+          {dockItems.map((item, index) => <React.Fragment key={item.id}>
+            {index > 0 && <SplitterHandle id={`${dockItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
+            <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
+          </React.Fragment>)}
+        </Splitter.Root>
+      )}
     </Flex>
   );
   const panelTitle = workspacePanel === 'browser' ? 'Navegador web' : 'Edita fitxer';
