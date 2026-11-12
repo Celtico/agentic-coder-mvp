@@ -76,8 +76,8 @@ const noticeTones = {
 } as const;
 const Notice = ({ tone = 'info', children }: { tone?: keyof typeof noticeTones; children: React.ReactNode }) => {
   const { bg, fg, icon: Icon } = noticeTones[tone];
-  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2.5" px="3" py="2.5" borderRadius="md" fontSize="sm" lineHeight="1.45" style={{ background: bg, color: fg }}>
-    <Box flex="none" mt="2px"><Icon size={15}/></Box><Box minW="0" overflowWrap="anywhere">{children}</Box>
+  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2" px="2.5" py="1.5" borderRadius="md" fontSize="xs" lineHeight="1.4" fontFamily="body" style={{ background: bg, color: fg }}>
+    <Box flex="none" mt="1px"><Icon size={13}/></Box><Box minW="0" overflowWrap="anywhere">{children}</Box>
   </Flex>;
 };
 /** One figure of the learning panel. */
