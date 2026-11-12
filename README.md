@@ -63,6 +63,10 @@ Els fitxers queden limitats a la carpeta, però els scripts no: un script de `pa
 
 Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, preparar un pla, implementar, executar comprovacions adequades i resumir els fitxers, resultats i limitacions. La inspecció amb Playwright només es pot afirmar quan l’eina l’hagi executada i retornat els resultats; si falta el paquet, l’app demana confirmació abans d’instal·lar-lo; Chromium s’instal·la després sense preguntar.
 
+### Instruccions per projecte: `AGENTS.md`
+
+Si a l’arrel del projecte hi ha un fitxer `AGENTS.md`, l’agent el rep com a instruccions de l’usuari i les segueix (gestor de paquets, convencions, carpetes que no ha de tocar…). La resta de fitxers continuen sent dades. Compte en obrir projectes d’altres: un `AGENTS.md` que no has escrit tu també serà obeït, sempre dins la carpeta seleccionada.
+
 ## Model i llicència
 El codi d’aquest repositori es publica sota la llicència MIT (vegeu [`LICENSE`](LICENSE)). Els models tenen la seva pròpia llicència:
 

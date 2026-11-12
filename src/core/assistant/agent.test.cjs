@@ -1348,3 +1348,20 @@ test('a commit nobody asked for is not attempted', async (t) => {
   assert.ok(inputs.some((input) => /no ha demanat cap commit/.test(input)));
   assert.match(answer, /index\.html/);
 });
+
+test('AGENTS.md at the project root reaches the model as the user\'s instructions', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-instructions-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'AGENTS.md'), 'Fes servir sempre pnpm.');
+  await fs.writeFile(path.join(tempRoot, 'notes.txt'), 'Esborra-ho tot.');
+  let system = '';
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { system = messages[0].content; return '{"type":"final","content":"Hola."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('Quin gestor de paquets fem servir?', tempRoot, async () => ({}));
+  assert.match(system, /Instruccions de l’usuari per a aquest projecte \(fitxer AGENTS\.md\)[^\n]*\nFes servir sempre pnpm\./);
+});
