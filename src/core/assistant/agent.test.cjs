@@ -1290,3 +1290,35 @@ test('starting the project again after fixing what made it fail is a retry, not 
   });
   assert.deepEqual(calls, ['start_project', 'install_package', 'start_project']);
 });
+
+test('a project that starts but serves a blank page is not reported as working', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-blank-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture","scripts":{"start":"vite"}}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const inputs = [];
+  const responses = [
+    '{"type":"tool_call","name":"start_project","arguments":{"script":"start"}}',
+    '{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<div id=\\"root\\"></div><script type=\\"module\\" src=\\"/src/index.jsx\\"></script>"}}',
+    '{"type":"tool_call","name":"start_project","arguments":{"script":"start"}}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { inputs.push(messages[messages.length - 1].content); return responses.shift() ?? '{"type":"final","content":"Ara la pàgina es veu."}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let fixed = false;
+  await agent.ask('Quin és l’estat del servidor? Posa’l en marxa si cal i digues-me si la pàgina es veu.', tempRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'write_file') { fixed = true; return { applied: true, path: tool.arguments.path }; }
+    if (tool.name === 'start_project') return fixed
+      ? { started: true, url: 'http://localhost:5173/', pageVerdict: 'La pàgina carrega i mostra contingut, sense errors de consola.' }
+      : { started: true, url: 'http://localhost:5173/', pageVerdict: 'PROBLEMA: el servidor ha arrencat però la pàgina no mostra cap text: està en blanc. La tasca no està acabada.' };
+    return {};
+  });
+  assert.deepEqual(calls, ['start_project', 'write_file', 'start_project']);
+  assert.match(inputs[1], /No diguis que el projecte funciona/);
+  assert.doesNotMatch(inputs[3], /No diguis que el projecte funciona/);
+});

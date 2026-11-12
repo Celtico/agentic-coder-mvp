@@ -495,7 +495,7 @@ export class LocalCodingAgent {
       try { result = await executeTool(directProjectStart); }
       catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
       const value = result && typeof result === 'object' ? result as Record<string, unknown> : {};
-      const answer = typeof value.error === 'string'
+      const startAnswer = typeof value.error === 'string'
         ? `No he pogut iniciar l’app: ${value.error}`
         : value.cancelled === true
           ? 'L’inici s’ha cancel·lat; no s’ha iniciat cap servidor.'
@@ -504,6 +504,8 @@ export class LocalCodingAgent {
           : typeof value.url === 'string'
             ? `Projecte iniciat amb npm run ${startScript}. Adreça local: ${value.url}. ${value.openedInAppBrowser === true ? 'S’ha obert al navegador integrat.' : 'L’eina no ha confirmat que s’obrís al navegador integrat.'}`
             : `npm run ${startScript} s’ha iniciat, però la seva sortida encara no conté cap adreça local. Sortida: ${String(value.output || '(buida)').slice(0, 1500)}`;
+      // What the app saw when it looked at the started page.
+      const answer = typeof value.pageVerdict === 'string' && value.pageVerdict ? `${startAnswer}\n\n${value.pageVerdict}` : startAnswer;
       await fs.mkdir(this.historyDir, { recursive: true });
       await fs.appendFile(path.join(this.historyDir, 'sessions.jsonl'), JSON.stringify({
         at: new Date().toISOString(), model: this.engine.getModelStatus().modelId, prompt, answer,
@@ -837,13 +839,17 @@ export class LocalCodingAgent {
         const browserAnswer = formatBrowserInspection(result);
         if (browserAnswer) { answer = browserAnswer; break; }
       }
+      // The app looks at the started page itself; a blank or broken page sends the model back to work.
+      const pageVerdict = tool.name === 'start_project' && result && typeof result === 'object' ? String((result as Record<string, unknown>).pageVerdict || '') : '';
+      const pageProblem = pageVerdict.startsWith('PROBLEMA');
+      if (pageProblem) this.onStatus({ type: 'status', message: 'La pàgina ha arrencat però no es veu bé; revisant…' });
       const toolText = JSON.stringify(result);
       const remaining = Math.max(0, 20000 - toolOutputSize);
       const boundedToolText = toolText.slice(0, Math.min(12000, remaining));
       completedToolCalls.set(toolKey, boundedToolText || '(s’ha arribat al límit de context de les eines)');
       toolOutputSize += boundedToolText.length;
       const failedCheck = (tool.name === 'run_tests' || tool.name === 'run_project_script') && result && typeof result === 'object' && (result as Record<string, unknown>).code !== 0;
-      messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\n${failedCheck ? 'La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.' : 'Si la tasca encara no està completa, continua amb una sola crida d’eina JSON vàlida. Si ja està completa, dona una resposta final en prosa basada en resultats reals.'}` });
+      messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\n${pageProblem ? `${pageVerdict} No diguis que el projecte funciona. Llegeix index.html i el fitxer d’entrada amb read_file, corregeix el que impedeix que es vegi (en Vite, index.html va a l’arrel i ha de carregar el codi amb un <script type="module">), i torna a cridar start_project per comprovar-ho de nou.\n\n` : ''}${failedCheck ? 'La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.' : 'Si la tasca encara no està completa, continua amb una sola crida d’eina JSON vàlida. Si ja està completa, dona una resposta final en prosa basada en resultats reals.'}` });
       if (toolOutputSize >= 20000) {
         messages.push({ role: 'user', content: 'Límit de context de les eines assolit. Dona ara la resposta final en prosa clara i breu.' });
       }
