@@ -1124,13 +1124,7 @@ export function App(): React.JSX.Element {
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" direction="column" gap="3">
-          <Flex h="58px" flex="none" align="center" justify="space-between" borderBottomWidth="1px" borderColor="border" px="2" fontWeight="semibold">
-            <Text>Espai de treball</Text>
-            <HStack gap="1">
-              <IconButton icon={MessageSquarePlus} label="Nova conversa" onClick={newChat}/>
-            </HStack>
-          </Flex>
+        <Flex as="aside" h="full" minH="0" minW="0" bg="surface.subtle" borderRightWidth="1px" borderColor="border" px="3" pt="2" direction="column" gap="3">
           <Splitter.Root
             h="full"
             flex="1"
@@ -1156,8 +1150,9 @@ export function App(): React.JSX.Element {
                 else splitterContext.collapsePanel('recent-conversations');
               }} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="recent" border="0" h="full" minH="0" display="flex" flexDirection="column">
-                  <Flex align="center" gap="1" h="36px" flex="none">
+                  <Flex align="center" gap="1" h="36px" flex="none" position="relative">
                     <Accordion.ItemTrigger flex="1" h="36px" minH="36px" px="2" py="0"><Text flex="1" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses recents</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <IconButton icon={MessageSquarePlus} label="Nova conversa" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => { event.stopPropagation(); void newChat(); }}/>
                   </Flex>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" p="0" overflowY="auto"><Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
