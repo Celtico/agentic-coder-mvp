@@ -24,6 +24,8 @@ const activeModelToolCalls = new Set();
 let activeModelRequestId = null;
 let selectedProject = null;
 let selectedModel = 'qwen-1.5b';
+/** 'ask': the agent asks before installing packages. 'auto': it never asks. The user's choice, kept between sessions. */
+let permissionMode = 'ask';
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
@@ -93,7 +95,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode }, null, 2), 'utf8');
 }
 
 const modelDefinitions = [
@@ -182,7 +184,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     // The only agent action that asks first: installing a package downloads code from the
     // internet and may run it on this machine, outside the selected folder. It asks once per
     // project and session, so a task that needs several packages is not stopped at each one.
-    if (approvedInstallRoots.has(root)) return executeNpmCommand(root, args, 300000);
+    if (permissionMode === 'auto' || approvedInstallRoots.has(root)) return executeNpmCommand(root, args, 300000);
     const options = {
       type: 'question', buttons: ['Instal·la', 'Cancel·la'], defaultId: 1, cancelId: 1,
       message: `Instal·lar el paquet npm «${packageName}»?`,
@@ -541,6 +543,7 @@ app.whenReady().then(async () => {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
     if (modelDefinitions.some((model) => model.id === saved.selectedModel)) selectedModel = saved.selectedModel;
+    if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
   } catch {}
   if (!selectedProject) { selectedProject = path.resolve(__dirname, '..', '..'); await saveSettings(); }
   createWindow();
@@ -992,6 +995,12 @@ ipcMain.handle('agent:ask', async (_e, request) => {
   return askModel(String(payload.prompt || ''), selectedProject, payload.history);
 });
 
+ipcMain.handle('permissions:get', async () => permissionMode);
+ipcMain.handle('permissions:set', async (_event, mode) => {
+  permissionMode = mode === 'auto' ? 'auto' : 'ask';
+  await saveSettings();
+  return permissionMode;
+});
 ipcMain.handle('models:list', async () => ({ selectedModel, models: await getAvailableModels() }));
 ipcMain.handle('models:select', async (_e, modelId) => {
   if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans de canviar de model.');

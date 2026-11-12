@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('agentic', {
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (request) => ipcRenderer.invoke('agent:ask', request),
+  getPermissionMode: () => ipcRenderer.invoke('permissions:get'),
+  setPermissionMode: (mode) => ipcRenderer.invoke('permissions:set', mode),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
   cancel: () => ipcRenderer.invoke('agent:cancel'),

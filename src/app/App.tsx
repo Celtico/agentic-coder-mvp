@@ -216,6 +216,8 @@ export function App(): React.JSX.Element {
   const [editorOriginal, setEditorOriginal] = useState('');
   const [editorCursor, setEditorCursor] = useState({ line: 1, column: 1 });
   const [editorBusy, setEditorBusy] = useState(false);
+  const [permissionMode, setPermissionMode] = useState<'ask' | 'auto'>('ask');
+  useEffect(() => { void window.agentic.getPermissionMode().then((mode) => setPermissionMode(mode === 'auto' ? 'auto' : 'ask')).catch(() => {}); }, []);
   const [editorStatus, setEditorStatus] = useState('');
   const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
   const [fileHistoryScopePath, setFileHistoryScopePath] = useState('');
@@ -1389,6 +1391,9 @@ export function App(): React.JSX.Element {
               <Text whiteSpace="nowrap">UTF-8</Text>
               <Text whiteSpace="nowrap">Spaces: 2</Text>
             </>}
+            <Button size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'agentic.fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>
+              <Text whiteSpace="nowrap">{permissionMode === 'auto' ? 'Permisos: automàtic' : 'Permisos: pregunta'}</Text>
+            </Button>
             <HStack gap="1.5" title="Model local executat al Mac">
               <Brain size={13}/><Text maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Text><Badge size="sm" colorPalette="agentic" variant="subtle">Local</Badge>
             </HStack>
