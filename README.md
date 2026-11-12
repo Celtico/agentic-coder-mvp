@@ -76,6 +76,16 @@ Si a l’arrel del projecte hi ha un fitxer `AGENTS.md`, l’agent el rep com a 
 
 Al costat d’`AGENTS.md` hi pot haver un `SKILLS.md`: el teu catàleg de perfils i maneres de treballar. Cada títol `## Nom` és un perfil i el text de sota són les seves instruccions; una primera línia opcional `Paraules: a, b, c` hi afegeix paraules que l’activen. L’agent sempre veu la llista de noms, i el text d’un perfil només s’afegeix quan el missatge el demana: pel nom (`@qa-engineer` o «com a QA Engineer»), per una de les seves paraules o per una paraula llarga del títol. Com a màxim dos perfils per missatge. Afegir, treure o canviar perfils és editar el fitxer; no cal tocar l’app. Hi ha un exemple a [`docs/SKILLS.exemple.md`](docs/SKILLS.exemple.md).
 
+### Servidors MCP per projecte: `mcp.json`
+
+Un servidor MCP és un programa que dona a l’agent coneixement o eines que no té: per exemple, la documentació actual d’una llibreria. Per connectar-ne un, posa un `mcp.json` a l’arrel del projecte amb la mateixa forma que fan servir altres eines:
+
+```json
+{ "mcpServers": { "chakra": { "command": "npx", "args": ["-y", "@chakra-ui/react-mcp"] } } }
+```
+
+En començar una tasca, l’app inicia els servidors declarats (transport stdio), en llista les eines i les passa al model, que les pot cridar abans d’escriure codi. Iniciar un servidor és executar un programa que pot baixar codi d’internet: l’app demana permís el primer cop, tret que els permisos estiguin en automàtic. Els servidors s’aturen en tancar l’app. Només amb el model gran. Exemple a [`docs/mcp.exemple.json`](docs/mcp.exemple.json).
+
 A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor: quan el programador acaba, el mateix model rellegeix els fitxers escrits amb unes altres instruccions i el pot fer tornar una vegada.
 
 ## Model i llicència

@@ -12,9 +12,36 @@ const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFi
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
 const { searchWeb, readWebPage } = require('./web-search.cjs');
+const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
+/** MCP servers started in this session, by project folder and server name. */
+const mcpConnections = new Map();
+function stopMcpServers() { for (const connection of mcpConnections.values()) connection.stop(); mcpConnections.clear(); }
+
+/** Starts (once) a server the project declares in mcp.json. Starting one runs a program, so it asks first unless permissions are automatic. */
+async function mcpServer(root, name) {
+  const key = `${root}\n${name}`;
+  const running = mcpConnections.get(key);
+  if (running && !running.closed) return running;
+  const config = (await readMcpConfig(root))[name];
+  if (!config) throw new Error(`El projecte no declara cap servidor MCP «${name}» a mcp.json.`);
+  if (permissionMode !== 'auto') {
+    const options = {
+      type: 'question', buttons: ['Inicia', 'Cancel·la'], defaultId: 1, cancelId: 1,
+      message: `Iniciar el servidor MCP «${name}»?`,
+      detail: `El fitxer mcp.json del projecte demana executar:\n${[config.command, ...config.args].join(' ')}\n\nUn servidor MCP és un programa que s’executa en aquest ordinador i pot baixar codi d’internet. Si acceptes, queda en marxa fins que tanquis l’app.`,
+    };
+    const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    if (confirmation.response !== 0) throw new Error(`L’usuari no ha volgut iniciar el servidor MCP «${name}».`);
+  }
+  if (win && !win.isDestroyed()) win.webContents.send('terminal:output', `\r\n$ ${[config.command, ...config.args].join(' ')}   (servidor MCP «${name}»)\r\n`);
+  const connection = await new McpConnection(name, config, root).start();
+  mcpConnections.set(key, connection);
+  return connection;
+}
+
 /** Projects where the user has already agreed to npm installs in this session. */
 const approvedInstallRoots = new Set();
 let modelWorker = null;
@@ -147,6 +174,18 @@ async function dispatchAgentTool(tool, projectRoot) {
     return searchWeb(query);
   }
   if (tool.name === 'read_web_page' && typeof tool.arguments?.url === 'string') return readWebPage(tool.arguments.url);
+  if (tool.name === 'list_mcp_tools') {
+    const servers = [];
+    for (const name of Object.keys(await readMcpConfig(root))) {
+      try { servers.push({ server: name, tools: await (await mcpServer(root, name)).listTools() }); }
+      catch (error) { servers.push({ server: name, error: error instanceof Error ? error.message : String(error), tools: [] }); }
+    }
+    return { servers };
+  }
+  if (tool.name === 'call_mcp_tool' && typeof tool.arguments?.server === 'string' && typeof tool.arguments?.tool === 'string') {
+    const result = await (await mcpServer(root, tool.arguments.server)).callTool(tool.arguments.tool, tool.arguments.arguments);
+    return { server: tool.arguments.server, tool: tool.arguments.tool, ...result };
+  }
   if (tool.name === 'create_git_commit' && typeof tool.arguments?.message === 'string') {
     const message = tool.arguments.message.trim();
     if (!message || message.length > 200 || /[\r\n\0]/.test(message)) throw new Error('El missatge del commit no és vàlid.');
@@ -540,7 +579,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { if (activeProjectProcess) stopProjectProcess(); });
+app.on('before-quit', () => { if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); });
 
 ipcMain.handle('project:open', async () => {
   const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });

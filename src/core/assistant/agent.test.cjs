@@ -1529,3 +1529,24 @@ test('a broken page sends the model to the file and cause named by the console e
   assert.doesNotMatch(hint, /Llegeix index\.html i el fitxer/);
   assert.match(pageFixHint({ page: { consoleErrors: [] } }), /Llegeix index\.html/);
 });
+
+test('a project with mcp.json: its tools are listed to the model, which can call them', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-mcp-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'mcp.json'), '{"mcpServers":{"chakra":{"command":"npx","args":["-y","@chakra-ui/react-mcp"]}}}');
+  let system = '';
+  const responses = ['{"type":"tool_call","name":"call_mcp_tool","arguments":{"server":"chakra","tool":"get_component_example","arguments":{"component":"accordion"}}}', '{"type":"final","content":"Fet servir Accordion.Root."}'];
+  const engine = { loadModel: async () => {}, generateResponse: async (messages) => { system = messages[0].content; return responses.shift(); }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask('Com és un acordió de Chakra?', tempRoot, async (tool) => {
+    calls.push(tool);
+    if (tool.name === 'list_mcp_tools') return { servers: [{ server: 'chakra', tools: [{ name: 'get_component_example', description: 'Returns code examples.', parameters: ['component'], required: ['component'] }] }] };
+    if (tool.name === 'call_mcp_tool') return { server: 'chakra', tool: tool.arguments.tool, isError: false, text: '<Accordion.Root>…</Accordion.Root>' };
+    return {};
+  });
+  assert.match(system, /servidor "chakra", eina "get_component_example" \(arguments: component\): Returns code examples\./);
+  assert.deepEqual(calls.filter((call) => call.name === 'call_mcp_tool'), [{ name: 'call_mcp_tool', arguments: { server: 'chakra', tool: 'get_component_example', arguments: { component: 'accordion' } } }]);
+  assert.match(answer, /Accordion\.Root/);
+});
