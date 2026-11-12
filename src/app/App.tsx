@@ -1200,15 +1200,6 @@ export function App(): React.JSX.Element {
                 <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative" style={{ width: '100%' }}>
                     <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0" style={{ width: '100%', flex: '1 1 auto' }}><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
-                    <Menu.Root>
-                      <Menu.Trigger asChild><IconButton icon={MoreVertical} label="Accions de fitxers del projecte" position="absolute" right="11" top="50%" transform="translateY(-50%)" onClick={(event) => event.stopPropagation()}/></Menu.Trigger>
-                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
-                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
-                        <Menu.Separator borderColor="border"/>
-                        <Menu.Item value="clear" color="red.300" disabled={!project || loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
-                      </Menu.Content></Menu.Positioner></Portal>
-                    </Menu.Root>
                   </HStack>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" px="0" py="2" overflowY="auto">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
@@ -1230,6 +1221,16 @@ export function App(): React.JSX.Element {
                     }}>
                       <TreeView.Tree>{projectFileNodes?.map((node, index) => <ProjectTreeNodeView key={node.value} node={node} indexPath={[index]} directoryPaths={projectDirectoryPaths} onOpen={openEditor} onCreate={(path, directory) => openCreateProjectEntry(directory, path)} onDelete={deleteProjectEntry} onRename={openRenameProjectEntry}/>)}</TreeView.Tree>
                     </TreeView.Root>}
+                    {/* The empty space under the tree: right-click for the folder's own actions. */}
+                    {project && <Menu.Root>
+                      <Menu.ContextTrigger asChild><Box minH="140px" px="2" pt="2">{project.files.length === 0 && <Text fontSize="xs" color="fg.muted">La carpeta és buida. Botó dret aquí per crear un document o una carpeta.</Text>}</Box></Menu.ContextTrigger>
+                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
+                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                        <Menu.Separator borderColor="border"/>
+                        <Menu.Item value="clear" color="red.300" disabled={loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
+                      </Menu.Content></Menu.Positioner></Portal>
+                    </Menu.Root>}
                     </Box>
                   </Accordion.ItemBody></Accordion.ItemContent>
                 </Accordion.Item>
