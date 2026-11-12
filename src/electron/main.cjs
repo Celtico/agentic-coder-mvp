@@ -516,6 +516,9 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 980, minHeight: 680,
     title: 'Agentic Coder — Local',
+    // On macOS the app draws its own title bar; the three window buttons stay where they are.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 11 } } : {}),
+    backgroundColor: '#171717',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true }
   });

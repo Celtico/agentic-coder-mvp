@@ -104,6 +104,9 @@ const markKeyframes = `
 @media (prefers-reduced-motion: reduce) { svg[style*="agentic-turn"], svg[style*="agentic-turn"] * { animation: none !important; } }
 `;
 
+/** On macOS the app draws its own title bar (the main process hides the system one). */
+const ownTitleBar = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) && typeof window !== 'undefined' && 'agentic' in window;
+
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
@@ -1044,7 +1047,6 @@ export function App(): React.JSX.Element {
               : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
           </Flex>
         </Box>
-        <Text fontSize="xs" color="fg.muted" textAlign="center" mt="1.5" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title="Arrossega fitxers de text o codi aquí · Qwen cercarà a Internet quan li calgui · Revisa les respostes abans d’aplicar-les.">Arrossega fitxers de text o codi aquí · Revisa les respostes abans d’aplicar-les.</Text>
       </Box>
     </Flex>
   );
@@ -1330,9 +1332,14 @@ export function App(): React.JSX.Element {
     <>
     <style>{markKeyframes}</style>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
+    {ownTitleBar && <Flex flex="none" h="36px" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+      <Mark size={15} busy={loading || modelChanging}/>
+      <Text fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">Agentic Coder</Text>
+      {project && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">— {project.path.split(/[\\/]/).filter(Boolean).at(-1)}</Text>}
+    </Flex>}
     <Grid flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
-          <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>
+          {!ownTitleBar && <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>}
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
@@ -1342,7 +1349,7 @@ export function App(): React.JSX.Element {
           <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
         </Flex>
-        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt="6px" pr="6px">
+        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
         {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '60px', maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(380, window.innerWidth - 58);
