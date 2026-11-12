@@ -1263,3 +1263,30 @@ test('JSON that merely appears in an explanation is not run as an action', async
   await agent.ask('Què hi ha al fitxer de configuració?', tempRoot, async (tool) => { calls.push(tool.name); return {}; });
   assert.deepEqual(calls, []);
 });
+
+test('starting the project again after fixing what made it fail is a retry, not a repetition', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-retry-test-'));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture","scripts":{"start":"vite"}}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const responses = [
+    '{"type":"tool_call","name":"start_project","arguments":{"script":"start"}}',
+    '{"type":"tool_call","name":"install_package","arguments":{"packageName":"@vitejs/plugin-react","dev":true}}',
+    '{"type":"tool_call","name":"start_project","arguments":{"script":"start"}}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => responses.shift() ?? '{"type":"final","content":"El projecte ja funciona."}',
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  let installed = false;
+  await agent.ask('Quin és l’estat del servidor? Arrenca’l si cal.', tempRoot, async (tool) => {
+    calls.push(tool.name);
+    if (tool.name === 'install_package') { installed = true; return { code: 0, output: 'added 1 package' }; }
+    if (tool.name === 'start_project') return installed ? { started: true, url: 'http://localhost:5173' } : { started: false, exited: true, code: 1, output: "Could not resolve '@vitejs/plugin-react'" };
+    return {};
+  });
+  assert.deepEqual(calls, ['start_project', 'install_package', 'start_project']);
+});
