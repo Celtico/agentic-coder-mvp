@@ -67,14 +67,14 @@ async function checkStartedPage(result, actions = []) {
       acted = await probe.webContents.executeJavaScript(pageActionsScript(actions), true);
       await new Promise((resolve) => setTimeout(resolve, 400));
     }
-    const info = await probe.webContents.executeJavaScript('({ title: document.title, text: ((document.body && document.body.innerText) || "").trim().slice(0, 1500) })', true);
+    const info = await probe.webContents.executeJavaScript('({ title: document.title, text: ((document.body && document.body.innerText) || "").trim().slice(0, 1500), buttons: [...document.querySelectorAll("button,[role=button],input[type=button],input[type=submit]")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => (b.getAttribute("aria-label") || b.innerText || b.value || "").replace(/\\s+/g, " ").trim().slice(0, 60)).filter(Boolean).slice(0, 12) })', true);
     const problems = [];
     if (typeof status === 'number' && status >= 400) problems.push(`el servidor respon HTTP ${status}`);
     if (!info.text) problems.push('la pàgina no mostra cap text: està en blanc');
     if (consoleErrors.length) problems.push(`hi ha ${consoleErrors.length} errors a la consola`);
     return {
       ...result,
-      page: { status, title: String(info.title || '').slice(0, 200), text: info.text, consoleErrors },
+      page: { status, title: String(info.title || '').slice(0, 200), text: info.text, consoleErrors, buttons: Array.isArray(info.buttons) ? info.buttons : [] },
       ...(acted ? { actionResults: acted.results || [], actionError: acted.error || null } : {}),
       pageVerdict: problems.length
         ? `PROBLEMA: el servidor ha arrencat però ${problems.join('; ')}. La tasca no està acabada.`
@@ -222,7 +222,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (looked.actionError) throw new Error(looked.actionError);
     return {
       inspected: true, url: safeBrowserUrl(target.href), status: looked.page?.status ?? null,
-      title: looked.page?.title || '', text: looked.page?.text || '', consoleErrors: looked.page?.consoleErrors || [],
+      title: looked.page?.title || '', text: looked.page?.text || '', consoleErrors: looked.page?.consoleErrors || [], buttons: looked.page?.buttons || [],
       pageErrors: [], requestFailures: [], actionResults: looked.actionResults || [], verdict: looked.pageVerdict,
     };
   }

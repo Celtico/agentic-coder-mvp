@@ -1499,3 +1499,24 @@ test('a web address in the message is read by the app before the model starts', 
   assert.deepEqual(read, ['https://example.com/docs/install']);
   assert.match(system, /--- https:\/\/example\.com\/docs\/install \(Instal·lació\)\nnpm i exemple/);
 });
+
+test('asked whether a button works, the app presses it and reports what changed', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-press-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  const responses = ['{"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5174/"}}'];
+  const engine = { loadModel: async () => {}, generateResponse: async () => responses.shift() ?? '{"type":"final","content":"Fet."}', getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask('Comprova que el botó del comptador funciona', tempRoot, async (tool) => {
+    calls.push(tool);
+    if (tool.name !== 'inspect_browser') return {};
+    const pressed = Array.isArray(tool.arguments.actions);
+    return { inspected: true, url: tool.arguments.url, status: 200, title: 'Comptador', text: pressed ? 'Count: 1 Increment' : 'Count: 0 Increment', consoleErrors: [], pageErrors: [], requestFailures: [], buttons: ['Increment', 'Elimina-ho tot'] };
+  });
+  const presses = calls.filter((call) => call.name === 'inspect_browser' && call.arguments.actions);
+  assert.equal(presses.length, 1, 'the destructive button is not pressed');
+  assert.deepEqual(presses[0].arguments.actions, [{ type: 'click', target: { by: 'role', role: 'button', value: 'Increment' } }]);
+  assert.match(answer, /Botó «Increment»: funciona\. En prémer-lo, la pàgina passa de «Count: 0 Increment» a «Count: 1 Increment»/);
+});

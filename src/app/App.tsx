@@ -1230,6 +1230,8 @@ export function App(): React.JSX.Element {
     const clearConsole = () => setConsoleEntries([]);
     const addConsoleLine = (event: Event) => {
       const data = event as Event & { level?: number | string; message?: string; sourceId?: string; line?: number };
+      // Electron's own development notice about the page's security policy is about the app's tooling, not the project.
+      if (String(data.message || '').startsWith('%cElectron Security Warning')) return;
       const level = data.level === 3 || data.level === 'error' ? 'error' : data.level === 2 || data.level === 'warning' ? 'warn' : 'info';
       const file = String(data.sourceId || '').split('/').pop()?.split('?')[0] || '';
       setConsoleEntries((current) => [...current.slice(-299), { level, text: String(data.message || '').slice(0, 2000), source: file ? `${file}${data.line ? `:${data.line}` : ''}` : '' }]);

@@ -1022,7 +1022,30 @@ export class LocalCodingAgent {
         failedCheckToRetry = typeof code === 'number' && code !== 0 ? tool : null;
       }
       if (tool.name === 'inspect_browser') {
-        const browserAnswer = formatBrowserInspection(result);
+        let browserAnswer = formatBrowserInspection(result);
+        // Asked whether a button works, looking is not enough: the app presses each button the page
+        // shows (never one that deletes, sends or pays) and says what changed on screen.
+        const looked = result && typeof result === 'object' ? result as { inspected?: unknown; text?: unknown; buttons?: unknown } : null;
+        const calledWithActions = Array.isArray((tool as Extract<AgentToolCall, { name: 'inspect_browser' }>).arguments.actions);
+        if (browserAnswer && looked?.inspected === true && !calledWithActions && /(?:^|[^\p{L}])(?:bot[oó]n?s?|buttons?|clic|click)(?![\p{L}])/iu.test(prompt) && Array.isArray(looked.buttons)) {
+          const before = typeof looked.text === 'string' ? looked.text.replace(/\s+/g, ' ').trim() : '';
+          const names = [...new Set(looked.buttons.filter((name): name is string => typeof name === 'string' && name.length > 0))]
+            .filter((name) => !/elimina|esborra|borra|suprimeix|delete|remove|envia|send|submit|paga|pay|compra|buy|tanca la sessi|log ?out/i.test(name)).slice(0, 3);
+          const lines: string[] = [];
+          for (const name of names) {
+            this.onStatus({ type: 'status', message: `Prement el botó «${name}»…` });
+            try {
+              const pressed = await executeTool({ name: 'inspect_browser', arguments: { url: (tool as Extract<AgentToolCall, { name: 'inspect_browser' }>).arguments.url, actions: [{ type: 'click', target: { by: 'role', role: 'button', value: name } }] } }) as { text?: unknown; consoleErrors?: unknown; error?: unknown } | null;
+              const after = pressed && typeof pressed.text === 'string' ? pressed.text.replace(/\s+/g, ' ').trim() : '';
+              const errors = pressed && Array.isArray(pressed.consoleErrors) ? pressed.consoleErrors.length : 0;
+              if (pressed && typeof pressed.error === 'string') lines.push(`- Botó «${name}»: no s’ha pogut prémer (${pressed.error}).`);
+              else if (after && after !== before) lines.push(`- Botó «${name}»: funciona. En prémer-lo, la pàgina passa de «${before.slice(0, 120)}» a «${after.slice(0, 120)}»${errors ? `, però amb ${errors} errors de consola` : ''}.`);
+              else lines.push(`- Botó «${name}»: en prémer-lo no canvia res visible a la pàgina${errors ? ` i hi ha ${errors} errors de consola` : ''}.`);
+            } catch (error) { lines.push(`- Botó «${name}»: no s’ha pogut prémer (${error instanceof Error ? error.message : String(error)}).`); }
+          }
+          if (lines.length) browserAnswer += `\n\nBotons provats (cadascun en una càrrega nova de la pàgina):\n${lines.join('\n')}`;
+          else if (looked.buttons.length === 0) browserAnswer += '\n\nA la pàgina no hi ha cap botó visible per provar.';
+        }
         if (browserAnswer) { answer = browserAnswer; break; }
       }
       // The app looks at the started page itself; a blank or broken page sends the model back to work.
