@@ -52,4 +52,43 @@ async function searchWeb(query, fetchImpl = globalThis.fetch) {
   return { query: cleanQuery, results };
 }
 
-module.exports = { parseDuckDuckGoResults, searchWeb };
+/** The readable text of an HTML page: no scripts, styles, navigation or markup. */
+function pageText(html) {
+  const body = String(html)
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style|noscript|svg|nav|footer|header|form|iframe)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/pre|\/section)\s*\/?>/gi, '\n');
+  return body.split('\n').map((line) => decodeHtml(line)).filter(Boolean).join('\n');
+}
+
+/** Only public web pages: nothing on this machine or on the local network. */
+function publicWebUrl(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); } catch { throw new Error('L’adreça no és vàlida.'); }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Només es poden llegir adreces http o https.');
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || !host.includes('.') || /^(?:127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|0\.)/.test(host) || host.includes(':')) {
+    throw new Error('Aquesta eina només llegeix pàgines públiques d’Internet. Per a una pàgina local, fes servir el navegador de l’app.');
+  }
+  url.username = ''; url.password = '';
+  return url;
+}
+
+/** Reads one public page and returns its text, so the agent can follow a search result or read documentation. */
+async function readWebPage(address, fetchImpl = globalThis.fetch) {
+  const url = publicWebUrl(address);
+  if (typeof fetchImpl !== 'function') throw new Error('Aquest runtime no té disponible la connexió web.');
+  const response = await fetchImpl(url.href, {
+    headers: { 'user-agent': 'Mozilla/5.0 AgenticCoder/1.0 (page reader)', accept: 'text/html,text/plain,text/markdown;q=0.9,*/*;q=0.1' },
+    signal: AbortSignal.timeout(15000), redirect: 'follow',
+  });
+  if (!response.ok) throw new Error(`La pàgina ha respost amb HTTP ${response.status}.`);
+  const type = String(response.headers?.get?.('content-type') || '');
+  if (type && !/text\/|json|xml/i.test(type)) throw new Error(`La pàgina no és text (${type.split(';')[0]}).`);
+  const raw = (await response.text()).slice(0, 2_000_000);
+  const title = /html/i.test(type) || /<html|<body/i.test(raw) ? decodeHtml((/<title[^>]*>([\s\S]*?)<\/title>/i.exec(raw) || [])[1] || '') : '';
+  const text = /html/i.test(type) || /<html|<body/i.test(raw) ? pageText(raw) : raw;
+  return { url: url.href, title: title.slice(0, 300), text: text.slice(0, 9000), truncated: text.length > 9000 };
+}
+
+module.exports = { parseDuckDuckGoResults, searchWeb, pageText, publicWebUrl, readWebPage };

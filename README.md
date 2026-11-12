@@ -41,6 +41,7 @@ Per executar l’avaluació sintètica de recuperació semàntica sense llegir d
 
 - La descàrrega inicial dels models des de Hugging Face.
 - L’eina de cerca web: quan l’agent la fa servir, la consulta (no el codi ni la conversa) s’envia a DuckDuckGo i en torna els enllaços.
+- L’eina de lectura de pàgines: quan l’agent vol llegir un resultat o una documentació, l’app demana aquella adreça pública i n’extreu el text. Només surt l’adreça; no llegeix adreces locals ni de la xarxa interna.
 - Les instal·lacions de paquets npm que confirmis.
 
 Tota la resta (inferència, converses, historial de fitxers, casos verificats) es queda en local.

@@ -28,3 +28,15 @@ test('rejects empty or oversized web search queries', async () => {
   await assert.rejects(searchWeb('   ', async () => { throw new Error('must not fetch'); }), /consulta de cerca no és vàlida/);
   await assert.rejects(searchWeb('x'.repeat(201), async () => { throw new Error('must not fetch'); }), /consulta de cerca no és vàlida/);
 });
+
+test('reads a public page as text and refuses local addresses', async () => {
+  const { readWebPage, publicWebUrl } = require('./web-search.cjs');
+  const html = '<html><head><title>Guia &amp; inici</title><style>p{}</style></head><body><nav>Menú</nav><h1>Instal·lació</h1><p>npm i <b>@chakra-ui/react</b></p><script>alert(1)</script></body></html>';
+  const page = await readWebPage('https://example.com/docs', async (address) => ({ ok: true, status: 200, headers: { get: () => 'text/html; charset=utf-8' }, text: async () => html, url: address }));
+  assert.equal(page.title, 'Guia & inici');
+  assert.match(page.text, /Instal·lació\nnpm i @chakra-ui\/react/);
+  assert.doesNotMatch(page.text, /alert|Menú|p\{\}/);
+  for (const address of ['http://localhost:5173/', 'http://127.0.0.1/', 'http://192.168.1.10/', 'file:///etc/passwd', 'http://router/']) {
+    assert.throws(() => publicWebUrl(address));
+  }
+});

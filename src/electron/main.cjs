@@ -11,7 +11,7 @@ const { ChatStore } = require('./chat-store.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
-const { searchWeb } = require('./web-search.cjs');
+const { searchWeb, readWebPage } = require('./web-search.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
@@ -139,6 +139,7 @@ async function dispatchAgentTool(tool, projectRoot) {
     if (!query || query.length > 200 || /[\r\n\0]/.test(query)) throw new Error('La consulta de cerca no és vàlida.');
     return searchWeb(query);
   }
+  if (tool.name === 'read_web_page' && typeof tool.arguments?.url === 'string') return readWebPage(tool.arguments.url);
   if (tool.name === 'create_git_commit' && typeof tool.arguments?.message === 'string') {
     const message = tool.arguments.message.trim();
     if (!message || message.length > 200 || /[\r\n\0]/.test(message)) throw new Error('El missatge del commit no és vàlid.');
