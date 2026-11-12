@@ -91,7 +91,7 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
 }
 type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
 const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
-  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" minW="6px" m="0" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
     <Splitter.ResizeTriggerSeparator bg="transparent"/>
     <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="transparent" borderWidth="0" boxShadow="none" css={{ '[data-part=resize-trigger]:hover &': { background: 'var(--chakra-colors-border)' } }}/>
   </Splitter.ResizeTrigger>
