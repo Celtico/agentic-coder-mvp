@@ -1,6 +1,10 @@
 # Agentic Coder MVP (macOS Apple Silicon, 16 GB RAM)
 
+![Agentic Coder: un agent de programació que viu al teu Mac](docs/cover.png)
+
 Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app: per defecte amb Transformers.js (Qwen2.5-Coder 1.5B) i, opcionalment, amb MLX d'Apple (Qwen2.5-Coder 7B), seleccionable a la barra superior. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
+
+![L’app amb el navegador, el xat, la consola i el terminal](docs/captura.jpg)
 
 ## Què inclou
 - Aplicació d'escriptori Electron.
