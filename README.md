@@ -57,7 +57,7 @@ Tota la resta (inferència, converses, historial de fitxers, casos verificats) e
 Utilitza’l només amb carpetes de prova o projectes de confiança. L’agent actua sol dins la carpeta seleccionada:
 
 - **Sense confirmació:** llegir, crear, modificar i eliminar fitxers de la carpeta (cada canvi deixa una còpia recuperable), executar `npm test` i altres scripts de `package.json`, iniciar el projecte, crear commits de Git i instal·lar Chromium per a Playwright.
-- **Amb confirmació:** instal·lar un paquet npm. La finestra mostra el paquet, l’ordre i la carpeta. És l’única acció que baixa codi d’internet triat pel model.
+- **Amb confirmació:** instal·lar un paquet npm. La finestra mostra el paquet, l’ordre i la carpeta, i només surt la primera vegada per projecte i sessió: un cop acceptada, les instal·lacions següents en aquell projecte no pregunten fins que es tanca l’app. És l’única acció que baixa codi d’internet triat pel model.
 
 Els fitxers queden limitats a la carpeta, però els scripts no: un script de `package.json` s’executa amb els permisos del teu usuari i pot fer qualsevol cosa a l’ordinador, i l’agent pot escriure aquest fitxer. Electron no és un entorn aïllat. No posis secrets al prompt ni als fitxers indexats.
 

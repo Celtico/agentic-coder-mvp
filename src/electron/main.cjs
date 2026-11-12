@@ -15,6 +15,8 @@ const { searchWeb } = require('./web-search.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
+/** Projects where the user has already agreed to npm installs in this session. */
+const approvedInstallRoots = new Set();
 let modelWorker = null;
 let requestId = 0;
 const pendingModelRequests = new Map();
@@ -137,14 +139,17 @@ async function dispatchAgentTool(tool, projectRoot) {
     await readProjectPackage(root);
     const args = ['install', ...(dev ? ['--save-dev'] : []), packageName];
     // The only agent action that asks first: installing a package downloads code from the
-    // internet and may run it on this machine, outside the selected folder.
+    // internet and may run it on this machine, outside the selected folder. It asks once per
+    // project and session, so a task that needs several packages is not stopped at each one.
+    if (approvedInstallRoots.has(root)) return executeNpmCommand(root, args, 300000);
     const options = {
       type: 'question', buttons: ['Instal·la', 'Cancel·la'], defaultId: 1, cancelId: 1,
       message: `Instal·lar el paquet npm «${packageName}»?`,
-      detail: `L’agent vol executar: npm ${args.join(' ')}\nCarpeta: ${root}\n\nInstal·lar un paquet baixa codi d’internet i el pot executar en aquest ordinador.`,
+      detail: `L’agent vol executar: npm ${args.join(' ')}\nCarpeta: ${root}\n\nInstal·lar un paquet baixa codi d’internet i el pot executar en aquest ordinador. Si acceptes, no es tornarà a preguntar per a aquest projecte fins que tanquis l’app.`,
     };
     const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     if (confirmation.response !== 0) return { cancelled: true, error: 'L’usuari ha cancel·lat la instal·lació del paquet.' };
+    approvedInstallRoots.add(root);
     return executeNpmCommand(root, args, 300000);
   }
   if (tool.name === 'install_playwright_browser') {
