@@ -14,7 +14,7 @@ import {
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
-  LuBrain as Brain, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -1003,12 +1003,8 @@ export function App(): React.JSX.Element {
     window.addEventListener('pointerup', up);
   }
 
-  const chatPane = (
-    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
-      <Flex h="32px" flex="none" px="3" align="center" justify="space-between" gap="3">
-        <HStack minW="0" gap="3">
-          <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
-          <NativeSelect.Root size="xs" width="300px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={async (event) => {
+  const modelSelect = (
+    <NativeSelect.Root size="xs" width="auto" maxW="230px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={async (event) => {
           const nextModel = event.currentTarget.value;
           setModelChanging(true);
           try {
@@ -1019,6 +1015,21 @@ export function App(): React.JSX.Element {
           } catch (error) { setStatus(`No s’ha pogut canviar el model: ${errorText(error)}`); }
           finally { setModelChanging(false); }
         }}>{modelOptions.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+  );
+  // The composer is one line that grows with what is typed.
+  useEffect(() => {
+    const field = promptRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(190, Math.max(24, field.scrollHeight))}px`;
+  }, [draft]);
+  const chatFilePickerRef = useRef<HTMLInputElement | null>(null);
+
+  const chatPane = (
+    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+      <Flex h="32px" flex="none" px="3" align="center" justify="space-between" gap="3">
+        <HStack minW="0" gap="3">
+          <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
         </HStack>
       </Flex>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
@@ -1036,17 +1047,23 @@ export function App(): React.JSX.Element {
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
-        <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.400' : 'border'} borderRadius="22px" p="3" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
+        <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.400' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="surface.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
           {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar a Qwen.</Text>}
-          <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" minH="44px" maxH="190px" resize="vertical" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
-          <Flex mt="2" align="center" justify="space-between" gap="3">
-            <Box/>
+          <Flex align="flex-end" gap="2">
+            <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
-              ? <Button aria-label="Atura la generació" title="Atura la generació" colorPalette="red" rounded="full" size="sm" onClick={cancelPrompt}><Stop size={17}/></Button>
-              : <Button aria-label="Envia" title="Envia" colorPalette="agentic" rounded="full" size="sm" onClick={sendPrompt}><Send size={17}/></Button>}
+              ? <Button flex="none" aria-label="Atura la generació" title="Atura la generació" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" bg="fg" color="bg" _hover={{ bg: 'white' }} onClick={cancelPrompt}><Stop size={12} fill="currentColor"/></Button>
+              : <Button flex="none" aria-label="Envia" title="Envia (Retorn)" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button>}
           </Flex>
         </Box>
+        <Flex align="center" gap="2" mt="1.5" px="1" minW="0">
+          <input ref={chatFilePickerRef} type="file" multiple hidden onChange={(event) => { if (event.target.files?.length) void addChatFiles(event.target.files); event.target.value = ''; }}/>
+          <IconButton icon={Plus} label="Adjunta fitxers de text o codi" size="sm" onClick={() => chatFilePickerRef.current?.click()}/>
+          <Text flex="1" minW="0" fontSize="xs" color="fg.muted" textAlign="center" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Qwen és un model local i pot equivocar-se.</Text>
+          {modelSelect}
+          <Button flex="none" size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>{permissionMode === 'auto' ? 'Automàtic' : 'Pregunta'}</Button>
+        </Flex>
       </Box>
     </Flex>
   );
@@ -1489,9 +1506,6 @@ export function App(): React.JSX.Element {
               <Text whiteSpace="nowrap">UTF-8</Text>
               <Text whiteSpace="nowrap">Spaces: 2</Text>
             </>}
-            <Button size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'agentic.fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>
-              <Text whiteSpace="nowrap">{permissionMode === 'auto' ? 'Permisos: automàtic' : 'Permisos: pregunta'}</Text>
-            </Button>
             <HStack gap="1.5" title="Model local executat al Mac">
               <Brain size={13}/><Text maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Text><Badge size="sm" colorPalette="agentic" variant="subtle">Local</Badge>
             </HStack>

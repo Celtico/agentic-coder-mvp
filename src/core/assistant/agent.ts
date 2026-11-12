@@ -1029,6 +1029,8 @@ export class LocalCodingAgent {
       const pageVerdict = tool.name === 'start_project' && result && typeof result === 'object' ? String((result as Record<string, unknown>).pageVerdict || '') : '';
       const pageProblem = pageVerdict.startsWith('PROBLEMA');
       if (pageVerdict) lastPageVerdict = pageVerdict;
+      // A page that loads, shows content and has a clean console is a passed check.
+      if (pageVerdict && !pageProblem) checkPassed = true;
       if (pageProblem) this.onStatus({ type: 'status', message: 'La pàgina ha arrencat però no es veu bé; revisant…' });
       const toolText = JSON.stringify(result);
       const remaining = Math.max(0, 20000 - toolOutputSize);
