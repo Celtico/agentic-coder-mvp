@@ -65,7 +65,7 @@ Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, pre
 
 ### Instruccions per projecte: `AGENTS.md`
 
-Si a l’arrel del projecte hi ha un fitxer `AGENTS.md`, l’agent el rep com a instruccions de l’usuari i les segueix (gestor de paquets, convencions, carpetes que no ha de tocar…). La resta de fitxers continuen sent dades. Compte en obrir projectes d’altres: un `AGENTS.md` que no has escrit tu també serà obeït, sempre dins la carpeta seleccionada.
+Si a l’arrel del projecte hi ha un fitxer `AGENTS.md`, l’agent el rep com a instruccions de l’usuari i les segueix (gestor de paquets, convencions, carpetes que no ha de tocar…). La resta de fitxers continuen sent dades. Compte en obrir projectes d’altres: un `AGENTS.md` que no has escrit tu també serà obeït, sempre dins la carpeta seleccionada. Hi ha un exemple a [`docs/AGENTS.exemple.md`](docs/AGENTS.exemple.md).
 
 ### Perfils per projecte: `SKILLS.md`
 
