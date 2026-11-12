@@ -782,12 +782,15 @@ ipcMain.handle('project:clear', async () => {
   if (root === home || isWithin(root, home) || depth < 3 || path.dirname(root) === home && /^(Desktop|Documents|Downloads|Library)$/i.test(path.basename(root))) {
     throw new Error('Aquesta carpeta no es pot buidar des de l’app.');
   }
-  const entries = await fs.readdir(root);
-  if (entries.length === 0) return { cleared: 0, project: { path: selectedProject, files: [] } };
+  // The files that set the agent up for this project stay: emptying is for starting the code over,
+  // not for losing the instructions.
+  const kept = (await fs.readdir(root)).filter((name) => /^(?:agents\.md|skills\.md|\.?mcp\.json)$/i.test(name));
+  const entries = (await fs.readdir(root)).filter((name) => !kept.includes(name));
+  if (entries.length === 0) return { cleared: 0, project: { path: selectedProject, files: await listFiles(selectedProject) } };
   const options = {
     type: 'warning', buttons: ['Buida la carpeta', 'Cancel·la'], defaultId: 1, cancelId: 1,
     message: `Buidar «${path.basename(root)}»?`,
-    detail: `Es mouran a la paperera ${entries.length} elements de ${root}${entries.includes('.git') ? ', inclòs l’historial de Git (.git)' : ''}. Els podràs recuperar des de la paperera.`,
+    detail: `Es mouran a la paperera ${entries.length} elements de ${root}${entries.includes('.git') ? ', inclòs l’historial de Git (.git)' : ''}. Els podràs recuperar des de la paperera.${kept.length ? `\n\nEs conserven: ${kept.join(', ')}.` : ''}`,
   };
   const confirmation = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
   if (confirmation.response !== 0) return { cancelled: true, cleared: 0, project: { path: selectedProject, files: await listFiles(selectedProject) } };
