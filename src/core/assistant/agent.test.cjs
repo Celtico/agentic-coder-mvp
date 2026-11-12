@@ -1419,3 +1419,26 @@ test('the reviewer profile sends the programmer back once, then the answer says 
   assert.match(answer, /amb el botó/);
   assert.match(answer, /Revisor: ha demanat corregir/);
 });
+
+test('SKILLS.md: titles are always listed, a skill\'s text only when the message calls for it', async (t) => {
+  const { parseSkills, matchSkills } = require('./agent-runtime.cjs');
+  const markdown = '# Perfils\n\n## Senior Frontend\nParaules: component, css\nFes components petits.\n\n## QA Engineer\nEscriu una prova per cada canvi.\n\n## Copywriter\nFrases curtes.';
+  const skills = parseSkills(markdown);
+  assert.deepEqual(skills.map((skill) => skill.title), ['Senior Frontend', 'QA Engineer', 'Copywriter']);
+  assert.equal(skills[0].body, 'Fes components petits.');
+  assert.deepEqual(matchSkills(skills, 'Fes un component nou').map((skill) => skill.title), ['Senior Frontend']);
+  assert.deepEqual(matchSkills(skills, 'Com a @qa-engineer, revisa això').map((skill) => skill.title), ['QA Engineer']);
+  assert.deepEqual(matchSkills(skills, 'Quina hora és?'), []);
+
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-skills-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'SKILLS.md'), markdown);
+  let system = '';
+  const engine = { loadModel: async () => {}, generateResponse: async (messages) => { system = messages[0].content; return '{"type":"final","content":"Hola."}'; }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  await agent.ask('Quin copywriter tenim?', tempRoot, async () => ({}));
+  assert.match(system, /Senior Frontend · QA Engineer · Copywriter/);
+  assert.match(system, /## Copywriter\nFrases curtes\./);
+  assert.doesNotMatch(system, /Fes components petits/);
+});

@@ -67,6 +67,12 @@ Per a tasques de codi, l’agent ha d’inspeccionar instruccions i scripts, pre
 
 Si a l’arrel del projecte hi ha un fitxer `AGENTS.md`, l’agent el rep com a instruccions de l’usuari i les segueix (gestor de paquets, convencions, carpetes que no ha de tocar…). La resta de fitxers continuen sent dades. Compte en obrir projectes d’altres: un `AGENTS.md` que no has escrit tu també serà obeït, sempre dins la carpeta seleccionada.
 
+### Perfils per projecte: `SKILLS.md`
+
+Al costat d’`AGENTS.md` hi pot haver un `SKILLS.md`: el teu catàleg de perfils i maneres de treballar. Cada títol `## Nom` és un perfil i el text de sota són les seves instruccions; una primera línia opcional `Paraules: a, b, c` hi afegeix paraules que l’activen. L’agent sempre veu la llista de noms, i el text d’un perfil només s’afegeix quan el missatge el demana: pel nom (`@qa-engineer` o «com a QA Engineer»), per una de les seves paraules o per una paraula llarga del títol. Com a màxim dos perfils per missatge. Afegir, treure o canviar perfils és editar el fitxer; no cal tocar l’app. Hi ha un exemple a [`docs/SKILLS.exemple.md`](docs/SKILLS.exemple.md).
+
+A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor: quan el programador acaba, el mateix model rellegeix els fitxers escrits amb unes altres instruccions i el pot fer tornar una vegada.
+
 ## Model i llicència
 El codi d’aquest repositori es publica sota la llicència MIT (vegeu [`LICENSE`](LICENSE)). Els models tenen la seva pròpia llicència:
 
