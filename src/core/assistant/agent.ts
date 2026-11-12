@@ -678,7 +678,7 @@ export class LocalCodingAgent {
       ? `${unfinishedPriorCodingRequest}\n\nSeguiment actual de l’usuari: ${prompt}`
       : prompt;
     const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(prompt);
-    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test)\b/i.test(effectivePrompt);
+    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test)\b/i.test(effectivePrompt);
     const unnecessaryQuestion = /\b(?:vols que|vols que ho|hauria de|necessito saber|em pots dir|pots indicar|would you like me to|do you want me to|should i|can you provide|could you clarify|please tell me which)\b/i;
     const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i;
     const appTargetMentioned = /\b(?:app|application)\b|aplicaci[oó](?=$|[^\p{L}\p{N}_])/iu.test(effectivePrompt);
@@ -703,6 +703,7 @@ export class LocalCodingAgent {
     const appliedProjectFiles = new Set<string>();
     let lastPageVerdict = '';
     let reviewed = false;
+    let toolsRun = 0;
     let reviewNote = '';
     let completionNudges = 0;
     const maxCompletionNudges = 4;
@@ -789,6 +790,12 @@ export class LocalCodingAgent {
       this.onStatus({ type: 'status', message: `Revisor: ${problems.length === 1 ? 'ha trobat un problema' : `ha trobat ${problems.length} problemes`}; el programador ho corregeix…` });
       return `Un revisor ha llegit els fitxers i ha trobat aquests problemes:\n${problems.map((item, index) => `${index + 1}. ${item}`).join('\n')}\n\nSi són certs, corregeix-los ara amb write_file (escriu el fitxer sencer)${lastPageVerdict ? ' i després torna a cridar start_project per comprovar la pàgina' : ''}. Si algun no és cert, ignora’l. Quan acabis, dona la resposta final en prosa. Respon ara amb una sola crida d’eina en JSON o amb la resposta final.`;
     };
+    // Asked to do something, the model sometimes answers with the plan and stops there. A plan is not
+    // an answer: it is told to carry it out, and if it never does, the reply says so plainly.
+    const onlyAPlan = (text: string) => requestedAction && toolsRun === 0 && !changeApplied
+      && (/^\s*(?:pla\b|plan\b)/i.test(text) || /\b\p{L}{3,}(?:aré|eré|iré)\b/iu.test(text) || /\bI(?:'ll| will)\b/.test(text));
+    const carryOutPlan = 'Això és només el pla i encara no has fet res. Executa’l ara: respon únicament amb la primera crida d’eina en JSON, sense text al voltant. Exemples: {"type":"tool_call","name":"install_package","arguments":{"packageName":"@chakra-ui/react","dev":false}} o {"type":"tool_call","name":"read_file","arguments":{"path":"src/main.jsx"}}.';
+    const planNeverRun = 'He escrit el pla però no he arribat a executar-ne cap pas: no he instal·lat res ni he tocat cap fitxer. Torna-m’ho a demanar, si pot ser dient el primer pas concret (per exemple «instal·la el paquet @chakra-ui/react»).';
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       const modelActivity = iteration === 0
         ? 'Qwen està analitzant la tasca i el projecte…'
@@ -814,6 +821,11 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw });
           await inspectProjectForCreation(raw);
           continue;
+        }
+        if (onlyAPlan(raw)) {
+          if (completionNudges < maxCompletionNudges) { completionNudges += 1; messages.push({ role: 'assistant', content: raw }, { role: 'user', content: carryOutPlan }); continue; }
+          answer = planNeverRun;
+          break;
         }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {
@@ -849,6 +861,11 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw });
           await inspectProjectForCreation(raw);
           continue;
+        }
+        if (onlyAPlan(action.content)) {
+          if (completionNudges < maxCompletionNudges) { completionNudges += 1; messages.push({ role: 'assistant', content: raw }, { role: 'user', content: carryOutPlan }); continue; }
+          answer = planNeverRun;
+          break;
         }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {
@@ -943,6 +960,7 @@ export class LocalCodingAgent {
           }
           result = { delegatedSequentially: true, agents: delegated };
         } else result = await executeTool(tool);
+        toolsRun += 1;
       }
       catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
       // Once the project has really changed (a file written, a package installed…), earlier results are

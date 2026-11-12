@@ -88,6 +88,22 @@ const Stat = ({ label, value, dim = false }: { label: string; value: number; dim
   </Box>
 );
 
+/** The app's mark. Still when the model is ready; it turns and breathes while the model works. */
+const Mark = ({ size = 16, busy = false }: { size?: number; busy?: boolean }) => (
+  <Box as="span" display="inline-flex" flex="none" color="agentic.300" aria-hidden="true" style={{ width: size, height: size }}>
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" style={busy ? { animation: 'agentic-turn 2.4s linear infinite' } : undefined}>
+      <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" style={busy ? { animation: 'agentic-breathe 1.2s ease-in-out infinite', transformOrigin: '12px 12px' } : undefined}/>
+      <path d="M12 8 16 12 12 16 8 12Z" fill="currentColor" style={busy ? { animation: 'agentic-beat 1.2s ease-in-out infinite', transformOrigin: '12px 12px' } : undefined}/>
+    </svg>
+  </Box>
+);
+const markKeyframes = `
+@keyframes agentic-turn { to { transform: rotate(360deg); } }
+@keyframes agentic-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes agentic-beat { 0%, 100% { transform: scale(.55); } 50% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { svg[style*="agentic-turn"], svg[style*="agentic-turn"] * { animation: none !important; } }
+`;
+
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Button aria-label={label} title={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
@@ -1009,7 +1025,7 @@ export function App(): React.JSX.Element {
             {previousUser && !message.error && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { setVerifiedEvidence(''); setVerifiedExperienceDraft({ prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}
-        {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1"><Spinner size="sm" colorPalette="agentic"/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
+        {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
@@ -1144,7 +1160,7 @@ export function App(): React.JSX.Element {
   );
 
   const learningPane = (
-    <Flex h="full" minH="0" direction="column" p="3" bg="bg" gap="3" overflowY="auto">
+    <Flex h="full" minH="0" direction="column" p="3" bg="bg" gap="3" overflowY="auto" css={{ '& > *': { flexShrink: 0 } }}>
       <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : datasetPreview ? <>
@@ -1267,10 +1283,11 @@ export function App(): React.JSX.Element {
 
   return (
     <>
+    <style>{markKeyframes}</style>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
     <Grid flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
-          <Flex h="32px" w="full" flex="none" align="center" justify="center" fontSize="lg" fontWeight="bold" color="agentic.300" title="Agentic Coder">◈</Flex>
+          <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
@@ -1427,7 +1444,7 @@ export function App(): React.JSX.Element {
               <Brain size={13}/><Text maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Text><Badge size="sm" colorPalette="agentic" variant="subtle">Local</Badge>
             </HStack>
             <HStack minW="0" gap="1.5" title={status}>
-              {loading || modelChanging ? <Spinner size="xs"/> : <Box w="7px" h="7px" rounded="full" bg="agentic.300" flex="none"/>}
+              <Mark size={13} busy={loading || modelChanging}/>
               <Text maxW="250px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{loading ? loadingLabel : modelChanging ? 'Canviant el model…' : status}</Text>
             </HStack>
           </HStack>

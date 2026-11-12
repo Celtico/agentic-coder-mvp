@@ -1463,3 +1463,23 @@ test('a tool call missing its last closing brace is still carried out', async (t
   assert.equal(written[0].path, 'src/Counter.jsx');
   assert.match(written[0].content, /return <button>\+<\/button>;\n\}$/);
 });
+
+test('a plan given as the answer to a request for action is carried out, not accepted', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-plan-only-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tempRoot, 'package.json'), '{"name":"fixture"}');
+  const inputs = [];
+  const responses = [
+    'Pla abans de començar:\nInspeccionaré el projecte; instal·laré Chakra UI; actualitzaré src/main.jsx.',
+    '{"type":"tool_call","name":"install_package","arguments":{"packageName":"@chakra-ui/react","dev":false}}',
+    '{"type":"final","content":"He instal·lat @chakra-ui/react."}',
+  ];
+  const engine = { loadModel: async () => {}, generateResponse: async (messages) => { inputs.push(messages[messages.length - 1].content); return responses.shift(); }, getModelStatus: () => ({ modelId: 'test-model' }) };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask('Instal·la Chakra UI', tempRoot, async (tool) => { calls.push(tool.name); return { code: 0, output: 'added 1 package' }; });
+  assert.deepEqual(calls, ['install_package']);
+  assert.ok(inputs.some((input) => /només el pla/.test(input)));
+  assert.match(answer, /He instal·lat/);
+});
