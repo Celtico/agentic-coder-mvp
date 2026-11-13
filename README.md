@@ -2,14 +2,14 @@
 
 ![Agentic Coder: un agent de programació que viu al teu Mac](docs/cover.png)
 
-Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app: per defecte amb Transformers.js (Qwen2.5-Coder 1.5B) i, opcionalment, amb MLX d'Apple (Qwen2.5-Coder 7B), seleccionable a la barra superior. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
+Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple (Qwen2.5-Coder 7B en 4 bits), en un procés local aïllat de la interfície. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
 ![L’app sencera: converses i fitxers, editor, navegador, xat amb l’agent, i a baix Git, aprenentatge, consola i terminal](docs/captura.jpg)
 
 ## Què inclou
 - Aplicació d'escriptori Electron.
 - Selecció d'una carpeta de projecte i exploració de fitxers.
-- Inferència local amb `onnx-community/Qwen2.5-Coder-1.5B-Instruct` quantitzat Q4 mitjançant Transformers.js.
+- Inferència local amb `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` mitjançant MLX d’Apple. Transformers.js es manté només per als embeddings de la cerca semàntica.
 - Context limitat del projecte que prioritza `AGENTS.md`, README, manifestos de dependències i fitxers d’entrada; converses persistides localment, que es poden eliminar d’una en una des de la llista.
 - Cerca semàntica local i opcionalment carregada per recuperar casos verificats del mateix projecte amb un model multilingüe independent de Qwen; si no està disponible, es manté la cerca per paraules.
 - La lectura de context respecta regles habituals de `.gitignore` a l’arrel i als subdirectoris, inclosos comodins i negacions senzilles; també manté exclusions fixes per a carpetes generades i fitxers ocults.
@@ -76,8 +76,7 @@ També es pot indicar una altra carpeta amb la variable `AGENT_MODELS_DIR`. Altr
 Tota la resta (inferència, converses, historial de fitxers, casos verificats) es queda en local.
 
 ## Limitacions conscients del MVP
-- El model 1.5B és petit: serveix per validar la integració, però no s'ha d'esperar la qualitat d'un model de programació gran. Per això rep un mode reduït: instruccions curtes, sis eines (llistar, llegir i escriure fitxers, executar scripts, iniciar el projecte i instal·lar paquets) i només uns 4 KB del projecte, i executa les eines directament sense pas de planificació. Els models més grans (7B) reben les instruccions completes i totes les eines. Es pot forçar amb `AGENT_COMPACT=1` o `AGENT_COMPACT=0`.
-- El model s'executa a través del backend ONNX de Transformers.js; l'acceleració GPU en Electron/Node pot variar segons el backend i la configuració.
+- El 7B en 4 bits ocupa 4,28 GB; en un Mac de 16 GB, amb converses llargues, MLX pot quedar-se sense memòria de GPU (`kIOGPUCommandBufferCallbackErrorOutOfMemory`). Els models de 3B o menys rebrien un mode reduït (instruccions curtes, poques eines, uns 4 KB del projecte); es pot forçar amb `AGENT_COMPACT=1` o `AGENT_COMPACT=0`.
 - La interfície permet obrir fitxers des d’un arbre de carpetes, editar-los i revisar el contingut abans de desar. L’editor no desa res sol: es desa amb el botó petit de desar o amb ⌘S, i cada desat crea una versió a l’historial local de l’aplicació; el panell compara versions i permet restaurar-les amb confirmació. Això val per a l’edició manual. Quan l’agent fa servir les seves eines, els canvis de fitxers s’apliquen directament i en queda una còpia recuperable.
 - L'execució de tests és una acció explícita de l'usuari.
 - El registre JSONL conserva els intercanvis complets de l’agent; les converses de la interfície es desen separadament a SQLite. Els casos verificats es poden cercar amb embeddings locals; això no entrena ni modifica el model generatiu.
@@ -116,7 +115,7 @@ A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor
 ## Model i llicència
 El codi d’aquest repositori es publica sota la llicència MIT (vegeu [`LICENSE`](LICENSE)). Els models tenen la seva pròpia llicència:
 
-El model generatiu per defecte és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`, publicat sota Apache-2.0; l’opcional és `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` (consulta’n el model card). La cerca semàntica opcional utilitza `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, també sota Apache-2.0. Consulta els [model cards de Qwen](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct) i [MiniLM multilingüe](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2) abans de redistribuir pesos o crear un producte.
+El model generatiu és `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` (Apache-2.0; consulta’n el model card). La cerca semàntica opcional utilitza `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, també sota Apache-2.0. Consulta els [model cards de Qwen](https://huggingface.co/mlx-community/Qwen2.5-Coder-7B-Instruct-4bit) i [MiniLM multilingüe](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2) abans de redistribuir pesos o crear un producte.
 
 
 ## Fases del projecte
@@ -128,7 +127,7 @@ El model generatiu per defecte és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`,
 
 | Fase | Estat actual |
 | --- | --- |
-| Motor local | Transformers.js ha carregat Qwen2.5-Coder-1.5B des de `models/` i ha generat una resposta en un procés Node local. La prova amb la xarxa físicament desactivada i l’acceleració Metal encara estan pendents. |
+| Motor local | MLX carrega Qwen2.5-Coder-7B (4 bits) des de `models/.hf` en un procés local. Històric: Transformers.js havia carregat Qwen2.5-Coder-1.5B, ja retirat (13-11-2026: 3/6 al benchmark, igual que el 7B, però fallava en tasques obertes). La prova amb la xarxa físicament desactivada i l’acceleració Metal encara estan pendents. |
 | Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada, creació segura de subcarpetes i còpia recuperable de cada fitxer modificat o eliminat; només la instal·lació de paquets demana confirmació. Detecta també peticions catalanes com «fes una aplicació nova» com a tasques d’implementació; una explicació sense cap fitxer escrit no es presenta com a feina acabada. Abans de començar, les instruccions demanen al model revisar les eines disponibles i triar-ne una. En una conversa nova, Qwen 7B va crear un fitxer `index.html` real; en una tasca de portfoli va crear `src/index.html` i `src/styles.css`, però no va completar l’entrada funcional a l’arrel. Per tant, pot executar eines en tasques simples, però encara falla en alguns projectes oberts. La generació es pot aturar tancant el procés aïllat del model, que es torna a carregar en la petició següent; les accions confirmades en curs no s’interrompen. No hi ha una eina de shell lliure per al model. |
 | Navegador i edició | Les peticions explícites d’arrencar una app local i d’inspeccionar una URL localhost criden les eines directament. La inspecció pot comprovar elements accessibles, clicar, omplir camps i verificar text amb un màxim de 12 accions; no s’accepten selectors arbitraris ni JavaScript del model. La inspecció la fa el navegador que ja porta Electron, sense instal·lar res al projecte; amb la versió anterior basada en Playwright, Agentic Coder va iniciar Notes al webview i va obtenir HTTP 200, títol `Notes` i cap error de consola, pàgina o xarxa. En una tasca real amb Qwen local, una instrucció llarga no va produir cap canvi; una instrucció directa i acotada sí que va corregir `src/math.cjs` i `npm test` va passar (1/1). El cicle d’interacció del navegador amb l’orquestrador i la fiabilitat general del model encara s’han de validar junts. |
 | Interfície | React, TypeScript, Chakra UI, Monaco per editar codi, xterm.js per a la terminal, xat amb historial local, panells separables, navegador integrat i panell Git de només lectura. `git-interface` aporta les branques locals i els remots; les operacions de canvi continuen protegides pels controls locals. La distribució instal·lable encara no està feta. |

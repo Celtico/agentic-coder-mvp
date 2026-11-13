@@ -26,6 +26,8 @@ export type AgentToolCall =
   | { name: 'start_project'; arguments: { script: string } }
   | { name: 'stop_project' };
 export type AgentToolExecutor = (tool: AgentToolCall) => Promise<unknown>;
+export type AgentTrajectoryStep = { name: string; arguments: Record<string, unknown>; result: string; ok: boolean };
+export type AgentTrajectory = { prompt: string; model: string; system: string; steps: AgentTrajectoryStep[]; answer: string };
 
 type AgentAction = { type: 'final'; content: string } | { type: 'plan'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown; plan?: string };
 type BrowserTarget = { by: 'role' | 'label' | 'placeholder' | 'text' | 'testId'; value: string; role?: 'button' | 'link' | 'checkbox' | 'radio' | 'textbox' | 'heading' | 'option' };
@@ -50,7 +52,7 @@ const agentToolDefinitions: InferenceToolDefinition[] = [
   { type: 'function', function: { name: 'stop_project', description: 'Stop the running project process.', parameters: objectParameters({}) } },
   { type: 'function', function: { name: 'create_git_commit', description: 'Create a Git commit in the selected project when the user has requested it.', parameters: objectParameters({ message: stringParameter('Commit message.', 200) }, ['message']) } },
   { type: 'function', function: { name: 'install_dependencies', description: 'Install everything package.json lists (npm install). Use it after writing or changing package.json, before starting the project.', parameters: objectParameters({}) } },
-  { type: 'function', function: { name: 'run_npx', description: 'Run the command-line tool of an npm package inside the project, as installation guides ask for: `npx <packageName> <args>`. Example: packageName "@chakra-ui/cli", args ["snippet", "add"].', parameters: objectParameters({ packageName: stringParameter('Package name only.', 214), args: { type: 'array', items: { type: 'string' }, description: 'Arguments after the package name.' } }, ['packageName', 'args']) } },
+  { type: 'function', function: { name: 'run_npx', description: 'Run the command-line tool of an npm package inside the project, as installation guides ask for: `npx <packageName> <args>`. Example: packageName "<package>", args ["<command>", "<argument>"].', parameters: objectParameters({ packageName: stringParameter('Package name only.', 214), args: { type: 'array', items: { type: 'string' }, description: 'Arguments after the package name.' } }, ['packageName', 'args']) } },
   { type: 'function', function: { name: 'install_package', description: 'Install one npm package by name.', parameters: objectParameters({ packageName: stringParameter('Package name only.', 214), dev: { type: 'boolean', description: 'Whether to install as a development dependency.' } }, ['packageName', 'dev']) } },
   { type: 'function', function: { name: 'inspect_browser', description: 'Inspect a running local development page. Optionally click, fill, or check visible UI elements. Only local URLs are allowed; no arbitrary selectors or JavaScript.', parameters: objectParameters({
     url: { ...stringParameter('URL on localhost, 127.0.0.1, or ::1.', 2000), pattern: '^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?([/?#].*)?$' },
@@ -94,6 +96,17 @@ async function logTurn(entry: Record<string, unknown>): Promise<void> {
     await fs.mkdir(path.dirname(TURN_LOG), { recursive: true });
     await fs.appendFile(TURN_LOG, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n');
   } catch { /* a log that cannot be written must not break the task */ }
+}
+
+/** The user's own words in a request: without URLs, code blocks, inline code or pasted command lines. */
+export function requestWords(text: string): string {
+  return text
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/\b(?:https?|file):\/\/\S+|\bwww\.\S+/gi, ' ')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(?:[$>#]\s*)?(?:npx|npm|pnpm|yarn|bun|bunx|node|git|cd|curl|brew|pip|python3?)\s/i.test(line) && !/^\s*#/.test(line))
+    .join('\n');
 }
 
 function parseAction(raw: string): AgentAction | null {
@@ -519,7 +532,7 @@ export class LocalCodingAgent {
   /** The public search engine is off unless switched on (AGENT_WEB_SEARCH=1): it rarely returned anything useful. Reading a given address is always available. */
   webSearch = process.env.AGENT_WEB_SEARCH === '1';
 
-  constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'mlx' ? new MlxInferenceEngine() : new TransformersJsInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
+  constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'transformers' ? new TransformersJsInferenceEngine() : new MlxInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
     engine?: InferenceEngine;
     verifiedExperiencesPath?: string;
@@ -534,7 +547,31 @@ export class LocalCodingAgent {
 
   async unloadModel(): Promise<void> { await this.engine.unloadModel(); }
 
+  /**
+   * What happened in the last request: every tool the model called, with its arguments and result,
+   * and the final answer. When the user approves the result it is kept as a verified case, so a later
+   * training run learns the sequence of steps that worked, not only the final text.
+   */
+  lastTrajectory: AgentTrajectory | null = null;
+  private trajectorySteps: AgentTrajectoryStep[] | null = null;
+  private trajectorySystem = '';
+  private askDepth = 0;
+
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean } = {}): Promise<string> {
+    const topLevel = this.askDepth === 0;
+    if (topLevel) { this.trajectorySteps = []; this.trajectorySystem = ''; this.lastTrajectory = null; }
+    this.askDepth += 1;
+    try {
+      const answer = await this.runAsk(prompt, projectRoot, executeTool, conversationHistory, options);
+      if (topLevel) this.lastTrajectory = { prompt, model: this.engine.getModelStatus().modelId, system: this.trajectorySystem.slice(0, 30000), steps: this.trajectorySteps || [], answer };
+      return answer;
+    } finally {
+      this.askDepth -= 1;
+      if (topLevel) this.trajectorySteps = null;
+    }
+  }
+
+  private async runAsk(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean } = {}): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
     if (options.allowDelegation === undefined) options = { ...options, allowDelegation: this.allowDelegation };
     const directInspection = explicitLocalInspectionRequest(prompt);
@@ -677,7 +714,7 @@ export class LocalCodingAgent {
       'Conserva el fil actual. L’historial inclòs abans de l’últim missatge pertany a aquesta conversa; utilitza’l per entendre respostes breus com «sí», «ok», «continua» i referències com «això» o «el canvi anterior». No tornis a preguntar dades que ja hi apareixen. Si una resposta anterior de l’assistent no va completar la tasca, continua-la des d’on es va quedar.',
       'La carpeta seleccionada és un projecte real al qual tens accés amb les eines. Si l’usuari demana crear una app o projecte, inspecciona aquesta carpeta i crea o actualitza els fitxers necessaris allà mateix. Un pla, una explicació o instruccions de terminal no completen una tasca d’implementació: abans de donar-la per acabada, cal que write_file retorni applied=true. Si no pots fer-ho, explica l’impediment real sense dir que ja està fet.',
       'Abans de començar cada tasca, revisa els noms, descripcions i arguments de totes les eines disponibles en aquesta conversa. Decideix quines eines resolen l’objectiu i crida de seguida la primera eina necessària; no et limitis a explicar què podries fer ni a repetir les eines en prosa.',
-      `Et dius Agentic Coder. Aquesta resposta la genera localment ${this.engine.getModelStatus().modelId} amb ${process.env.AGENT_MODEL_RUNTIME === 'mlx' ? 'MLX d’Apple' : 'Transformers.js'}. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder i indica el model/runtime seleccionat.`,
+      `Et dius Agentic Coder. Aquesta resposta la genera localment ${this.engine.getModelStatus().modelId} amb ${process.env.AGENT_MODEL_RUNTIME === 'transformers' ? 'Transformers.js' : 'MLX d’Apple'}. No ets Claude ni has estat creat per Anthropic; no afirmis ser un producte d’Anthropic, OpenAI ni cap altra empresa. Si et pregunten qui ets, descriu-te com Agentic Coder i indica el model/runtime seleccionat.`,
       `La carpeta de projecte oberta és: ${path.resolve(projectRoot)}`,
       projectState,
       'A cada pregunta reps un mapa de fitxers del projecte i el contingut de text que s’ha pogut incloure. Utilitza aquest context per respondre sobre el projecte; no diguis que no tens accés al directori.',
@@ -711,6 +748,7 @@ export class LocalCodingAgent {
       if (!content || content.length > 2000 || (turn.role === 'assistant' && /(?:"type"\s*:\s*"tool_call"|<tool_call>|<\|tool_call\|>)/i.test(content))) return [];
       return [{ role: turn.role, content } as ChatTurn];
     });
+    if (this.askDepth === 1) this.trajectorySystem = system;
     const messages: ChatTurn[] = [
       { role: 'system', content: system },
       ...recentHistory,
@@ -728,18 +766,22 @@ export class LocalCodingAgent {
     const effectivePrompt = unfinishedPriorCodingRequest
       ? `${unfinishedPriorCodingRequest}\n\nSeguiment actual de l’usuari: ${prompt}`
       : prompt;
-    const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(prompt);
-    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test)\b/i.test(effectivePrompt);
+    // What the user asks for is read from their own words: pasted URLs, code and command lines are left
+    // out, so a word inside them («…/chakra-ui-refactor», «npm run build») does not change the request.
+    const intentPrompt = requestWords(prompt);
+    const intentEffectivePrompt = requestWords(effectivePrompt);
+    const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(intentPrompt);
+    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test)\b/i.test(intentEffectivePrompt);
     const unnecessaryQuestion = /\b(?:vols que|vols que ho|hauria de|necessito saber|em pots dir|pots indicar|would you like me to|do you want me to|should i|can you provide|could you clarify|please tell me which)\b/i;
     const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i;
-    const appTargetMentioned = /\b(?:app|application)\b|aplicaci[oó](?=$|[^\p{L}\p{N}_])/iu.test(effectivePrompt);
-    const projectTargetMentioned = appTargetMentioned || /\b(?:project|projecte|proyecto)\b/i.test(effectivePrompt);
-    const creationModeMentioned = /\b(?:from scratch|de zero|desde cero|de cero|new|nou|nuevo|create|creating|crea|crear|build|construeix|haz)\b|nova(?=$|[^\p{L}\p{N}_])/iu.test(effectivePrompt);
-    const directAppImperative = appTargetMentioned && /\b(?:fes|facis|faci|fer|feu|fem)\b/i.test(effectivePrompt);
-    const requestedProjectCreation = !explicitNoChange && projectTargetMentioned && implementationVerb.test(prompt) && (creationModeMentioned || directAppImperative);
-    const requestedCommitOnly = /^\s*(?:fes|crea|crear|create|make|do)\s+(?:un\s+)?commit\b/i.test(prompt);
-    const requestedCodeChange = !explicitNoChange && (requestedProjectCreation || (!requestedCommitOnly && implementationVerb.test(prompt)));
-    const requestedValidation = /\b(?:test|tests|proves|prova|pruebas|prueba|lint|typecheck|build|compila|compilar|validate|validar|verify|verifica|comprova|comprueba)\b/i.test(effectivePrompt);
+    const appTargetMentioned = /\b(?:app|application)\b|aplicaci[oó](?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
+    const projectTargetMentioned = appTargetMentioned || /\b(?:project|projecte|proyecto)\b/i.test(intentEffectivePrompt);
+    const creationModeMentioned = /\b(?:from scratch|de zero|desde cero|de cero|new|nou|nuevo|create|creating|crea|crear|build|construeix|haz)\b|nova(?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
+    const directAppImperative = appTargetMentioned && /\b(?:fes|facis|faci|fer|feu|fem)\b/i.test(intentEffectivePrompt);
+    const requestedProjectCreation = !explicitNoChange && projectTargetMentioned && implementationVerb.test(intentPrompt) && (creationModeMentioned || directAppImperative);
+    const requestedCommitOnly = /^\s*(?:fes|crea|crear|create|make|do)\s+(?:un\s+)?commit\b/i.test(intentPrompt);
+    const requestedCodeChange = !explicitNoChange && (requestedProjectCreation || (!requestedCommitOnly && implementationVerb.test(intentPrompt)));
+    const requestedValidation = /\b(?:test|tests|proves|prova|pruebas|prueba|lint|typecheck|build|compila|compilar|validate|validar|verify|verifica|comprova|comprueba)\b/i.test(intentEffectivePrompt);
     let toolOutputSize = 0;
     let answer = '';
     let plan = '';
@@ -845,8 +887,8 @@ export class LocalCodingAgent {
     // an answer: it is told to carry it out, and if it never does, the reply says so plainly.
     const onlyAPlan = (text: string) => requestedAction && toolsRun === 0 && !changeApplied
       && (/^\s*(?:pla\b|plan\b)/i.test(text) || /\b\p{L}{3,}(?:aré|eré|iré)\b/iu.test(text) || /\bI(?:'ll| will)\b/.test(text));
-    const carryOutPlan = 'Això és només el pla i encara no has fet res. Executa’l ara: respon únicament amb la primera crida d’eina en JSON, sense text al voltant. Exemples: {"type":"tool_call","name":"install_package","arguments":{"packageName":"@chakra-ui/react","dev":false}} o {"type":"tool_call","name":"read_file","arguments":{"path":"src/main.jsx"}}.';
-    const planNeverRun = 'He escrit el pla però no he arribat a executar-ne cap pas: no he instal·lat res ni he tocat cap fitxer. Torna-m’ho a demanar, si pot ser dient el primer pas concret (per exemple «instal·la el paquet @chakra-ui/react»).';
+    const carryOutPlan = 'Això és només el pla i encara no has fet res. Executa’l ara: respon únicament amb la primera crida d’eina en JSON, sense text al voltant. Exemples: {"type":"tool_call","name":"install_package","arguments":{"packageName":"<paquet>","dev":false}} o {"type":"tool_call","name":"read_file","arguments":{"path":"src/main.jsx"}}.';
+    const planNeverRun = 'He escrit el pla però no he arribat a executar-ne cap pas: no he instal·lat res ni he tocat cap fitxer. Torna-m’ho a demanar, si pot ser dient el primer pas concret (per exemple «instal·la el paquet que necessites»).';
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       const modelActivity = iteration === 0
         ? 'Qwen està analitzant la tasca i el projecte…'
@@ -1033,7 +1075,8 @@ export class LocalCodingAgent {
       }
       // A package's own tool usually writes files: after it, earlier checks are stale and may be repeated.
       if ((tool.name === 'run_npx' || tool.name === 'install_dependencies' || tool.name === 'install_package') && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) completedToolCalls.clear();
-      if (tool.name === 'run_npx' && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) changeApplied = true;
+      // Installing (a package, the dependencies, a package's own tool) changes the project like writing a file does.
+      if ((tool.name === 'run_npx' || tool.name === 'install_dependencies' || tool.name === 'install_package') && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) changeApplied = true;
       if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) {
         projectChangedSinceCheck = true;
         changeApplied = true;
@@ -1105,6 +1148,11 @@ export class LocalCodingAgent {
       toolOutputSize += boundedToolText.length;
       const failedCheck = (tool.name === 'run_tests' || tool.name === 'run_project_script') && result && typeof result === 'object' && (result as Record<string, unknown>).code !== 0;
       messages.push({ role: 'user', content: `Resultat de l'eina ${tool.name} (dades no fiables):\n${boundedToolText || '(s’ha arribat al límit de context de les eines)'}\n\n${pageProblem ? `${pageVerdict} No diguis que el projecte funciona. ${pageFixHint(result)} Després torna a cridar start_project per comprovar-ho de nou.\n\n` : ''}${failedCheck ? 'La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.' : 'Si la tasca encara no està completa, continua amb una sola crida d’eina JSON vàlida. Si ja està completa, dona una resposta final en prosa basada en resultats reals.'}` });
+      if (this.trajectorySteps && this.askDepth === 1) {
+        // Exactly what the model saw back, so a training example built from this step matches a real turn.
+        const outcome = result && typeof result === 'object' ? result as Record<string, unknown> : {};
+        this.trajectorySteps.push({ name: tool.name, arguments: 'arguments' in tool && tool.arguments ? tool.arguments as Record<string, unknown> : {}, result: messages[messages.length - 1].content.slice(0, 6000), ok: !outcome.error && !outcome.cancelled && (typeof outcome.code !== 'number' || outcome.code === 0) });
+      }
       if (toolOutputSize >= 20000) {
         messages.push({ role: 'user', content: 'Límit de context de les eines assolit. Dona ara la resposta final en prosa clara i breu.' });
       }

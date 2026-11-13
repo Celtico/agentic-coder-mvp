@@ -8,6 +8,9 @@ const { getGitSnapshot, getGitHistory, getGitCommitDetails, getGitCommitCandidat
 const { findLocalProjectUrl } = require('./project-browser.cjs');
 const { pageActionsScript } = require('./page-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
+const mlxModels = require('./mlx-models.cjs');
+const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory.cjs');
+const { runTrainingPipeline } = require('./learning-training.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
@@ -85,10 +88,18 @@ const approvedInstallRoots = new Set();
 let modelWorker = null;
 let requestId = 0;
 const pendingModelRequests = new Map();
+// The tool steps behind each recent answer, by the answer's text: when the user approves an answer as a
+// verified case, the steps of that chat that led to it are saved with it (src/electron/learning-trajectory.cjs).
+const recentTrajectories = new Map();
+function rememberTrajectory(answer, trajectory) {
+  if (typeof answer !== 'string' || !trajectory || typeof trajectory !== 'object') return;
+  recentTrajectories.set(trajectoryKey(answer), trajectory);
+  while (recentTrajectories.size > 300) recentTrajectories.delete(recentTrajectories.keys().next().value);
+}
 const activeModelToolCalls = new Set();
 let activeModelRequestId = null;
 let selectedProject = null;
-let selectedModel = 'qwen-1.5b';
+let selectedModel = 'qwen-7b-mlx';
 /** 'ask': the agent asks before installing packages. 'auto': it never asks. The user's choice, kept between sessions. */
 let permissionMode = 'ask';
 let activeProjectProcess = null;
@@ -170,40 +181,25 @@ async function saveSettings() {
   await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode }, null, 2), 'utf8');
 }
 
-const modelDefinitions = [
-  { id: 'qwen-1.5b', label: 'Qwen2.5-Coder 1.5B · Transformers.js', modelId: 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', runtime: 'transformers' },
-  { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX (Apple)', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx' },
-];
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
 // several gigabytes of weights inside its bundle, so it reads them from its data folder
 // (~/Library/Application Support/Agentic Coder/models), or from AGENT_MODELS_DIR.
 const projectModelsDirectory = () => process.env.AGENT_MODELS_DIR
   || (app.isPackaged ? path.join(app.getPath('userData'), 'models') : path.resolve(__dirname, '..', '..', 'models'));
 const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || path.join(projectModelsDirectory(), '.mlx-venv', 'bin', 'python');
-const mlxModelDirectory = async () => {
-  const modelRoot = path.join(projectModelsDirectory(), '.hf', 'hub', 'models--mlx-community--Qwen2.5-Coder-7B-Instruct-4bit', 'snapshots');
-  const snapshots = await fs.readdir(modelRoot).catch(() => []);
-  for (const snapshot of snapshots) {
-    const directory = path.join(modelRoot, snapshot);
-    try {
-      await fs.access(path.join(directory, 'config.json'));
-      await fs.access(path.join(directory, 'model.safetensors'));
-      return directory;
-    } catch {}
-  }
-  return null;
-};
+// Every MLX model this app knows (src/electron/mlx-models.cjs); one is offered only when its weights are here.
+const allModels = () => mlxModels.listModels(projectModelsDirectory());
+const currentModel = async () => { const models = await allModels(); return models.find((model) => model.id === selectedModel) || models[0]; };
 async function getAvailableModels() {
-  const modelRoot = projectModelsDirectory();
-  const mlxPath = await mlxModelDirectory();
   const mlxPythonReady = await fs.access(mlxPythonPath()).then(() => true, () => false);
-  return modelDefinitions.map((model) => {
-    const available = model.runtime === 'mlx' ? Boolean(mlxPath && mlxPythonReady) : true;
-    const reason = model.runtime === 'mlx' && !available
-      ? !mlxPath ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.'
-      : undefined;
-    return { id: model.id, label: model.label, modelId: model.modelId, available, ...(reason ? { reason } : {}) };
-  });
+  const result = [];
+  for (const model of await allModels()) {
+    const directory = await mlxModels.modelDirectory(model, projectModelsDirectory());
+    const available = Boolean(directory && mlxPythonReady);
+    const reason = available ? undefined : !directory ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.';
+    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, ...(reason ? { reason } : {}) });
+  }
+  return result;
 }
 
 async function dispatchAgentTool(tool, projectRoot) {
@@ -493,15 +489,14 @@ async function startModelWorker() {
     env: {
       ...process.env,
       AGENT_MODEL_CACHE: projectModelsDirectory(),
-      AGENT_MODEL_RUNTIME: modelDefinitions.find((model) => model.id === selectedModel)?.runtime || 'transformers',
-      AGENT_MODEL: modelDefinitions.find((model) => model.id === selectedModel)?.modelId || modelDefinitions[0].modelId,
-      AGENT_MODEL_PATH: path.join(projectModelsDirectory(), 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+      AGENT_MODEL_RUNTIME: (await currentModel()).runtime,
+      AGENT_MODEL: (await currentModel()).modelId,
       // An installed app must not write inside its own bundle: the turn log goes to the data folder.
       ...(app.isPackaged && !process.env.AGENT_TURN_LOG ? { AGENT_TURN_LOG: path.join(app.getPath('userData'), 'logs', 'agent-turns.jsonl') } : {}),
       // Without a Node.js of its own, the worker runs on Electron's Node.
       ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       AGENT_MLX_PYTHON: mlxPythonPath(),
-      AGENT_MLX_MODEL_PATH: await mlxModelDirectory() || '',
+      AGENT_MLX_MODEL_PATH: await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory()) || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
       AGENT_EMBEDDING_INDEX_PATH: path.join(app.getPath('userData'), 'learning', 'embedding-index-v1.json'),
     },
@@ -524,7 +519,7 @@ async function startModelWorker() {
     if (!pending) return;
     pendingModelRequests.delete(message.id);
     if (activeModelRequestId === message.id) activeModelRequestId = null;
-    if (message.error) pending.reject(new Error(message.error)); else pending.resolve(message.answer);
+    if (message.error) pending.reject(new Error(message.error)); else { rememberTrajectory(message.answer, message.trajectory); pending.resolve(message.answer); }
   });
   child.on('error', (error) => {
     for (const pending of pendingModelRequests.values()) pending.reject(error);
@@ -649,7 +644,9 @@ app.whenReady().then(async () => {
   try {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
-    if (modelDefinitions.some((model) => model.id === saved.selectedModel)) selectedModel = saved.selectedModel;
+    // The Qwen 1.5B is no longer offered: settings saved with it move to the 7B.
+    const savedModel = saved.selectedModel === 'qwen-1.5b' ? 'qwen-7b-mlx' : saved.selectedModel;
+    if ((await allModels()).some((model) => model.id === savedModel)) selectedModel = savedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
   } catch {}
   if (!selectedProject) {
@@ -1060,6 +1057,7 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
   if (!value || typeof value !== 'object') throw new Error('El cas d’aprenentatge no és vàlid.');
   const { prompt, answer, projectPath, evidence } = value;
+  const task = typeof value.task === 'string' && value.task.trim() ? value.task.trim().slice(0, 4000) : prompt;
   if ([prompt, answer, projectPath, evidence].some((item) => typeof item !== 'string') || !prompt.trim() || !answer.trim() || !evidence.trim()) {
     throw new Error('Cal indicar la petició, la resposta i una comprovació real.');
   }
@@ -1077,7 +1075,9 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   try { existing = await fs.readFile(filePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (existing.split(/\r?\n/).some((line) => { try { return JSON.parse(line).id === id; } catch { return false; } })) return { id, saved: false };
 
-  const record = { id, at: new Date().toISOString(), projectPath: root, model: process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', prompt, answer, evidence, verification: 'user-confirmed' };
+  // The whole chat up to this answer, with the tool steps of every answer the app still remembers.
+  const session = buildSessionTrajectory(Array.isArray(value.sessionTurns) ? value.sessionTurns : [{ role: 'user', content: prompt }, { role: 'assistant', content: answer }], (text) => recentTrajectories.get(trajectoryKey(text)));
+  const record = { id, at: new Date().toISOString(), projectPath: root, model: (await currentModel()).modelId, prompt, answer, evidence, task, ...(session ? { trajectory: session } : {}), verification: 'user-confirmed' };
   await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
   await fs.chmod(filePath, 0o600);
   return { id, saved: true };
@@ -1105,6 +1105,77 @@ ipcMain.handle('learning:prepare-dataset', async () => {
   return { prepared: true, directory: candidate.directory, manifest: candidate.manifest };
 });
 
+// Training a version of our own from the verified cases (src/electron/learning-training.cjs), in the
+// background: one run at a time, with progress sent to the window and cancellable.
+let trainingRun = null;
+const sendTraining = (event) => { if (win && !win.isDestroyed()) win.webContents.send('learning:train-progress', event); };
+
+function runStreaming(command, args, { onLine, signal, env } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd: projectModelsDirectory(), env: { ...process.env, ...env }, detached: true });
+    let output = '';
+    let partial = '';
+    const take = (chunk) => {
+      const text = chunk.toString();
+      output = (output + text).slice(-20000);
+      const lines = (partial + text).split(/\r?\n|\r/);
+      partial = lines.pop() || '';
+      for (const line of lines) if (line.trim()) onLine?.(line);
+    };
+    child.stdout.on('data', take);
+    child.stderr.on('data', take);
+    const stop = () => { try { process.kill(-child.pid, 'SIGTERM'); } catch {} };
+    signal?.addEventListener('abort', stop, { once: true });
+    child.on('error', (error) => { signal?.removeEventListener('abort', stop); resolve({ code: -1, output: error.message }); });
+    child.on('close', (code) => { signal?.removeEventListener('abort', stop); resolve({ code: code ?? -1, output }); });
+  });
+}
+
+ipcMain.handle('learning:train-status', async () => ({ running: Boolean(trainingRun), ...(trainingRun ? { name: trainingRun.name, base: trainingRun.base } : {}) }));
+ipcMain.handle('learning:train-cancel', async () => { trainingRun?.controller.abort(); return { cancelled: Boolean(trainingRun) }; });
+ipcMain.handle('learning:train-start', async (_e, request) => {
+  if (trainingRun) throw new Error('Ja hi ha un entrenament en marxa.');
+  if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans d’entrenar.');
+  const name = typeof request?.name === 'string' ? request.name.trim() : '';
+  if (!name || name.length > 60) throw new Error('Tria un nom per al model (fins a 60 caràcters).');
+  const models = await allModels();
+  const base = models.find((model) => model.id === (request?.baseModelId || selectedModel));
+  const directory = base && await mlxModels.modelDirectory(base, projectModelsDirectory());
+  if (!base || !directory) throw new Error('El model base no és disponible en aquest Mac.');
+  const prepared = await readPreparedExperienceDataset();
+  if (!prepared.trainingReady) throw new Error(`Calen 30 casos verificats per entrenar; n’hi ha ${prepared.counts.included}.`);
+  const candidate = await writeTrainingCandidate(prepared, path.join(app.getPath('userData'), 'learning', 'candidates'));
+  // Training needs the memory the chat model is using.
+  if (modelWorker) { const child = modelWorker; modelWorker = null; child.kill('SIGTERM'); }
+  const controller = new AbortController();
+  trainingRun = { controller, name, base: base.label };
+  const benchmark = async (adapterPath) => {
+    const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs');
+    if (!fsSync.existsSync(script)) return null;
+    const out = path.join(app.getPath('temp'), `agentic-benchmark-${Date.now()}.json`);
+    const nodeExecutable = findNodeExecutable();
+    const result = await runStreaming(nodeExecutable, [script, '--model', base.id, '--out', out], {
+      signal: controller.signal,
+      onLine: (line) => { if (/^(PASSA|FALLA)/.test(line)) sendTraining({ step: adapterPath ? 'benchmark-adapter' : 'benchmark-base', message: line.slice(0, 300) }); },
+      env: { AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: 'off', ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+    });
+    try { const report = JSON.parse(await fs.readFile(out, 'utf8')); await fs.rm(out, { force: true }); return { passed: report.summary.passed, runs: report.summary.runs }; }
+    catch { sendTraining({ step: 'benchmark', message: `El benchmark no ha donat resultat (codi ${result.code}).` }); return null; }
+  };
+  (async () => {
+    try {
+      const result = await runTrainingPipeline({
+        datasetDirectory: candidate.directory, base: { id: base.id, label: base.label, modelId: base.modelId, directory }, name,
+        modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), run: runStreaming, benchmark, onProgress: sendTraining, signal: controller.signal,
+      });
+      sendTraining({ step: 'finished', published: result.published, message: result.published ? `Nova versió: ${result.model.label}` : `Es manté la versió actual: ${result.reason}`, ...(result.published ? { modelId: result.model.id } : {}) });
+    } catch (error) {
+      sendTraining({ step: 'failed', message: error instanceof Error ? error.message : String(error) });
+    } finally { trainingRun = null; }
+  })();
+  return { started: true, dataset: candidate.manifest.datasetVersion };
+});
+
 ipcMain.handle('agent:ask', async (_e, request) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   const payload = request && typeof request === 'object' ? request : { prompt: request };
@@ -1120,7 +1191,7 @@ ipcMain.handle('permissions:set', async (_event, mode) => {
 ipcMain.handle('models:list', async () => ({ selectedModel, models: await getAvailableModels() }));
 ipcMain.handle('models:select', async (_e, modelId) => {
   if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans de canviar de model.');
-  const model = modelDefinitions.find((candidate) => candidate.id === modelId);
+  const model = (await allModels()).find((candidate) => candidate.id === modelId);
   if (!model) throw new Error('Aquest model no és vàlid.');
   const available = (await getAvailableModels()).find((candidate) => candidate.id === model.id);
   if (!available?.available) throw new Error(available?.reason || 'Aquest model encara no està disponible en aquest Mac.');

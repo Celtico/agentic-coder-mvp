@@ -1560,3 +1560,42 @@ test('without a search engine, the model is told to read a real address instead'
   assert.ok(tools.some((tool) => tool.function.name === 'read_web_page'));
   assert.ok(inputs.some((input) => /No hi ha cercador/.test(input)));
 });
+
+// The request cel wrote: «instala aixo» followed by pasted `npx skills add` lines. The word «refactor»
+// inside one URL (chakra-ui-refactor) used to turn it into a code change that demanded a write_file.
+const PASTED_INSTALL = 'instala aixo # Install all skills\nnpx skills add https://github.com/chakra-ui/chakra-ui/tree/main/skills\n\n# Install a specific skill\nnpx skills add https://github.com/chakra-ui/chakra-ui/tree/main/skills/chakra-ui-builder\nnpx skills add https://github.com/chakra-ui/chakra-ui/tree/main/skills/chakra-ui-migrate\nnpx skills add https://github.com/chakra-ui/chakra-ui/tree/main/skills/chakra-ui-refactor';
+
+test('pasted URLs and command lines do not decide what the request is', () => {
+  const { requestWords } = require('./agent-runtime.cjs');
+  const words = requestWords(PASTED_INSTALL);
+  assert.doesNotMatch(words, /refactor|npx|https?:/);
+  assert.match(words, /instala aixo/);
+  assert.equal(requestWords('Corregeix `npm run build` a https://example.com/fix').includes('fix'), false);
+  assert.match(requestWords('Corregeix el build'), /Corregeix el build/);
+});
+
+test('an install request with a pasted npx command is done when the install succeeds, without demanding a file', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-install-test-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const prompts = [];
+  const responses = [
+    '{"type":"tool_call","name":"run_npx","arguments":{"packageName":"skills","args":["add","https://github.com/chakra-ui/chakra-ui/tree/main/skills"]}}',
+    '{"type":"final","content":"He instal·lat les skills amb npx skills add."}',
+  ];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages[messages.length - 1].content); return responses.shift() ?? '{"type":"final","content":"Fet."}'; },
+    getModelStatus: () => ({ modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {}, experienceRanker: { rank: async () => [] } });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask(PASTED_INSTALL, tempRoot, async (tool) => { calls.push(tool.name); return tool.name === 'run_npx' ? { code: 0, output: 'installed' } : {}; });
+  assert.ok(calls.includes('run_npx'));
+  assert.doesNotMatch(answer, /no s’ha aplicat cap canvi|l’eina d’escriptura no ha confirmat/);
+  assert.ok(!prompts.some((text) => /Encara no has aplicat cap canvi al codi/.test(text)), 'no nudge to write a file');
+  // The trajectory of the request is recorded for a later verified case.
+  assert.equal(agent.lastTrajectory.prompt, PASTED_INSTALL);
+  assert.deepEqual(agent.lastTrajectory.steps.map((step) => [step.name, step.ok]), [['run_npx', true]]);
+  assert.match(agent.lastTrajectory.steps[0].result, /installed/);
+});

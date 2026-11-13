@@ -56,6 +56,7 @@ test('candidate partitions are deterministic, provenance-preserving and immutabl
   const candidate = await writeTrainingCandidate(first, candidatesRoot);
   t.after(async () => {
     await fs.chmod(candidate.directory, 0o700).catch(() => {});
+    await fs.chmod(path.join(candidate.directory, 'mlx'), 0o700).catch(() => {});
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
@@ -68,4 +69,10 @@ test('candidate partitions are deterministic, provenance-preserving and immutabl
   assert.doesNotMatch(train, /private-project/);
   assert.match(train, /sourceProjectHash/);
   assert.match(candidate.manifest.note, /No model was trained or changed/);
+  // The chat-format copy for mlx_lm.lora: train/valid/test with the same records.
+  const mlxTrain = (await fs.readFile(path.join(candidate.directory, 'mlx', 'train.jsonl'), 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(mlxTrain.length, 32);
+  assert.deepEqual(mlxTrain[0].messages.map((message) => message.role), ['user', 'assistant']);
+  assert.equal(manifest.files['mlx/valid.jsonl'].records, 4);
+  assert.match(manifest.datasetHash, /^[0-9a-f]{64}$/);
 });

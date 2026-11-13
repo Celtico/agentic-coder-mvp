@@ -56,7 +56,7 @@ export class MlxInferenceEngine implements InferenceEngine {
       lines.on('line', (line) => {
         let message: Record<string, unknown>;
         try { message = JSON.parse(line); } catch { return; }
-        if (message.type === 'ready') { this.state = 'ready'; onStatus('Qwen2.5-Coder 7B carregat amb MLX.'); resolve(); return; }
+        if (message.type === 'ready') { this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;
           if (typeof message.error === 'string') pending.reject(new Error(message.error));
@@ -71,7 +71,7 @@ export class MlxInferenceEngine implements InferenceEngine {
         if (!wasReady) reject(error);
         this.pending?.reject(error); this.pending = null;
       });
-      onStatus('Carregant Qwen2.5-Coder 7B a la memòria unificada…');
+      onStatus(`Carregant ${this.modelId} a la memòria unificada…`);
     }).catch((error) => { this.state = 'unloaded'; throw error; }).finally(() => { this.ready = null; });
     return this.ready;
   }
@@ -106,10 +106,10 @@ export class TransformersJsInferenceEngine implements InferenceEngine {
   private loading: Promise<void> | null = null;
   private state: ModelStatus['state'] = 'unloaded';
 
-  constructor(modelId = process.env.AGENT_MODEL || 'onnx-community/Qwen2.5-Coder-1.5B-Instruct') {
+  constructor(modelId = process.env.AGENT_MODEL || '') {
     this.modelId = modelId;
     this.cacheDir = process.env.AGENT_MODEL_CACHE || path.resolve(__dirname, '../../../models');
-    this.modelPath = process.env.AGENT_MODEL_PATH || path.resolve(this.cacheDir, 'onnx-community/Qwen2.5-Coder-1.5B-Instruct');
+    this.modelPath = process.env.AGENT_MODEL_PATH || path.resolve(this.cacheDir, modelId);
   }
 
   async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {

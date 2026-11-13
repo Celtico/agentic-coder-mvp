@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect
@@ -217,7 +217,7 @@ export function App(): React.JSX.Element {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [status, setStatus] = useState('Preparat · model encara no carregat');
   const [modelOptions, setModelOptions] = useState<LocalModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState('qwen-1.5b');
+  const [selectedModel, setSelectedModel] = useState('qwen-7b-mlx');
   const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
@@ -255,6 +255,36 @@ export function App(): React.JSX.Element {
   const [gitSearch, setGitSearch] = useState('');
   const [gitLoading, setGitLoading] = useState(false);
   const [datasetPreview, setDatasetPreview] = useState<TrainingDatasetPreview | null>(null);
+  // Training a version of our own runs in the background in the main process; the panel shows its steps.
+  const [trainingName, setTrainingName] = useState(() => localStorage.getItem('agentic-training-name') || '');
+  const [trainingRunning, setTrainingRunning] = useState(false);
+  const [trainingLog, setTrainingLog] = useState<TrainingProgress[]>([]);
+  const [trainingProgress, setTrainingProgress] = useState<number | null>(null);
+  useEffect(() => {
+    void window.agentic.trainingStatus().then((value) => setTrainingRunning(value.running)).catch(() => {});
+    return window.agentic.onTrainingProgress((event) => {
+      setTrainingLog((current) => [...current, event].slice(-200));
+      if (typeof event.progress === 'number') setTrainingProgress(event.progress);
+      if (event.step === 'finished' || event.step === 'failed') {
+        setTrainingRunning(false); setTrainingProgress(null);
+        // A new version appears in the model selector.
+        void window.agentic.listModels().then((available) => setModelOptions(available.models)).catch(() => {});
+      }
+    });
+  }, []);
+  async function startTraining() {
+    const name = trainingName.trim();
+    if (!name || trainingRunning) return;
+    try { localStorage.setItem('agentic-training-name', name); } catch {}
+    setTrainingLog([]); setTrainingProgress(0);
+    try {
+      await window.agentic.startTraining({ name, baseModelId: selectedModel });
+      setTrainingRunning(true);
+    } catch (error) {
+      setTrainingProgress(null);
+      setTrainingLog([{ step: 'failed', message: errorText(error) }]);
+    }
+  }
   const [learningBusy, setLearningBusy] = useState(false);
   const [learningStatus, setLearningStatus] = useState('');
   const [editingPath, setEditingPath] = useState<string | null>(null);
@@ -285,7 +315,8 @@ export function App(): React.JSX.Element {
   const [renameEntryPath, setRenameEntryPath] = useState('');
   const [createEntryBusy, setCreateEntryBusy] = useState(false);
   const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null);
-  const [verifiedExperienceDraft, setVerifiedExperienceDraft] = useState<{ prompt: string; answer: string; key: string } | null>(null);
+  const [verifiedExperienceDraft, setVerifiedExperienceDraft] = useState<{ prompt: string; answer: string; key: string; turns: { role: 'user' | 'assistant'; content: string }[] } | null>(null);
+  const [verifiedTask, setVerifiedTask] = useState('');
   const [verifiedEvidence, setVerifiedEvidence] = useState('');
   const [verifiedExperienceBusy, setVerifiedExperienceBusy] = useState(false);
   const [testsBusy, setTestsBusy] = useState(false);
@@ -776,7 +807,7 @@ export function App(): React.JSX.Element {
     if (!verifiedExperienceDraft || !verifiedEvidence.trim() || verifiedExperienceBusy) return;
     setVerifiedExperienceBusy(true);
     try {
-      const input: VerifiedExperience = { prompt: verifiedExperienceDraft.prompt, answer: verifiedExperienceDraft.answer, projectPath: project.path, evidence: verifiedEvidence.trim() };
+      const input: VerifiedExperience = { prompt: verifiedExperienceDraft.prompt, answer: verifiedExperienceDraft.answer, projectPath: project.path, evidence: verifiedEvidence.trim(), task: verifiedTask.trim() || verifiedExperienceDraft.prompt, sessionTurns: verifiedExperienceDraft.turns };
       const result = await window.agentic.recordVerifiedExperience(input);
       setVerifiedExperienceKeys((current) => new Set(current).add(verifiedExperienceDraft.key));
       setStatus(result.saved ? 'Cas verificat guardat localment; el model no s’ha entrenat.' : 'Aquest cas ja era a la memòria local.');
@@ -1068,7 +1099,7 @@ export function App(): React.JSX.Element {
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode="dark" style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
-            {previousUser && !message.error && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { setVerifiedEvidence(''); setVerifiedExperienceDraft({ prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
+            {previousUser && !message.error && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !item.error && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
@@ -1244,6 +1275,18 @@ export function App(): React.JSX.Element {
             <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Preparar dades no entrena el model, i des d’aquí no se’n pot activar cap.</Text>
           </HStack>
             <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : `Encara no n’hi ha prou per entrenar: en tens ${datasetPreview.counts.included} de 30. Continua desant els que surtin bé.`}</Notice>
+          <Box>
+            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">El nostre model</Text>
+            <HStack gap="2" flexWrap="wrap">
+              <Input size="sm" flex="1" minW="160px" maxLength={60} value={trainingName} onChange={(event) => setTrainingName(event.target.value)} placeholder="Nom del model, p. ex. El nostre model" aria-label="Nom del model" disabled={trainingRunning}/>
+              {trainingRunning
+                ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Cancel·la</Button>
+                : <Button size="sm" flex="none" colorPalette="agentic" disabled={!datasetPreview.trainingReady || !trainingName.trim()} onClick={() => void startTraining()}><Brain size={15}/>Entrena</Button>}
+            </HStack>
+            <Text mt="1.5" fontSize="xs" color="fg.muted">Entrena un adaptador sobre {modelOptions.find((item) => item.id === selectedModel)?.label || 'el model actual'} amb els casos verificats, el compara amb el model base (casos de prova i benchmark) i només si millora en desa una versió nova al selector de models. Les versions anteriors es queden i s’hi pot tornar triant-les.</Text>
+            {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.400" style={{ width: `${Math.round(trainingProgress * 100)}%` }}/></Box>}
+            {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'red.300' : event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}</Box>}
+          </Box>
         </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
@@ -1574,6 +1617,8 @@ export function App(): React.JSX.Element {
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Indica què has comprovat perquè aquest exemple sigui fiable.</Text>
               <Input autoFocus value={verifiedEvidence} onChange={(event) => setVerifiedEvidence(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !verifiedExperienceBusy) void saveVerifiedExperience(); }} placeholder="Per exemple: build superat" aria-label="Comprovació realitzada"/>
+              <Text mt="4" mb="2" fontSize="sm" color="fg.muted">Petició general: el que voldries demanar d’una sola vegada la propera vegada. Es desa amb tots els passos d’aquesta conversa.</Text>
+              <Input value={verifiedTask} onChange={(event) => setVerifiedTask(event.target.value)} placeholder="Per exemple: la primera petició de la conversa" aria-label="Petició general"/>
             </Dialog.Body>
             <Dialog.Footer>
               <Button variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</Button>

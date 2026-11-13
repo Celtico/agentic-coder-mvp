@@ -1,6 +1,7 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { createHash, randomUUID } = require('node:crypto');
+const { toChatExample } = require('./learning-trajectory.cjs');
 
 const MAX_RECORDS = 10_000;
 const MAX_INPUT_BYTES = 20_000_000;
@@ -40,7 +41,11 @@ function prepareTrainingDataset(records) {
         record.prompt.length > 12_000 || record.answer.length > 30_000 || record.evidence.length > 4_000) {
       counts.invalid += 1; continue;
     }
-    const text = `${record.prompt}\n${record.answer}\n${record.evidence}`;
+    const trajectory = record.trajectory && typeof record.trajectory === 'object' && Array.isArray(record.trajectory.turns) ? record.trajectory : null;
+    const trajectoryText = trajectory ? JSON.stringify(trajectory) : '';
+    if (trajectoryText.length > 400_000) { counts.invalid += 1; continue; }
+    const task = typeof record.task === 'string' && record.task.trim() ? record.task.trim().slice(0, 4000) : null;
+    const text = `${record.prompt}\n${record.answer}\n${record.evidence}\n${task || ''}\n${trajectoryText}`;
     if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) { counts.secrets += 1; continue; }
     const projectHash = digest(path.resolve(record.projectPath));
     const duplicateKey = `${projectHash}\n${normalizeText(record.prompt)}\n${normalizeText(record.answer)}`;
@@ -53,6 +58,8 @@ function prepareTrainingDataset(records) {
       prompt: record.prompt.trim(),
       answer: record.answer.trim(),
       evidence: record.evidence.trim(),
+      ...(task ? { task } : {}),
+      ...(trajectory ? { trajectory } : {}),
     });
   }
 
@@ -96,6 +103,18 @@ async function writeTrainingCandidate(prepared, candidatesDirectory) {
       await fs.chmod(filePath, 0o400);
       files[`${name}.jsonl`] = { records: prepared.partitions[name].length, sha256: digest(content) };
     }
+    // The same split in the chat format `mlx_lm.lora --data <folder>/mlx` reads (train, valid, test).
+    const mlxDirectory = path.join(candidateDirectory, 'mlx');
+    await fs.mkdir(mlxDirectory, { mode: 0o700 });
+    for (const [name, file] of [['train', 'train.jsonl'], ['validation', 'valid.jsonl'], ['test', 'test.jsonl']]) {
+      const content = prepared.partitions[name].map((item) => JSON.stringify(toChatExample(item))).join('\n') + (prepared.partitions[name].length ? '\n' : '');
+      const filePath = path.join(mlxDirectory, file);
+      await fs.writeFile(filePath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await fs.chmod(filePath, 0o400);
+      files[`mlx/${file}`] = { records: prepared.partitions[name].length, sha256: digest(content) };
+    }
+    await fs.chmod(mlxDirectory, 0o500);
+    const datasetHash = digest(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)).map(([name, file]) => `${name}:${file.sha256}`).join('\n'));
     const manifest = {
       schemaVersion: 1,
       datasetVersion: version,
@@ -105,6 +124,8 @@ async function writeTrainingCandidate(prepared, candidatesDirectory) {
       splits: prepared.splitCounts,
       trainingReady: prepared.trainingReady,
       files,
+      datasetHash,
+      withTrajectory: prepared.partitions.train.concat(prepared.partitions.validation, prepared.partitions.test).filter((item) => item.trajectory).length,
       note: 'Candidate data only. No model was trained or changed. Review quality and privacy before any training.',
     };
     const manifestPath = path.join(candidateDirectory, 'manifest.json');

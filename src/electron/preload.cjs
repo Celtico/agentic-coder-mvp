@@ -31,6 +31,14 @@ contextBridge.exposeInMainWorld('agentic', {
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
   learningDatasetPreview: () => ipcRenderer.invoke('learning:dataset-preview'),
   prepareLearningDataset: () => ipcRenderer.invoke('learning:prepare-dataset'),
+  startTraining: (request) => ipcRenderer.invoke('learning:train-start', request),
+  cancelTraining: () => ipcRenderer.invoke('learning:train-cancel'),
+  trainingStatus: () => ipcRenderer.invoke('learning:train-status'),
+  onTrainingProgress: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('learning:train-progress', listener);
+    return () => ipcRenderer.removeListener('learning:train-progress', listener);
+  },
   runTests: () => ipcRenderer.invoke('project:run-tests'),
   runCommand: (command) => ipcRenderer.invoke('terminal:run', command),
   onTerminalOutput: (callback) => {

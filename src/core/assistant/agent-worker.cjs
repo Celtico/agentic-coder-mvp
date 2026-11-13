@@ -29,7 +29,7 @@ process.on('message', async (message) => {
       });
     });
     const answer = await agent.ask(String(message.prompt || ''), String(message.projectRoot || ''), executeTool, Array.isArray(message.history) ? message.history : []);
-    process.send?.({ id: message.id, answer });
+    process.send?.({ id: message.id, answer, trajectory: agent.lastTrajectory });
   } catch (error) {
     process.send?.({ id: message.id, error: error?.message || String(error) });
   }

@@ -2,9 +2,9 @@
 
 ## Decisió del motor
 
-L’app ofereix ara dos models locals seleccionables a la barra superior: `onnx-community/Qwen2.5-Coder-1.5B-Instruct` amb Transformers.js i `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` amb MLX natiu d’Apple Silicon. Cada runtime s’executa en un procés aïllat de la interfície; en canviar de model es desa l’opció i es tanca el treballador anterior. El Qwen 1.5B es troba a `models/onnx-community/`; els pesos MLX de 4,28 GB queden a `models/.hf/` i el runtime Python local a `models/.mlx-venv/`. La inferència dels dos models és local un cop instal·lats. La prova amb la xarxa físicament desactivada encara queda pendent. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
+El model generatiu és `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` amb MLX natiu d’Apple Silicon, en un procés aïllat de la interfície. Els pesos MLX de 4,28 GB queden a `models/.hf/` i el runtime Python local a `models/.mlx-venv/`. El Qwen2.5-Coder-1.5B amb Transformers.js s’ha retirat el 13 de novembre de 2026 (pesos esborrats; els ajustos desats amb ell passen al 7B). La inferència és local un cop instal·lat. La prova amb la xarxa físicament desactivada encara queda pendent. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
 
-El codi separa el contracte `InferenceEngine` de l’orquestrador. `TransformersJsInferenceEngine` i `MlxInferenceEngine` implementen càrrega, generació, descàrrega i estat; l’app només mostra el 7B com a disponible quan troba tant els pesos com el runtime.
+El codi separa el contracte `InferenceEngine` de l’orquestrador. `MlxInferenceEngine` és el motor per defecte; `TransformersJsInferenceEngine` es conserva (amb `AGENT_MODEL_RUNTIME=transformers`) i Transformers.js continua servint els embeddings MiniLM. L’app només mostra el 7B com a disponible quan troba tant els pesos com el runtime.
 
 Qwen3-Coder-Next no s’activa com a candidat encara. La fitxa oficial el descriu com a 80B paràmetres totals (3B activats) en BF16; “3B actius” no implica que el model càpiga en 16 GB de RAM. La cerca feta no ha localitzat una distribució ONNX compatible i verificada per Transformers.js. Per tant, no es descarrega, no es converteix automàticament i no substitueix el model estable.
 
@@ -12,7 +12,7 @@ Transformers.js usa ONNX Runtime. ONNX Runtime documenta un CoreML Execution Pro
 
 Proves de runtime al MacBook Pro M2 Pro amb 16 GB, 19 d’octubre de 2026:
 
-- Amb el Qwen2.5-Coder-1.5B local, Transformers.js 4.3.1 per defecte ha tardat 1,60 s a carregar i 0,88 s a generar. Amb `device: 'webgpu'`, ha tardat 1,72 s a carregar i 0,76 s a generar. En tots dos casos, en demanar exactament «Hello IA», ha respost «Hello! How can I assist you today?». WebGPU funciona en aquest procés Node, però aquesta petita prova no mostra una millora de qualitat i només una diferència modesta de velocitat.
+- (Històric, model retirat) Amb el Qwen2.5-Coder-1.5B local, Transformers.js 4.3.1 per defecte ha tardat 1,60 s a carregar i 0,88 s a generar. Amb `device: 'webgpu'`, ha tardat 1,72 s a carregar i 0,76 s a generar. En tots dos casos, en demanar exactament «Hello IA», ha respost «Hello! How can I assist you today?». WebGPU funciona en aquest procés Node, però aquesta petita prova no mostra una millora de qualitat i només una diferència modesta de velocitat.
 - MLX 0.32.4 amb `mlx-lm` 0.32.2 s’ha provat en un entorn Python temporal, sense servidor. El model `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` ocupa 4,28 GB. En una petició per crear «Hello IA», ha generat primer un pla i després una crida `write_file` coherent en 2,42 s i 3,78 s; el document generat feia servir `lang="es"` tot i que l’usuari s’expressava en català. El pic de memòria MLX mesurat ha estat de 4,39 GB. No s’ha escrit cap fitxer real en aquesta prova.
 - Amb el selector de l’app configurat al 7B MLX, la prova `Respon exactament en català: Hola IA` ha generat «Hola! Com puc ajudar-te avui?» i ha acabat sense error. La càrrega inicial del 7B ha necessitat el model de 4,28 GB ja descarregat; el runtime `mlx-lm` 0.32.2 ara queda instal·lat a `models/.mlx-venv/`.
 - En demanar un commit des del xat, el model ha preparat un pla però ha retornat una crida mal formada a `write_file` per `.gitignore`, no una operació Git. L’app no l’ha executada ni ha creat cap commit; el repositori continua sense commits. El 7B encara no és fiable per completar tasques d’agent ni per usar eines.
@@ -71,7 +71,6 @@ El visor de codi ara usa `@monaco-editor/react` amb els recursos locals de `mona
 ## Fonts tècniques consultades
 
 - [Transformers.js: configuració de cache i models locals](https://huggingface.co/docs/transformers.js/api/env)
-- [Model ONNX Qwen2.5-Coder-1.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-Coder-1.5B-Instruct)
 - [Model card Qwen3-Coder-Next](https://huggingface.co/Qwen/Qwen3-Coder-Next)
 - [Transformers.js v4: WebGPU en Node.js](https://huggingface.co/blog/transformersjs-v4)
 - [Model MLX Qwen2.5-Coder-7B-Instruct quantitzat a 4 bits](https://huggingface.co/mlx-community/Qwen2.5-Coder-7B-Instruct-4bit)

@@ -1,7 +1,7 @@
 // Repeatable benchmark of the coding agent with the real local model.
 //
-//   npm run evaluate:agent                      # every task once with Qwen 1.5B (Transformers.js)
-//   npm run evaluate:agent -- --model 7b        # Qwen 7B with MLX
+//   npm run evaluate:agent                      # every task once with Qwen 7B (MLX)
+//   npm run evaluate:agent -- --model gemma     # another MLX model: id or alias from src/electron/mlx-models.cjs
 //   npm run evaluate:agent -- --task add-function --repeat 3
 //   npm run evaluate:agent -- --list
 //
@@ -12,14 +12,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
-const modelsRoot = path.join(repoRoot, 'models');
-const MODELS = {
-  '1.5b': { runtime: 'transformers', modelId: 'onnx-community/Qwen2.5-Coder-1.5B-Instruct' },
-  '7b': { runtime: 'mlx', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit' },
-};
+const modelsRoot = process.env.AGENT_MODELS_DIR || path.join(repoRoot, 'models');
+const mlxModels = require('../src/electron/mlx-models.cjs');
 
 function parseArgs(argv) {
-  const options = { model: '1.5b', tasks: [], repeat: 1, keep: false, list: false, timeoutMinutes: 10 };
+  const options = { model: '7b', tasks: [], repeat: 1, keep: false, list: false, timeoutMinutes: 10 };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => { const value = argv[++index]; if (value === undefined) throw new Error(`Falta el valor de ${arg}`); return value; };
@@ -32,17 +29,7 @@ function parseArgs(argv) {
     else if (arg === '--list') options.list = true;
     else throw new Error(`Opció desconeguda: ${arg}`);
   }
-  if (!MODELS[options.model]) throw new Error(`Model desconegut: ${options.model} (opcions: ${Object.keys(MODELS).join(', ')})`);
   return options;
-}
-
-function mlxModelDirectory() {
-  const snapshots = path.join(modelsRoot, '.hf', 'hub', 'models--mlx-community--Qwen2.5-Coder-7B-Instruct-4bit', 'snapshots');
-  for (const snapshot of fs.existsSync(snapshots) ? fs.readdirSync(snapshots) : []) {
-    const directory = path.join(snapshots, snapshot);
-    if (fs.existsSync(path.join(directory, 'config.json')) && fs.existsSync(path.join(directory, 'model.safetensors'))) return directory;
-  }
-  return '';
 }
 
 async function main() {
@@ -53,25 +40,27 @@ async function main() {
     return;
   }
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const outDir = path.join(repoRoot, 'logs', 'benchmarks');
+  // With --out (as the app runs it) nothing is written inside the repository or the app bundle.
+  const outDir = options.out ? path.dirname(options.out) : path.join(repoRoot, 'logs', 'benchmarks');
   fs.mkdirSync(outDir, { recursive: true });
-  const model = MODELS[options.model];
+  const model = await mlxModels.findModel(modelsRoot, options.model);
+  if (!model) throw new Error(`Model desconegut: ${options.model} (opcions: ${(await mlxModels.listModels(modelsRoot)).map((item) => [item.id, ...item.aliases].join('/')).join(', ')})`);
+  const modelDirectory = await mlxModels.modelDirectory(model, modelsRoot);
+  if (!modelDirectory) throw new Error(`No s’han trobat els pesos de ${model.label} a models/.`);
   // The same environment the app gives its model worker (src/electron/main.cjs), set before the
   // runtime is loaded because it reads some of it at load time.
   Object.assign(process.env, {
     AGENT_MODEL_CACHE: modelsRoot,
     AGENT_MODEL_RUNTIME: model.runtime,
     AGENT_MODEL: model.modelId,
-    AGENT_MODEL_PATH: path.join(modelsRoot, 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
     AGENT_MLX_PYTHON: process.env.AGENT_MLX_PYTHON || path.join(modelsRoot, '.mlx-venv', 'bin', 'python'),
-    AGENT_MLX_MODEL_PATH: mlxModelDirectory(),
-    AGENT_TURN_LOG: path.join(outDir, `turns-${options.model}-${stamp}.jsonl`),
+    AGENT_MLX_MODEL_PATH: modelDirectory,
+    AGENT_TURN_LOG: process.env.AGENT_TURN_LOG || path.join(outDir, `turns-${model.id}-${stamp}.jsonl`),
   });
-  if (model.runtime === 'mlx' && !process.env.AGENT_MLX_MODEL_PATH) throw new Error('No s’han trobat els pesos MLX del 7B a models/.hf.');
 
-  const { LocalCodingAgent, MlxInferenceEngine, TransformersJsInferenceEngine } = require('../src/core/assistant/agent-runtime.cjs');
+  const { LocalCodingAgent, MlxInferenceEngine } = require('../src/core/assistant/agent-runtime.cjs');
   const { runBenchmark } = require('./agent-benchmark/run.cjs');
-  const engine = model.runtime === 'mlx' ? new MlxInferenceEngine() : new TransformersJsInferenceEngine();
+  const engine = new MlxInferenceEngine();
   console.error(`Model: ${model.modelId} (${model.runtime}). Carregant…`);
   const loadStarted = Date.now();
   await engine.loadModel((message) => console.error(message));
@@ -86,8 +75,8 @@ async function main() {
   } finally {
     await engine.unloadModel().catch(() => {});
   }
-  const out = options.out || path.join(outDir, `agent-${options.model}-${stamp}.json`);
-  const full = { at: new Date().toISOString(), model: model.modelId, runtime: model.runtime, loadSeconds, repeat: options.repeat, ...report };
+  const out = options.out || path.join(outDir, `agent-${model.id}-${stamp}.json`);
+  const full = { at: new Date().toISOString(), model: model.modelId, runtime: model.runtime, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null, loadSeconds, repeat: options.repeat, ...report };
   fs.writeFileSync(out, `${JSON.stringify(full, null, 2)}\n`);
   console.log(JSON.stringify({ model: model.modelId, ...report.summary }, null, 2));
   console.error(`Informe complet: ${path.relative(process.cwd(), out)}`);
