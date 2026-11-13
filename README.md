@@ -4,7 +4,7 @@
 
 Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple, en un procés local aïllat de la interfície. El model base és **MiMo V2.6 9B**: al [benchmark](#benchmark) fa 9 de 10 tasques obertes, a prop de Gemma 4 12B (10/10), en gairebé la meitat de temps per tasca. Gemma 4 12B i Qwen2.5-Coder 7B continuen seleccionables a la barra de dalt si se'n descarreguen els pesos. Només hi ha un model a la GPU alhora. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
-![L’app sencera: converses i fitxers, editor, navegador, avaluació, xat amb l’agent, i a baix Git, aprenentatge i terminal](docs/captura.jpg)
+![L’app sencera: converses i fitxers, editor amb l’Historial local, navegador, avaluació, xat amb l’agent, i a baix Git, aprenentatge, consola i terminal](docs/captura.png)
 
 ## Finestres
 Cada finestra és una funcionalitat; s’obren i es tanquen des de les icones de la barra de l’esquerra.
