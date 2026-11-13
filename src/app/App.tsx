@@ -14,7 +14,7 @@ import {
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
-  LuBrain as Brain, LuChartBar as ChartBar, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -250,7 +250,7 @@ export function App(): React.JSX.Element {
   const [evaluationCurrent, setEvaluationCurrent] = useState<BenchmarkCurrent | null>(null);
   const [evaluationNow, setEvaluationNow] = useState(() => Date.now());
   const [evaluationOpenRun, setEvaluationOpenRun] = useState<string[]>([]);
-  const [evaluationOpenTask, setEvaluationOpenTask] = useState<string[]>([]);
+  const [evaluationReports, setEvaluationReports] = useState<Record<string, BenchmarkReport>>({});
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
   const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
   const [terminalResizing, setTerminalResizing] = useState(false);
@@ -801,7 +801,7 @@ export function App(): React.JSX.Element {
     return () => clearInterval(timer);
   }, [evaluationRunning]);
   async function openEvaluationReport(id: string) {
-    try { setEvaluationReport(await window.agentic.benchmarkReport(id)); setEvaluationResultIndex(null); setEvaluationError(''); }
+    try { const report = await window.agentic.benchmarkReport(id); setEvaluationReports((current) => ({ ...current, [id]: report })); setEvaluationError(''); }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   async function startEvaluation() {
@@ -822,7 +822,7 @@ export function App(): React.JSX.Element {
       setEvaluationRunning(false); setEvaluationCurrent(null);
       setStatus(event.message);
       void refreshEvaluations();
-      if (event.step === 'finished' && event.id) { setEvaluationOpenRun([event.id]); void openEvaluationReport(event.id); }
+      if (event.step === 'finished' && event.id) { const id = event.id; setEvaluationOpenRun((current) => [...new Set([...current, id])]); void openEvaluationReport(id); }
     }
   }), []);
 
@@ -1110,7 +1110,7 @@ export function App(): React.JSX.Element {
     let latest = startHeight;
     setTerminalResizing(true);
     const move = (moveEvent: PointerEvent) => {
-      latest = Math.max(30, Math.min(window.innerHeight - 440, startHeight + (startY - moveEvent.clientY)));
+      latest = Math.max(30, Math.min(window.innerHeight - 240, startHeight + (startY - moveEvent.clientY)));
       setTerminalHeight(latest);
     };
     const up = () => {
@@ -1413,11 +1413,21 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
+  // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
+  const rowProps = { borderBottomWidth: '1px', borderColor: 'border', _last: { borderBottomWidth: 0 } } as const;
+  const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="subtle" colorPalette="gray" borderRadius="sm">{count}</Badge>}</HStack>
+    <Accordion.ItemIndicator/>
+  </>;
+  const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
+  const kindNote: Record<BenchmarkTask['kind'], string> = { open: 'Arreglar codi, fer pàgines i respondre sense tocar res.', app: 'Des d’una carpeta buida, amb la petició tal com la diries.', reference: 'La mateixa correcció dient exactament què canviar.' };
   const kindLabel: Record<BenchmarkTask['kind'], string> = { open: 'Tasques obertes de codi', app: 'Apps des d’una carpeta buida', reference: 'Tasca dirigida (referència)' };
   const chosenCount = evaluationTasks.filter((task) => evaluationChosen.has(task.id)).length;
   const elapsed = evaluationCurrent ? Math.max(0, Math.round((evaluationNow - evaluationCurrent.since) / 1000)) : 0;
   const evaluationPane = (
-    <Flex direction="column" gap="3" h="full" overflowY="auto" p="3">
+    // One scroll area for the whole panel: the sections keep their natural height inside it (in a
+    // shrinking flex column the accordions, which clip their content, were squeezed to nothing).
+    <Box h="full" minH="0" overflowY="auto" p="3"><Stack gap="3">
       <HStack gap="2" flexWrap="wrap">
         <Text flex="1" minW="160px" fontSize="sm">Model: <b>{modelOptions.find((item) => item.id === selectedModel)?.label || selectedModel}</b></Text>
         <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
@@ -1426,101 +1436,105 @@ export function App(): React.JSX.Element {
           : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark{chosenCount && chosenCount < evaluationTasks.length ? ` (${chosenCount})` : ''}</Button>}
       </HStack>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
-      {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.600" borderRadius="md" p="2">
+      {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.600" borderRadius="sm" p="2">
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
         {evaluationCurrent && <Box h="5px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.400" style={{ width: `${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%` }}/></Box>}
         {evaluationCurrent && <Text mt="1" fontSize="2xs" color="fg.muted">{evaluationTasks.find((task) => task.id === evaluationCurrent.task)?.description}</Text>}
         {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'red.300' : 'agentic.200'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
-      <Accordion.Root collapsible size="sm" variant="enclosed">
-        <Accordion.Item value="tasks">
-          <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="semibold" textAlign="left">Tasques · {chosenCount} de {evaluationTasks.length} marcades</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-          <Accordion.ItemContent><Accordion.ItemBody pt="1">
+      {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
+      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="surface">
+        <Accordion.Item value="tasks" {...rowProps}>
+          <Accordion.ItemTrigger px="3" py="2">{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
+            {rowNote('Marca les tasques que vols passar; totes es fan en una carpeta nova.')}
             <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
-            <Accordion.Root collapsible multiple size="sm" variant="enclosed">{(['open', 'app', 'reference'] as const).map((kind) => {
+            <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm">{(['open', 'app', 'reference'] as const).map((kind) => {
               const group = evaluationTasks.filter((task) => task.kind === kind);
-              return <Accordion.Item key={kind} value={kind}>
-              <Accordion.ItemTrigger><Text flex="1" fontSize="xs" fontWeight="semibold" textAlign="left">{kindLabel[kind]} · {group.filter((task) => evaluationChosen.has(task.id)).length} de {group.length}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-              <Accordion.ItemContent><Accordion.ItemBody>
-              <Stack gap="1">{evaluationTasks.filter((task) => task.kind === kind).map((task) => <Checkbox.Root key={task.id} size="sm" alignItems="flex-start" disabled={evaluationRunning} checked={evaluationChosen.has(task.id)} onCheckedChange={(details) => setEvaluationChosen((current) => { const next = new Set(current); if (details.checked) next.add(task.id); else next.delete(task.id); return next; })}>
-                <Checkbox.HiddenInput/><Checkbox.Control mt="0.5"/>
-                <Checkbox.Label fontSize="xs" title={task.description}><b>{task.id}</b><Text as="span" display="block" color="fg.muted" lineClamp={2}>«{task.prompt}»</Text></Checkbox.Label>
-              </Checkbox.Root>)}</Stack>
-              </Accordion.ItemBody></Accordion.ItemContent>
-            </Accordion.Item>; })}</Accordion.Root>
+              return <Accordion.Item key={kind} value={kind} {...rowProps}>
+                <Accordion.ItemTrigger px="3" py="1.5">{rowHeader(kindLabel[kind], `${group.filter((task) => evaluationChosen.has(task.id)).length}/${group.length}`)}</Accordion.ItemTrigger>
+                <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
+                  {rowNote(kindNote[kind])}
+                  <Stack gap="1">{group.map((task) => <Checkbox.Root key={task.id} size="sm" alignItems="flex-start" disabled={evaluationRunning} checked={evaluationChosen.has(task.id)} onCheckedChange={(details) => setEvaluationChosen((current) => { const next = new Set(current); if (details.checked) next.add(task.id); else next.delete(task.id); return next; })}>
+                    <Checkbox.HiddenInput/><Checkbox.Control mt="0.5"/>
+                    <Checkbox.Label fontSize="xs" title={task.description}><b>{task.id}</b><Text as="span" display="block" color="fg.muted" lineClamp={2}>«{task.prompt}»</Text></Checkbox.Label>
+                  </Checkbox.Root>)}</Stack>
+                </Accordion.ItemBody></Accordion.ItemContent>
+              </Accordion.Item>;
+            })}</Accordion.Root>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
-      </Accordion.Root>
-      {evaluationList && evaluationList.models.length > 0 && <Accordion.Root collapsible size="sm" variant="enclosed">
-        <Accordion.Item value="comparison">
-          <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="semibold" textAlign="left">Comparativa · {evaluationList.models.length} {evaluationList.models.length === 1 ? 'model' : 'models'}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-          <Accordion.ItemContent><Accordion.ItemBody pt="1">
-        <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
-          <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
-          {([['Obertes', model.open, 'agentic.400'], ['Apps', model.apps, 'orange.400'], ['Dirigida', model.reference, 'gray.400']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
-            <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
-            <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} style={{ width: `${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%` }}/></Box>
-            <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
-          </HStack>)}
-        </Box>)}</Stack>
+        {evaluationList && evaluationList.models.length > 0 && <Accordion.Item value="comparison" {...rowProps}>
+          <Accordion.ItemTrigger px="3" py="2">{rowHeader('Comparativa', evaluationList.models.length, ChartBar)}</Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
+            {rowNote('Tasques superades per model, de totes les avaluacions.')}
+            <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
+              <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
+              {([['Obertes', model.open, 'agentic.400'], ['Apps', model.apps, 'orange.400'], ['Dirigida', model.reference, 'gray.400']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
+                <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
+                <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} style={{ width: `${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%` }}/></Box>
+                <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
+              </HStack>)}
+            </Box>)}</Stack>
           </Accordion.ItemBody></Accordion.ItemContent>
-        </Accordion.Item>
-      </Accordion.Root>}
-      <Accordion.Root collapsible size="sm" variant="enclosed">
-        <Accordion.Item value="evaluations">
-          <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="semibold" textAlign="left">Avaluacions · {evaluationList?.runs.length ?? 0}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-          <Accordion.ItemContent><Accordion.ItemBody pt="1">
-        {evaluationList && evaluationList.runs.length === 0 && !evaluationRunning && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
-        <Accordion.Root collapsible size="sm" variant="enclosed" value={evaluationOpenRun} onValueChange={(details) => {
-          setEvaluationOpenRun(details.value); setEvaluationOpenTask([]);
-          if (details.value[0]) void openEvaluationReport(details.value[0]);
-        }}>
-          {(evaluationList?.runs || []).map((run) => <Accordion.Item key={run.id} value={run.id}>
-            <Accordion.ItemTrigger><Text flex="1" fontSize="xs" textAlign="left">{new Date(run.at).toLocaleString('ca')} · {run.model}{run.adapter ? ' · amb adaptador' : ''}</Text><Badge size="sm" colorPalette="gray">{run.summary.passed}/{run.summary.runs}</Badge><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-            <Accordion.ItemContent><Accordion.ItemBody>
-              {evaluationReport?.id !== run.id ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
-                : <Accordion.Root collapsible size="sm" variant="plain" value={evaluationOpenTask} onValueChange={(details) => setEvaluationOpenTask(details.value)}>
-                  {evaluationReport.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)}>
-                    <Accordion.ItemTrigger py="1"><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-                    <Accordion.ItemContent><Accordion.ItemBody pt="1">
-                      {!result.pass && result.detail && <Text fontSize="xs" color="red.300" mb="1.5">{result.detail}</Text>}
-                      {result.hasProject && <Button mb="2" size="xs" variant="outline" onClick={async () => {
-                        try { const opened = await window.agentic.openBenchmarkProject(evaluationReport.id, index); activateProject(opened, true); setStatus(`Obert el projecte que el model va fer a ${result.task}`); }
-                        catch (error) { setEvaluationError(errorText(error)); }
-                      }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
-                      {result.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
-                      <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="md" p="2">
-                        <Text fontSize="2xs" color="fg.muted" mb="1">Torn {turnIndex + 1} · {turn.seconds} s</Text>
-                        {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
-                        <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
-                      </Box>)}</Stack>
-                    </Accordion.ItemBody></Accordion.ItemContent>
-                  </Accordion.Item>)}
-                </Accordion.Root>}
-            </Accordion.ItemBody></Accordion.ItemContent>
-          </Accordion.Item>)}
-        </Accordion.Root>
-          </Accordion.ItemBody></Accordion.ItemContent>
-        </Accordion.Item>
-      </Accordion.Root>
-      <Accordion.Root collapsible size="sm" variant="enclosed">
-        <Accordion.Item value="projects">
-          <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="semibold" textAlign="left">Projectes fets pel model · {evaluationProjects.length}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-          <Accordion.ItemContent><Accordion.ItemBody pt="1">
-        {evaluationProjects.length === 0
-          ? <Text fontSize="xs" color="fg.muted">Apareixeran quan passis el benchmark: la carpeta on el model ha treballat a cada tasca.</Text>
-          : <Stack gap="1">{evaluationProjects.map((item) => <Button key={`${item.id}-${item.index}`} size="xs" h="auto" py="1" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant="ghost" colorPalette="gray" title="Obre aquest projecte" onClick={async () => {
-              try { const opened = await window.agentic.openBenchmarkProject(item.id, item.index); activateProject(opened, true); setStatus(`Obert el projecte que ${item.model} va fer a ${item.task}`); }
-              catch (error) { setEvaluationError(errorText(error)); }
+        </Accordion.Item>}
+        <Accordion.Item value="evaluations" {...rowProps}>
+          <Accordion.ItemTrigger px="3" py="2">{rowHeader('Avaluacions', evaluationList?.runs.length ?? 0, History)}</Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
+            {rowNote('Cada passada del benchmark: obre’n una per veure què ha fet el model a cada tasca.')}
+            {evaluationList && evaluationList.runs.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
+            <Accordion.Root multiple collapsible size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" value={evaluationOpenRun} onValueChange={(details) => {
+              setEvaluationOpenRun(details.value);
+              for (const id of details.value) if (!evaluationReports[id]) void openEvaluationReport(id);
             }}>
-              <FolderOpen size={13}/><Badge size="sm" flex="none" colorPalette={item.pass ? 'green' : 'red'}>{item.pass ? 'PASSA' : 'FALLA'}</Badge>
-              <Text flex="1" fontSize="xs">{item.task} #{item.run} · {item.model} · {new Date(item.at).toLocaleString('ca')}</Text>
-            </Button>)}</Stack>}
+              {(evaluationList?.runs || []).map((run) => {
+                const report = evaluationReports[run.id];
+                return <Accordion.Item key={run.id} value={run.id} {...rowProps}>
+                  <Accordion.ItemTrigger px="3" py="1.5">{rowHeader(`${run.model} · ${new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}${run.adapter ? ' · amb adaptador' : ''}`, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
+                  <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
+                    {!report ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
+                      : <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm">
+                        {report.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)} {...rowProps}>
+                          <Accordion.ItemTrigger px="3" py="1.5"><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                          <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
+                            {!result.pass && result.detail && <Text fontSize="xs" color="red.300" mb="1.5">{result.detail}</Text>}
+                            {result.hasProject && <Button mb="2" size="xs" variant="outline" onClick={async () => {
+                              try { const opened = await window.agentic.openBenchmarkProject(report.id, index); activateProject(opened, true); setStatus(`Obert el projecte que el model va fer a ${result.task}`); }
+                              catch (error) { setEvaluationError(errorText(error)); }
+                            }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
+                            {result.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
+                            <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="sm" p="2" bg="surface.subtle">
+                              <Text fontSize="2xs" color="fg.muted" mb="1">Torn {turnIndex + 1} · {turn.seconds} s</Text>
+                              {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
+                              <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
+                            </Box>)}</Stack>
+                          </Accordion.ItemBody></Accordion.ItemContent>
+                        </Accordion.Item>)}
+                      </Accordion.Root>}
+                  </Accordion.ItemBody></Accordion.ItemContent>
+                </Accordion.Item>;
+              })}
+            </Accordion.Root>
+          </Accordion.ItemBody></Accordion.ItemContent>
+        </Accordion.Item>
+        <Accordion.Item value="projects" {...rowProps}>
+          <Accordion.ItemTrigger px="3" py="2">{rowHeader('Projectes fets pel model', evaluationProjects.length, FolderOpen)}</Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
+            {rowNote('Les carpetes on el model ha treballat; clica’n una per obrir-la com a projecte.')}
+            {evaluationProjects.length === 0
+              ? <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap: apareixeran quan passis el benchmark.</Text>
+              : <Stack gap="1">{evaluationProjects.map((item) => <Button key={`${item.id}-${item.index}`} size="xs" h="auto" py="1" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant="ghost" colorPalette="gray" title="Obre aquest projecte" onClick={async () => {
+                  try { const opened = await window.agentic.openBenchmarkProject(item.id, item.index); activateProject(opened, true); setStatus(`Obert el projecte que ${item.model} va fer a ${item.task}`); }
+                  catch (error) { setEvaluationError(errorText(error)); }
+                }}>
+                  <FolderOpen size={13}/><Badge size="sm" flex="none" colorPalette={item.pass ? 'green' : 'red'}>{item.pass ? 'PASSA' : 'FALLA'}</Badge>
+                  <Text flex="1" fontSize="xs">{item.task} #{item.run} · {item.model} · {new Date(item.at).toLocaleString('ca')}</Text>
+                </Button>)}</Stack>}
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
       </Accordion.Root>
-    </Flex>
+    </Stack></Box>
   );
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
@@ -1533,7 +1547,7 @@ export function App(): React.JSX.Element {
   const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
   const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
-    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 440px)' }}>
+    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 240px)' }}>
       <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} css={{ '&:hover > div': { background: 'var(--chakra-colors-border)' } }}><Box w="32px" h="2px" rounded="full" bg="transparent"/></Center>
       {dockItems.length === 1 ? dockItems[0].node : (
         // One splitter per arrangement of open panes; each arrangement remembers its own widths.
