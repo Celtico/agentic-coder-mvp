@@ -4,7 +4,19 @@
 
 Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple, en un procés local aïllat de la interfície: Qwen2.5-Coder 7B per defecte, i Gemma 4 12B o MiMo V2.6 9B si se'n descarreguen els pesos, seleccionables a la barra de dalt. Només hi ha un model a la GPU alhora. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
-![L’app sencera: converses i fitxers, editor, navegador, xat amb l’agent, i a baix Git, aprenentatge, consola i terminal](docs/captura.jpg)
+![L’app sencera: converses i fitxers, editor, navegador, avaluació, xat amb l’agent, i a baix Git, aprenentatge i terminal](docs/captura.jpg)
+
+## Finestres
+Cada finestra és una funcionalitat; s’obren i es tanquen des de les icones de la barra de l’esquerra.
+
+- **Xat** amb l’agent: demanes canvis o preguntes sobre el projecte, i el model llegeix, escriu, executa i comprova.
+- **Fitxers i converses** del projecte obert.
+- **Editor** (Monaco) amb **Historial local** de cada fitxer, en una finestra flotant com les de macOS.
+- **Navegador web** per veure la pàgina del projecte, i **Consola** amb el que hi escriu.
+- **Avaluació**: el benchmark de l’agent amb el model triat, la comparativa entre models i què ha fet el model a cada tasca.
+- **Git** de només lectura: branca, estat, diffs i historial.
+- **Aprenentatge local**: els casos verificats i l’entrenament d’un model propi.
+- **Terminal** a la carpeta del projecte.
 
 ## Què inclou
 - Aplicació d'escriptori Electron.
