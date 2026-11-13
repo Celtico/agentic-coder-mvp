@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 352" width="760" height="352" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="760" height="352" fill="#ffffff"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#1f2328">Benchmark de l’agent amb models locals</text>
+<rect x="20" y="44" width="12" height="12" rx="2" fill="#2f9e75"/><text x="38" y="54" font-size="12" fill="#57606a">Tasques obertes</text>
+<rect x="250" y="44" width="12" height="12" rx="2" fill="#d9822b"/><text x="268" y="54" font-size="12" fill="#57606a">Apps des de carpeta buida</text>
+<rect x="480" y="44" width="12" height="12" rx="2" fill="#8a8f98"/><text x="498" y="54" font-size="12" fill="#57606a">Tasca dirigida (referència)</text>
+<line x1="210" y1="68" x2="210" y2="316" stroke="#d0d7de" stroke-width="1"/><text x="210" y="332" font-size="11" fill="#57606a" text-anchor="middle">0%</text>
+<line x1="330" y1="68" x2="330" y2="316" stroke="#d0d7de" stroke-width="1"/><text x="330" y="332" font-size="11" fill="#57606a" text-anchor="middle">25%</text>
+<line x1="450" y1="68" x2="450" y2="316" stroke="#d0d7de" stroke-width="1"/><text x="450" y="332" font-size="11" fill="#57606a" text-anchor="middle">50%</text>
+<line x1="570" y1="68" x2="570" y2="316" stroke="#d0d7de" stroke-width="1"/><text x="570" y="332" font-size="11" fill="#57606a" text-anchor="middle">75%</text>
+<line x1="690" y1="68" x2="690" y2="316" stroke="#d0d7de" stroke-width="1"/><text x="690" y="332" font-size="11" fill="#57606a" text-anchor="middle">100%</text>
+<text x="198" y="100" font-size="13" font-weight="600" fill="#1f2328" text-anchor="end">Qwen2.5-Coder 7B</text>
+<text x="198" y="115" font-size="10" fill="#8a8f98" text-anchor="end">codi del matí</text>
+<rect x="210" y="74" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="74" width="288" height="16" rx="3" fill="#2f9e75"/>
+<text x="698" y="86" font-size="11" fill="#1f2328">6/10</text>
+<rect x="210" y="94" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<text x="698" y="106" font-size="11" fill="#1f2328">0/6</text>
+<rect x="210" y="114" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="114" width="480" height="16" rx="3" fill="#8a8f98"/>
+<text x="698" y="126" font-size="11" fill="#1f2328">2/2</text>
+<text x="198" y="178" font-size="13" font-weight="600" fill="#1f2328" text-anchor="end">Gemma 4 12B</text>
+<rect x="210" y="152" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="152" width="480" height="16" rx="3" fill="#2f9e75"/>
+<text x="698" y="164" font-size="11" fill="#1f2328">10/10</text>
+<rect x="210" y="172" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<text x="698" y="184" font-size="11" fill="#1f2328">0/6</text>
+<rect x="210" y="192" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="192" width="480" height="16" rx="3" fill="#8a8f98"/>
+<text x="698" y="204" font-size="11" fill="#1f2328">2/2</text>
+<text x="198" y="256" font-size="13" font-weight="600" fill="#1f2328" text-anchor="end">MiMo V2.6 9B</text>
+<rect x="210" y="230" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="230" width="432" height="16" rx="3" fill="#2f9e75"/>
+<text x="698" y="242" font-size="11" fill="#1f2328">9/10</text>
+<rect x="210" y="250" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<text x="698" y="262" font-size="11" fill="#1f2328">0/3</text>
+<rect x="210" y="270" width="480" height="16" rx="3" fill="#f3f4f6"/>
+<rect x="210" y="270" width="480" height="16" rx="3" fill="#8a8f98"/>
+<text x="698" y="282" font-size="11" fill="#1f2328">2/2</text>
+</svg>

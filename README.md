@@ -145,13 +145,21 @@ A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor
 
 ## Benchmark
 
-Resultats amb el conjunt fix de tasques (`npm run evaluate:agent` o el panell Avaluació), al MacBook Pro M2 Pro de 16 GB, 13 de novembre de 2026:
+Resultats amb el conjunt fix de tasques (`npm run evaluate:agent` o el panell Avaluació), al MacBook Pro M2 Pro de 16 GB, 13 de novembre de 2026. Cada model suma les passades del dia (Qwen i Gemma, dues rondes; MiMo, una ronda de les obertes més la passada completa de 9 tasques des de l’app).
 
-- **Qwen2.5-Coder 7B** (2 rondes, amb el codi del matí, abans dels arreglos del tarda): tasques obertes de codi 6/10, apps des de carpeta buida 0/6, tasca dirigida 2/2. A les apps de Chakra UI instal·la sempre la v2 i fa servir la seva API; el build no passa per manca de Vite o de l’script.
-- **Gemma 4 12B** (amb els arreglos): tasques obertes de codi 10/10 en dues rondes, inclosa la correcció sense indicacions que el 7B no aconseguia mai; tasca dirigida 2/2; apps des de carpeta buida 0 de 6 intents fins ara (sense `package.json` vàlid, API de v2 o temps esgotat: intenta escriure tota l’app en una sola resposta i supera el límit de 2.400 tokens per resposta).
-- **MiMo V2.6 9B** (primera ronda, abans de l’últim arreglo de l’agent): tasques obertes de codi 5/5, tasca dirigida 1/1; falten les apps.
+![Benchmark de l’agent amb Qwen2.5-Coder 7B, Gemma 4 12B i MiMo V2.6 9B](docs/benchmark.svg)
 
-La comparativa completa, amb gràfic, es publicarà aquí quan acabi.
+| Model | Tasques obertes | Tasca dirigida | Apps des de carpeta buida | Temps mitjà per tasca |
+| --- | --- | --- | --- | --- |
+| Gemma 4 12B | **10/10** | 2/2 | 0/6 | 441 s |
+| MiMo V2.6 9B | 9/10 | 2/2 | 0/3 | 261 s |
+| Qwen2.5-Coder 7B (codi del matí) | 6/10 | 2/2 | 0/6 | 197 s |
+
+- **Gemma 4 12B** fa totes les tasques obertes, també la correcció sense indicacions, però és el més lent. Apps: una amb l’API de Chakra v2 (`ChakraProvider` sense `value`) i el build sense Vite; una sense `package.json` vàlid; quatre per temps esgotat (1.200 s), perquè intenta escriure tota l’app en una sola resposta.
+- **MiMo V2.6 9B** només falla la correcció sense indicacions, per temps (600 s), i tocant la prova protegida. Apps: cap arriba a tenir un `package.json`. En dues escriu les crides de diversos fitxers en una sola resposta, algunes buides, i la del `package.json` queda tallada i no s’executa; a la tercera, en 30 torns no fa cap crida vàlida. (Des de 4534440 l’agent executa la primera crida vàlida d’una resposta amb diverses; aquesta passada és d’abans.)
+- **Qwen2.5-Coder 7B** (amb el codi del matí, abans dels arreglos de la tarda): apps sempre amb Chakra UI v2 i la seva API, i el build no passa (falta Vite o l’script `build`).
+
+Cap model fa encara una app des d’una carpeta buida sense ajuda. Per això l’app permet ensenyar-l’hi (secció següent).
 
 ## Aprenentatge: el vostre model
 
