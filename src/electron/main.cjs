@@ -733,7 +733,11 @@ app.whenReady().then(async () => {
     await saveSettings();
   }
   // Every command the app runs for a project (npm, npx, Vite…) uses the Node chosen above.
-  try { const node = findNodeExecutable(); if (node !== process.execPath) process.env.PATH = [path.dirname(node), process.env.PATH || ''].join(path.delimiter); } catch { /* no Node: the worker reports it */ }
+  try {
+    const node = findNodeExecutable();
+    if (node !== process.execPath) process.env.PATH = [path.dirname(node), process.env.PATH || ''].join(path.delimiter);
+    console.error(`Node.js per al model i els projectes: ${node} (v${nodeMajor(node) || '?'})`);
+  } catch { /* no Node: the worker reports it */ }
   if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
   addCaptureToMenu();
   createWindow();
