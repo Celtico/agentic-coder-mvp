@@ -1,13 +1,18 @@
-import { FloatingPanel, HStack, IconButton, useFloatingPanelContext } from "@chakra-ui/react"
+import { FloatingPanel, HStack, IconButton, useFloatingPanelContext, type IconButtonProps } from "@chakra-ui/react"
 import { LuMinus as Minus, LuPlus as Plus, LuX as X } from "react-icons/lu"
 import { useEffect, type ReactNode } from "react"
 
 export type WindowStage = "default" | "minimized" | "maximized"
 
-/** One traffic light: a round button, as big as the system ones, whose glyph shows only while the pointer is over the three. */
-function Light({ color, label, children }: { color: string; label: string; children: ReactNode }) {
+/**
+ * One traffic light: a round button, as big as the system ones, whose glyph shows only while the pointer
+ * is over the three. It is the child of a CloseTrigger or StageTrigger (asChild), so it must pass on what
+ * the trigger gives it — the click above all; without that the lights did nothing.
+ */
+function Light({ color, label, children, ...trigger }: Omit<IconButtonProps, "color"> & { color: string; label: string; children: ReactNode }) {
   return (
     <IconButton
+      {...trigger}
       aria-label={label}
       title={label}
       unstyled

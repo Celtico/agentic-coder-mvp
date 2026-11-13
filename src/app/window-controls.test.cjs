@@ -42,6 +42,14 @@ test('the three traffic lights are on the left, before the centred title, and no
   assert.ok(drag > -1 && drag < html.indexOf('Tanca l’historial'));
 });
 
+test('each light is the trigger itself: it gets the trigger’s click and attributes', () => {
+  const lights = buttons(render('default'));
+  assert.match(lights[0], /data-part="close-trigger"/);
+  assert.match(lights[1], /data-part="stage-trigger"[^>]*data-stage="minimized"|data-stage="minimized"[^>]*data-part="stage-trigger"/);
+  assert.match(lights[2], /data-stage="maximized"/);
+  assert.ok(lights.every((button) => /type="button"/.test(button)));
+});
+
 test('yellow and green turn into restore when the window is already minimized or big', () => {
   assert.deepEqual(buttons(render('maximized')).map(label), ['Tanca l’historial', 'Minimitza l’historial', 'Restaura la mida de l’historial']);
   assert.deepEqual(buttons(render('minimized')).map(label), ['Tanca l’historial', 'Restaura l’historial', 'Fes gran l’historial']);
