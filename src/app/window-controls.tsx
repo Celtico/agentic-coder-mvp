@@ -44,13 +44,13 @@ export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage
       <FloatingPanel.DragTrigger flex="1" minW="0" h="windowTitleBar" display="grid" gridTemplateColumns="auto minmax(0, 1fr) auto" alignItems="center" gap="3" px="windowLightInset" py="0">
         <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic">
           <FloatingPanel.CloseTrigger asChild>
-            <Light color="window.close" label={`Tanca ${name}`}><X size={9} strokeWidth={3}/></Light>
+            <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
           </FloatingPanel.CloseTrigger>
           <FloatingPanel.StageTrigger stage={minimized ? "default" : "minimized"} hidden={false} asChild>
-            <Light color="window.minimize" label={minimized ? `Restaura ${name}` : `Minimitza ${name}`}><Minus size={9} strokeWidth={3}/></Light>
+            <Light color="window.minimize" label={minimized ? `Restaura ${name}` : `Minimitza ${name}`}><Minus size={8} strokeWidth={3}/></Light>
           </FloatingPanel.StageTrigger>
           <FloatingPanel.StageTrigger stage={maximized ? "default" : "maximized"} hidden={false} asChild>
-            <Light color="window.maximize" label={maximized ? `Restaura la mida de ${name}` : `Fes gran ${name}`}><Plus size={9} strokeWidth={3}/></Light>
+            <Light color="window.maximize" label={maximized ? `Restaura la mida de ${name}` : `Fes gran ${name}`}><Plus size={8} strokeWidth={3}/></Light>
           </FloatingPanel.StageTrigger>
         </FloatingPanel.Control>
         <FloatingPanel.Title truncate textAlign="center" fontSize="xs" fontWeight="semibold">{title}</FloatingPanel.Title>

@@ -51,5 +51,5 @@ test('the colours and sizes come from the theme, not from the component', () => 
   const source = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
   assert.doesNotMatch(source, /#[0-9a-f]{3,8}\b|\d+px/i);
   const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  for (const token of ['"window.close"', '"window.minimize"', '"window.maximize"', 'windowTitleBar: { value: "36px" }', 'windowLight: { value: "14px" }', 'windowLightGap: { value: "9px" }']) assert.ok(theme.includes(token), token);
+  for (const token of ['"window.close"', '"window.minimize"', '"window.maximize"', 'windowTitleBar: { value: "28px" }', 'windowLight: { value: "12px" }', 'windowLights: { value: "52px" }', 'windowLightGap: { value: "8px" }', 'windowLightInset: { value: "12px" }']) assert.ok(theme.includes(token), token);
 });
