@@ -1268,7 +1268,6 @@ export function App(): React.JSX.Element {
         </HStack>
         <HStack flex="none" gap="2">
           {terminalStatus && <Text fontSize="xs" color="fg.muted">{terminalStatus}</Text>}
-          <IconButton icon={X} label="Tanca el terminal" size="xs" onClick={() => setTerminalOpen(false)}/>
         </HStack>
       </Flex>
       <Box ref={terminalContainerRef} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
@@ -1453,11 +1452,13 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
-  const dockPane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
+  // Panes opened from an icon of the left bar have no × of their own: the icon is their tab, and
+  // it opens and closes them. Only a pane without an icon gets a close button (`close`).
+  const dockPane = (title: string, content: React.ReactNode, badge?: React.ReactNode, close?: { label: string; onClose: () => void }) => (
     <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
-        <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
+        {close && <IconButton icon={X} label={close.label} size="xs" onClick={close.onClose}/>}
       </Flex>
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
@@ -1591,9 +1592,11 @@ export function App(): React.JSX.Element {
     </Stack>
   );
   const dockItems = [
-    gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
-    learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
-    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', 'Tanca la consola', () => setConsoleOpen(false), consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
+    gitOpen ? { id: 'dock-git', node: dockPane('Git', gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
+    learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', learningPane) } : null,
+    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined,
+      // Its tab is the console button of the browser: with the browser closed it needs its own ×.
+      browserOpen ? undefined : { label: 'Tanca la consola', onClose: () => setConsoleOpen(false) }) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const dockKey = dockItems.map((item) => item.id).join('+');
@@ -1613,24 +1616,23 @@ export function App(): React.JSX.Element {
       )}
     </Flex>
   );
-  const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
+  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode, close?: { label: string; onClose: () => void }) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
         <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
-        <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
+        {close && <IconButton icon={X} label={close.label} size="xs" onClick={close.onClose}/>}
       </Flex>
       <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
-    browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>, { label: 'Tanca l’editor', onClose: closeEditor }) } : null,
+    browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', browserPane) } : null,
     // The evaluation opens beside the chat, like the browser, with the whole height.
     // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
     evaluationOpen ? { id: 'side-evaluation', node: <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
       <Card.Header flexDirection="row" alignItems="center" justifyContent="space-between" gap="3" py="1.5" px="3">
         <HStack gap="2" minW="0"><Card.Title fontSize="xs">Avaluació</Card.Title>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
-        <IconButton icon={X} label="Tanca l’avaluació" size="xs" onClick={() => setEvaluationOpen(false)}/>
       </Card.Header>
       <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
     </Card.Root> } : null,
