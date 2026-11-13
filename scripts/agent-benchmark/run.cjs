@@ -3,7 +3,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { createSandboxExecutor, listProjectFiles } = require('./sandbox-tools.cjs');
-const { tasks: allTasks } = require('./tasks.cjs');
+const { tasks: codeTasks } = require('./tasks.cjs');
+const { appTasks } = require('./app-tasks.cjs');
+const allTasks = [...codeTasks, ...appTasks];
 
 const sha = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -45,7 +47,7 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
   const counter = { generations: 0, generationMs: 0 };
   const agent = new LocalCodingAgent({ engine: countingEngine(engine, counter), experienceRanker: { rank: async () => [] } });
   agent.historyDir = historyDir;
-  const tools = createSandboxExecutor(root);
+  const tools = createSandboxExecutor(root, { allowInstall: task.allowInstall === true });
   const started = Date.now();
   let answer = '';
   let error;
@@ -53,7 +55,7 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
   try {
     answer = await Promise.race([
       agent.ask(task.prompt, root, tools.execute),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`Temps esgotat (${Math.round(timeoutMs / 1000)} s).`)), timeoutMs); }),
+      new Promise((_, reject) => { const limit = Math.max(timeoutMs, (task.timeoutMinutes || 0) * 60000); timer = setTimeout(() => reject(new Error(`Temps esgotat (${Math.round(limit / 1000)} s).`)), limit); }),
     ]);
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
@@ -111,9 +113,13 @@ function summarize(results) {
     delete entry.toolCalls; delete entry.seconds;
   }
   const passed = results.filter((result) => result.pass).length;
+  // The open total leaves out the reference tasks, whose prompt says exactly what to do.
+  const referenceIds = new Set(allTasks.filter((task) => task.reference).map((task) => task.id));
+  const open = results.filter((result) => !referenceIds.has(result.task));
   return {
     runs: results.length,
     passed,
+    open: { runs: open.length, passed: open.filter((result) => result.pass).length },
     passRate: results.length ? Number((passed / results.length).toFixed(3)) : 0,
     runsWithoutTools: results.filter((result) => !result.toolCalls).length,
     byTask,

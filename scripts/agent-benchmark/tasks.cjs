@@ -33,6 +33,8 @@ const tasks = [
   },
   {
     id: 'fix-failing-test-directed',
+    // A reference, not part of the open total: the prompt says exactly what to change.
+    reference: true,
     description: 'El mateix error amb la instrucció concreta que ja va funcionar a mà (vegeu docs/engine-and-learning.md).',
     prompt: 'A src/math.cjs canvia `return a - b` per `return a + b` i executa npm test.',
     files: sumFixture,

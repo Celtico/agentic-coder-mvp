@@ -3,11 +3,16 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { executeProjectChecks } = require('../../src/electron/project-checks.cjs');
 
-// The project tools of the app, reduced to what a benchmark task can use without the network or a
-// window: reading, searching, writing and deleting files and running the project's own scripts.
-// Everything that would download code, open a browser or reach the internet answers with an error,
-// so a task never depends on what is installed or reachable on the machine running it.
-const UNAVAILABLE = new Set(['install_dependencies', 'install_package', 'run_npx', 'install_playwright_browser', 'web_search', 'read_web_page', 'inspect_browser', 'start_project', 'stop_project', 'list_mcp_tools', 'call_mcp_tool', 'create_git_commit']);
+// The project tools of the app, reduced to what a benchmark task can use without a window: reading,
+// searching, writing and deleting files and running the project's own scripts. Everything that would
+// download code, open a browser or reach the internet answers with an error, so a task never depends
+// on what is installed or reachable on the machine running it. The exception are the tasks that build
+// a whole app from an empty folder (allowInstall): they may install npm packages, as in the app.
+const INSTALL_TOOLS = new Set(['install_dependencies', 'install_package', 'run_npx']);
+const UNAVAILABLE = new Set([...INSTALL_TOOLS, 'install_playwright_browser', 'web_search', 'read_web_page', 'inspect_browser', 'start_project', 'stop_project', 'list_mcp_tools', 'call_mcp_tool', 'create_git_commit']);
+// A script that serves the app never ends; there is no browser here to look at it.
+const LONG_RUNNING_SCRIPT = /^(?:dev|start|serve|preview|watch)$/;
+const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(?:@[\w.^~-]{1,30})?$/i;
 const SKIPPED_FOLDERS = new Set(['node_modules', '.git']);
 
 function insideRoot(root, relativePath) {
@@ -28,12 +33,16 @@ async function listProjectFiles(root, directory = root, found = []) {
 }
 
 function runNpmScript(root, script, timeoutMs = 60000) {
+  return runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], root, timeoutMs);
+}
+
+function runCommand(command, args, root, timeoutMs = 60000) {
   return new Promise((resolve) => {
     // A task's own `node --test` must not inherit the runner's test context when the benchmark
     // itself runs under node --test.
     const env = { ...process.env, CI: '1', FORCE_COLOR: '0' };
     delete env.NODE_TEST_CONTEXT;
-    const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], { cwd: root, env });
+    const child = spawn(command, args, { cwd: root, env });
     let output = '';
     const keep = (chunk) => { output = (output + chunk.toString()).slice(-12000); };
     child.stdout.on('data', keep);
@@ -45,7 +54,7 @@ function runNpmScript(root, script, timeoutMs = 60000) {
 }
 
 /** Returns a tool executor bound to one task folder, and the record of every call it served. */
-function createSandboxExecutor(root) {
+function createSandboxExecutor(root, { allowInstall = false } = {}) {
   const calls = [];
   const execute = async (tool) => {
     const name = tool && typeof tool === 'object' ? tool.name : undefined;
@@ -53,6 +62,16 @@ function createSandboxExecutor(root) {
     const record = { name: String(name), path: typeof args.path === 'string' ? args.path : undefined, ok: true };
     calls.push(record);
     try {
+      if (allowInstall && INSTALL_TOOLS.has(name)) {
+        const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        if (name === 'install_dependencies') return runCommand(npm, ['install'], root, 600000);
+        if (typeof args.packageName !== 'string' || !PACKAGE_NAME.test(args.packageName)) throw new Error('Nom de paquet npm no vàlid.');
+        record.package = args.packageName;
+        if (name === 'install_package') return runCommand(npm, ['install', ...(args.dev === true ? ['--save-dev'] : []), args.packageName], root, 300000);
+        const extra = Array.isArray(args.args) ? args.args : [];
+        if (extra.length > 10 || extra.some((item) => typeof item !== 'string' || item.length > 120 || /[\r\n\0;&|`$<>]/.test(item))) throw new Error('Els arguments de l’ordre no són vàlids.');
+        return runCommand(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['-y', args.packageName, ...extra], root, 300000);
+      }
       if (UNAVAILABLE.has(name)) throw new Error(`L’eina ${name} no està disponible en aquesta avaluació: no hi ha xarxa, navegador ni Git.`);
       if (name === 'list_files') return { files: await listProjectFiles(root) };
       if (name === 'read_file') {
@@ -89,7 +108,8 @@ function createSandboxExecutor(root) {
       if (name === 'run_project_script') {
         const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
         if (typeof args.script !== 'string' || typeof pkg.scripts?.[args.script] !== 'string') throw new Error(`El projecte no defineix el script ${args.script}.`);
-        return runNpmScript(root, args.script);
+        if (LONG_RUNNING_SCRIPT.test(args.script)) throw new Error(`El script ${args.script} no s’acaba mai; en aquesta avaluació no es pot servir l’app.`);
+        return runNpmScript(root, args.script, allowInstall ? 300000 : 60000);
       }
       throw new Error('Eina desconeguda o arguments invàlids.');
     } catch (error) {
@@ -101,4 +121,4 @@ function createSandboxExecutor(root) {
   return { execute, calls };
 }
 
-module.exports = { createSandboxExecutor, listProjectFiles, runNpmScript };
+module.exports = { createSandboxExecutor, listProjectFiles, runNpmScript, runCommand };

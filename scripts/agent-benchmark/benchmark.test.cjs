@@ -25,7 +25,8 @@ test('every task has an id, a prompt, files and a check', () => {
     assert.ok(task.id && !ids.has(task.id), `unique id ${task.id}`);
     ids.add(task.id);
     assert.ok(task.prompt.length > 10);
-    assert.ok(Object.keys(task.files).length > 0);
+    // Only the app tasks start from an empty folder, and only they may install packages.
+    assert.ok(Object.keys(task.files).length > 0 || task.allowInstall === true, `${task.id}: files`);
     assert.equal(typeof task.check, 'function');
     for (const file of task.protected) assert.ok(file in task.files, `${task.id}: protected ${file} exists`);
   }
@@ -68,4 +69,31 @@ test('tools that need the network are refused inside the benchmark', async () =>
 
 test('unknown task ids are rejected', async () => {
   await assert.rejects(runBenchmark({ LocalCodingAgent, engine: scriptedEngine([]), taskIds: ['nope'] }), /Tasques desconegudes: nope/);
+});
+
+test('the app tasks start empty, may install, and their check spots Chakra v2 code without building', async (t) => {
+  const fs = require('node:fs/promises');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { appTasks, appCheck } = require('./app-tasks.cjs');
+  const { createSandboxExecutor } = require('./sandbox-tools.cjs');
+  assert.equal(appTasks.length, 3);
+  for (const task of appTasks) { assert.deepEqual(task.files, {}); assert.equal(task.allowInstall, true); assert.doesNotMatch(task.prompt, /package\.json|vite|npm|\.jsx/i); }
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-bench-app-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  assert.match((await appCheck({ chakra: true })(root)).detail, /package\.json/);
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ dependencies: { '@chakra-ui/react': '^2.8.0' } }));
+  await fs.mkdir(path.join(root, 'src'));
+  await fs.writeFile(path.join(root, 'src', 'main.jsx'), 'import { ChakraProvider, extendTheme } from "@chakra-ui/react";\n<ChakraProvider theme={extendTheme({})}><Button colorScheme="blue"/></ChakraProvider>');
+  const result = await appCheck({ chakra: true })(root);
+  assert.equal(result.pass, false);
+  assert.match(result.detail, /no la v3/);
+  assert.match(result.detail, /extendTheme/);
+  assert.match(result.detail, /no hi ha script build/);
+  // Without allowInstall the installs answer with an error; a dev server is never started.
+  const closed = createSandboxExecutor(root);
+  await assert.rejects(closed.execute({ name: 'install_package', arguments: { packageName: 'react', dev: false } }), /no està disponible/);
+  await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }));
+  await assert.rejects(createSandboxExecutor(root, { allowInstall: true }).execute({ name: 'run_project_script', arguments: { script: 'dev' } }), /no s’acaba mai/);
+  await assert.rejects(createSandboxExecutor(root, { allowInstall: true }).execute({ name: 'install_package', arguments: { packageName: 'bad name; rm', dev: false } }), /no vàlid/);
 });
