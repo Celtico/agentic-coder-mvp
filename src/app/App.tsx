@@ -245,7 +245,12 @@ export function App(): React.JSX.Element {
   const [evaluationError, setEvaluationError] = useState('');
   const [evaluationProjects, setEvaluationProjects] = useState<BenchmarkProject[]>([]);
   const [evaluationTasks, setEvaluationTasks] = useState<BenchmarkTask[]>([]);
-  const [evaluationChosen, setEvaluationChosen] = useState<Set<string>>(() => new Set());
+  // The chosen tasks are remembered between restarts of the app.
+  const [evaluationChosen, setEvaluationChosen] = useState<Set<string>>(() => {
+    try { const saved = JSON.parse(localStorage.getItem('agentic-evaluation-tasks') || 'null'); return Array.isArray(saved) ? new Set(saved.filter((id): id is string => typeof id === 'string')) : new Set(); }
+    catch { return new Set(); }
+  });
+  useEffect(() => { try { localStorage.setItem('agentic-evaluation-tasks', JSON.stringify([...evaluationChosen])); } catch { /* the selection is only a convenience */ } }, [evaluationChosen]);
   const [evaluationCurrent, setEvaluationCurrent] = useState<BenchmarkCurrent | null>(null);
   const [evaluationNow, setEvaluationNow] = useState(() => Date.now());
   const [evaluationOpenRun, setEvaluationOpenRun] = useState<string[]>([]);
@@ -789,7 +794,8 @@ export function App(): React.JSX.Element {
     void window.agentic.benchmarkStatus().then((value) => { setEvaluationRunning(value.running); setEvaluationCurrent(value.current || null); }).catch(() => {});
     void window.agentic.benchmarkTasks().then((tasks) => {
       setEvaluationTasks(tasks);
-      setEvaluationChosen((current) => (current.size ? current : new Set(tasks.map((task) => task.id))));
+      // A remembered selection keeps only the tasks that still exist; with none, every task.
+      setEvaluationChosen((current) => { const known = new Set(tasks.map((task) => task.id)); const kept = [...current].filter((id) => known.has(id)); return kept.length ? new Set(kept) : known; });
     }).catch(() => {});
     await refreshEvaluations();
   }
@@ -1433,7 +1439,7 @@ export function App(): React.JSX.Element {
         <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
           ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
-          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark{chosenCount && chosenCount < evaluationTasks.length ? ` (${chosenCount})` : ''}</Button>}
+          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
       </HStack>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
       {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.emphasized" borderRadius="sm" p="2">
