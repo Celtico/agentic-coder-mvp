@@ -34,6 +34,10 @@ export const system = createSystem(defaultConfig, defineConfig({
           900: { value: "#094534" }, 950: { value: "#04271d" },
         },
       },
+      // Every panel of the window (columns, the Converses and Fitxers boxes, the evaluation cards).
+      radii: {
+        panel: { value: "10px" },
+      },
       shadows: {
         composer: { value: "0 4px 24px #0002" },
       },

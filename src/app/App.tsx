@@ -1147,7 +1147,7 @@ export function App(): React.JSX.Element {
   const chatFilePickerRef = useRef<HTMLInputElement | null>(null);
 
   const chatPane = (
-    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex h="32px" flex="none" px="3" align="center" justify="space-between" gap="3">
         <HStack minW="0" gap="3">
           <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
@@ -1210,7 +1210,7 @@ export function App(): React.JSX.Element {
   );
 
   const terminalDock = (
-    <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="10px" overflow="hidden">
+    <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="3">
           <Text flex="none" fontSize="xs" fontWeight="semibold">Terminal</Text>
@@ -1404,7 +1404,7 @@ export function App(): React.JSX.Element {
   );
 
   const dockPane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
-    <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+    <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
         <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
@@ -1414,6 +1414,8 @@ export function App(): React.JSX.Element {
   );
   // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
   const rowProps = { borderBottomWidth: '1px', borderColor: 'border', _last: { borderBottomWidth: 0 } } as const;
+  // The top-level sections are cards like the Converses and Fitxers boxes: panel background and radius.
+  const cardProps = { bg: 'bg', borderRadius: 'panel', overflow: 'hidden' } as const;
   const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
     <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
@@ -1426,7 +1428,8 @@ export function App(): React.JSX.Element {
   const evaluationPane = (
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
     // shrinking flex column the accordions, which clip their content, were squeezed to nothing).
-    <Box h="full" minH="0" overflowY="auto" p="3"><Stack gap="3">
+    <Box h="full" minH="0" overflowY="auto"><Stack gap="6px">
+      <Stack gap="3" bg="bg" borderRadius="panel" p="3">
       <HStack gap="2" flexWrap="wrap">
         <Text flex="1" minW="160px" fontSize="sm">Model: <b>{modelOptions.find((item) => item.id === selectedModel)?.label || selectedModel}</b></Text>
         <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
@@ -1442,9 +1445,10 @@ export function App(): React.JSX.Element {
         {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'fg.error' : 'agentic.fg'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
+      </Stack>
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderTopWidth="1px" borderBottomWidth="1px" borderColor="border" bg="canvas">
-        <Accordion.Item value="tasks" {...rowProps}>
+      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" display="flex" flexDirection="column" gap="6px">
+        <Accordion.Item value="tasks" {...cardProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Marca les tasques que vols passar; totes es fan en una carpeta nova.')}
@@ -1464,7 +1468,7 @@ export function App(): React.JSX.Element {
             })}</Accordion.Root>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
-        {evaluationList && evaluationList.models.length > 0 && <Accordion.Item value="comparison" {...rowProps}>
+        {evaluationList && evaluationList.models.length > 0 && <Accordion.Item value="comparison" {...cardProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Comparativa', evaluationList.models.length, ChartBar)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Tasques superades per model, de totes les avaluacions.')}
@@ -1478,7 +1482,7 @@ export function App(): React.JSX.Element {
             </Box>)}</Stack>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>}
-        <Accordion.Item value="evaluations" {...rowProps}>
+        <Accordion.Item value="evaluations" {...cardProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Avaluacions', evaluationList?.runs.length ?? 0, History)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Cada passada del benchmark: obre’n una per veure què ha fet el model a cada tasca.')}
@@ -1520,7 +1524,7 @@ export function App(): React.JSX.Element {
             </Accordion.Root>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
-        <Accordion.Item value="projects" {...rowProps}>
+        <Accordion.Item value="projects" {...cardProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Projectes fets pel model', evaluationProjects.length, FolderOpen)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Les carpetes on el model ha treballat; clica’n una per obrir-la com a projecte.')}
@@ -1562,7 +1566,7 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   const sidePane = (title: string, closeLabel: string, onClose: () => void, content: React.ReactNode, badge?: React.ReactNode) => (
-    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="10px" overflow="hidden">
+    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
         <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
         <IconButton icon={X} label={closeLabel} size="xs" onClick={onClose}/>
@@ -1574,7 +1578,13 @@ export function App(): React.JSX.Element {
     editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
     // The evaluation opens beside the chat, like the browser, with the whole height.
-    evaluationOpen ? { id: 'side-evaluation', node: sidePane('Avaluació', 'Tanca l’avaluació', () => setEvaluationOpen(false), evaluationPane, evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined) } : null,
+    evaluationOpen ? { id: 'side-evaluation', node: <Flex flex="1" h="full" minW="0" minH="0" direction="column" gap="6px">
+      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3" bg="bg" borderRadius="panel">
+        <HStack gap="2" minW="0"><Text fontSize="xs" fontWeight="semibold">Avaluació</Text>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
+        <IconButton icon={X} label="Tanca l’avaluació" size="xs" onClick={() => setEvaluationOpen(false)}/>
+      </Flex>
+      <Box flex="1" minH="0">{evaluationPane}</Box>
+    </Flex> } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
   const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
@@ -1644,7 +1654,7 @@ export function App(): React.JSX.Element {
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
           {/* The project comes first: conversations and files below both belong to it. */}
-          <Box flex="none" bg="bg" borderTopRadius="10px" px="2" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+          <Box flex="none" bg="bg" borderTopRadius="panel" px="2" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
             <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
             <Box flex="1" minW="0" textAlign="left">
               <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
@@ -1668,7 +1678,7 @@ export function App(): React.JSX.Element {
             }}
           >
             <Splitter.Context>{(splitterContext) => <>
-            <Splitter.Panel id="recent-conversations" minH="0" minW="0" overflow="hidden" bg="bg" borderBottomRadius="10px" px="2">
+            <Splitter.Panel id="recent-conversations" minH="0" minW="0" overflow="hidden" bg="bg" borderBottomRadius="panel" px="2">
               <Accordion.Root collapsible value={recentConversationsExpanded ? ['recent'] : []} onValueChange={(details) => {
                 const expanded = details.value.includes('recent');
                 setRecentConversationsExpanded(expanded);
@@ -1697,7 +1707,7 @@ export function App(): React.JSX.Element {
               <Splitter.ResizeTriggerSeparator bg="transparent"/>
               <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="transparent" borderWidth="0" boxShadow="none" _groupHover={{ bg: 'border' }}/>
             </Splitter.ResizeTrigger>
-            <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden" bg="bg" borderRadius="10px" px="2">
+            <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden" bg="bg" borderRadius="panel" px="2">
               <Accordion.Root collapsible defaultValue={['files']} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
                   <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative">
