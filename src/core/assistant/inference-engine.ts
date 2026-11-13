@@ -60,6 +60,8 @@ export class MlxInferenceEngine implements InferenceEngine {
         if (!current()) return;
         let message: Record<string, unknown>;
         try { message = JSON.parse(line); } catch { return; }
+        // An error before «ready» (no runtime, the model already loaded elsewhere…) is the reason it did not load.
+        if (message.type === 'result' && typeof message.error === 'string' && this.state === 'loading') { reject(new Error(message.error)); return; }
         if (message.type === 'ready') { this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;

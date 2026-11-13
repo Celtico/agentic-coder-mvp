@@ -37,3 +37,15 @@ test('a stopped model process that exits late does not unload the one loaded aft
   assert.ok((await abandoned) instanceof Error);
   await engine.unloadModel();
 });
+
+test('a worker that cannot load says why, and loading fails with that reason', { timeout: 15000 }, async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-fake-mlx-busy-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const fake = path.join(dir, 'python');
+  await fs.writeFile(fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({ type: 'result', error: 'Ja hi ha un altre model carregat en aquest Mac (pid 1: prova).' }));\nprocess.exit(1);\n`, { mode: 0o755 });
+  const before = { python: process.env.AGENT_MLX_PYTHON, model: process.env.AGENT_MLX_MODEL_PATH };
+  process.env.AGENT_MLX_PYTHON = fake;
+  process.env.AGENT_MLX_MODEL_PATH = dir;
+  t.after(() => { process.env.AGENT_MLX_PYTHON = before.python; process.env.AGENT_MLX_MODEL_PATH = before.model; });
+  await assert.rejects(new MlxInferenceEngine().loadModel(), /Ja hi ha un altre model carregat/);
+});

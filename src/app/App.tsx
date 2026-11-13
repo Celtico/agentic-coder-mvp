@@ -1418,6 +1418,13 @@ export function App(): React.JSX.Element {
           <Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge>
           <Text flex="1" fontSize="xs">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines{result.pass ? '' : ` · ${result.detail}`}</Text>
         </Button>)}</Stack>
+        {evaluationResultIndex !== null && evaluationReport.results[evaluationResultIndex]?.hasProject && <Button mt="2" size="xs" variant="outline" onClick={async () => {
+          try {
+            const opened = await window.agentic.openBenchmarkProject(evaluationReport.id, evaluationResultIndex);
+            activateProject(opened, true);
+            setStatus(`Obert el projecte que el model va fer a ${evaluationReport.results[evaluationResultIndex].task}`);
+          } catch (error) { setEvaluationError(errorText(error)); }
+        }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
       </Box>}
       {evaluationResult && <Box>
         <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Què ha fet el model a {evaluationResult.task} #{evaluationResult.run}</Text>

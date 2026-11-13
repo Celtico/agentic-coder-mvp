@@ -48,7 +48,10 @@ function countingEngine(engine, counter) {
 }
 
 async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run }) {
-  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), `agentic-coder-bench-${task.id}-`)));
+  // Kept projects go where AGENT_BENCHMARK_WORKDIR says (the app's evaluation keeps them to be opened).
+  const workdir = keep && process.env.AGENT_BENCHMARK_WORKDIR ? process.env.AGENT_BENCHMARK_WORKDIR : os.tmpdir();
+  await fs.mkdir(workdir, { recursive: true });
+  const root = await fs.realpath(await fs.mkdtemp(path.join(workdir, `${task.id}-${run}-`)));
   const historyDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-bench-history-'));
   for (const [file, content] of Object.entries(task.files)) {
     await fs.mkdir(path.dirname(path.join(root, file)), { recursive: true });

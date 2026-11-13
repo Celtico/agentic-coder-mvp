@@ -57,7 +57,9 @@ function decide({ baseLoss, adapterLoss, baseBenchmark, adapterBenchmark }) {
  * @param {object} [options.settings]        iters, numLayers, maxSeqLength, learningRate; requireReady=false only for a plumbing test
  * @param {() => Date} [options.now]
  */
-async function runTrainingPipeline({ datasetDirectory, base, name, modelsRoot, python, run, benchmark, onProgress = () => {}, signal, settings = {}, now = () => new Date() }) {
+async function runTrainingPipeline({ datasetDirectory, base, name, modelsRoot, python, mlxLauncher = null, run, benchmark, onProgress = () => {}, signal, settings = {}, now = () => new Date() }) {
+  // `python <mlxLauncher> lora …` takes the one-model-on-the-GPU lock first (mlx-locked.py); without it, `python -m mlx_lm lora …`.
+  const mlx = (...args) => [...(mlxLauncher ? [mlxLauncher] : ['-m', 'mlx_lm']), ...args];
   const config = { ...DEFAULTS, requireReady: true, ...settings };
   const slug = slugify(name);
   const manifest = JSON.parse(await fs.readFile(path.join(datasetDirectory, 'manifest.json'), 'utf8'));
@@ -87,12 +89,12 @@ async function runTrainingPipeline({ datasetDirectory, base, name, modelsRoot, p
   };
 
   try {
-    await step('train', `Entrenant l’adaptador LoRA sobre ${base.label}…`, python, ['-m', 'mlx_lm', 'lora', '--model', base.directory, '--train', '--data', data,
+    await step('train', `Entrenant l’adaptador LoRA sobre ${base.label}…`, python, mlx('lora', '--model', base.directory, '--train', '--data', data,
       '--adapter-path', adapterPath, '--iters', String(config.iters), '--batch-size', String(config.batchSize), '--num-layers', String(config.numLayers),
-      '--max-seq-length', String(config.maxSeqLength), '--learning-rate', String(config.learningRate), '--grad-checkpoint', '--steps-per-eval', String(Math.max(10, Math.floor(config.iters / 4)))]);
+      '--max-seq-length', String(config.maxSeqLength), '--learning-rate', String(config.learningRate), '--grad-checkpoint', '--steps-per-eval', String(Math.max(10, Math.floor(config.iters / 4)))));
 
-    const baseTest = await step('test-base', 'Mesurant el model base amb el conjunt de prova…', python, ['-m', 'mlx_lm', 'lora', '--model', base.directory, '--data', data, '--test', '--adapter-path', '']);
-    const adapterTest = await step('test-adapter', 'Mesurant el model amb l’adaptador amb el conjunt de prova…', python, ['-m', 'mlx_lm', 'lora', '--model', base.directory, '--data', data, '--test', '--adapter-path', adapterPath]);
+    const baseTest = await step('test-base', 'Mesurant el model base amb el conjunt de prova…', python, mlx('lora', '--model', base.directory, '--data', data, '--test', '--adapter-path', ''));
+    const adapterTest = await step('test-adapter', 'Mesurant el model amb l’adaptador amb el conjunt de prova…', python, mlx('lora', '--model', base.directory, '--data', data, '--test', '--adapter-path', adapterPath));
     report.testLoss = { base: parseTestLoss(baseTest.output), adapter: parseTestLoss(adapterTest.output) };
 
     checkCancel();
@@ -117,7 +119,7 @@ async function runTrainingPipeline({ datasetDirectory, base, name, modelsRoot, p
     await fs.mkdir(path.dirname(savePath), { recursive: true });
     try { await fs.access(savePath); throw new Error(`La carpeta ${folder} ja existeix; no es sobreescriu.`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     try {
-      await step('fuse', `Fusionant l’adaptador en un model nou: ${folder}…`, python, ['-m', 'mlx_lm', 'fuse', '--model', base.directory, '--adapter-path', adapterPath, '--save-path', savePath]);
+      await step('fuse', `Fusionant l’adaptador en un model nou: ${folder}…`, python, mlx('fuse', '--model', base.directory, '--adapter-path', adapterPath, '--save-path', savePath));
       const meta = {
         id: folder, label: `${String(name).trim().slice(0, 60)} v${version}`, modelId: `local/${folder}`, version, name: String(name).trim(),
         base: { id: base.id, modelId: base.modelId }, adapterPath, dataset: report.dataset, createdAt: now().toISOString(),

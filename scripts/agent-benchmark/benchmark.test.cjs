@@ -126,3 +126,17 @@ test('each result keeps what the model saw and answered at every turn', async ()
   assert.match(results[0].transcript[0].input.content, /arrenc|start/i);
   assert.match(results[0].transcript[0].output, /npm start/);
 });
+
+test('kept projects go to AGENT_BENCHMARK_WORKDIR, to be opened from the app', async (t) => {
+  const fs = require('node:fs/promises');
+  const os = require('node:os');
+  const path = require('node:path');
+  const workdir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-bench-keep-'));
+  t.after(() => { delete process.env.AGENT_BENCHMARK_WORKDIR; return fs.rm(workdir, { recursive: true, force: true }); });
+  process.env.AGENT_BENCHMARK_WORKDIR = path.join(workdir, 'projectes');
+  const engine = scriptedEngine(['{"type":"final","content":"Amb npm start, que arrenca server.cjs."}']);
+  const { results } = await runBenchmark({ LocalCodingAgent, engine, taskIds: ['answer-without-editing'], keep: true });
+  const real = await fs.realpath(path.join(workdir, 'projectes'));
+  assert.ok(results[0].folder.startsWith(real + path.sep), results[0].folder);
+  assert.ok((await fs.readdir(results[0].folder)).includes('package.json'));
+});

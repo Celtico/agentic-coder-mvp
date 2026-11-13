@@ -497,6 +497,7 @@ async function startModelWorker() {
       // Without a Node.js of its own, the worker runs on Electron's Node.
       ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       AGENT_MLX_PYTHON: mlxPythonPath(),
+      AGENT_MLX_LOCK_LABEL: 'el xat d’Agentic Coder',
       AGENT_MLX_MODEL_PATH: await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory()) || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
       AGENT_EMBEDDING_INDEX_PATH: path.join(app.getPath('userData'), 'learning', 'embedding-index-v1.json'),
@@ -1113,7 +1114,7 @@ const sendTraining = (event) => { if (win && !win.isDestroyed()) win.webContents
 
 function runStreaming(command, args, { onLine, signal, env } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: projectModelsDirectory(), env: { ...process.env, ...env }, detached: true });
+    const child = spawn(command, args, { cwd: projectModelsDirectory(), env: { AGENT_MLX_LOCK_LABEL: 'un entrenament d’Agentic Coder', ...process.env, ...env }, detached: true });
     let output = '';
     let partial = '';
     const take = (chunk) => {
@@ -1136,13 +1137,13 @@ function runStreaming(command, args, { onLine, signal, env } = {}) {
  * Runs scripts/evaluate-agent.cjs for one model in its own process, as the developer runs it from the
  * terminal. Null when the benchmark is not there (it ships with the app, but not in every build).
  */
-async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = 'off', repeat = 1, signal, onLine }) {
+async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = 'off', repeat = 1, keepIn = '', signal, onLine }) {
   const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs');
   if (!fsSync.existsSync(script)) return null;
   const nodeExecutable = findNodeExecutable();
-  return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out], {
+  return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : [])], {
     signal, onLine,
-    env: { AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+    env: { ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   });
 }
 
@@ -1173,6 +1174,8 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
     try {
       result = await runBenchmarkProcess({
         modelId: model.id, out, repeat, signal: controller.signal, turnLog: path.join(benchmarksDirectory(), `${id}.turns.jsonl`),
+        // What the model built is kept, to be opened from the panel as a project.
+        keepIn: path.join(benchmarksDirectory(), `${id}-projectes`),
         onLine: (line) => { if (/^(PASSA|FALLA|Model:)/.test(line) || /carregat amb MLX/.test(line)) sendBenchmark({ step: 'progress', message: line.slice(0, 300) }); },
       });
     } finally {
@@ -1208,7 +1211,21 @@ ipcMain.handle('benchmark:list', async () => {
 ipcMain.handle('benchmark:report', async (_e, id) => {
   if (typeof id !== 'string' || !/^[\w.-]+$/.test(id)) throw new Error('Aquesta avaluació no és vàlida.');
   const report = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.json`), 'utf8'));
-  return { id, at: report.at, model: report.model, summary: report.summary, results: report.results.map(({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript, error }) => ({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript: transcript || [], error })) };
+  return { id, at: report.at, model: report.model, summary: report.summary, results: report.results.map(({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript, error, folder }) => ({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript: transcript || [], error, hasProject: typeof folder === 'string' && fsSync.existsSync(folder) })) };
+});
+
+// Opens, as the current project, the folder where the model worked on one task of an evaluation.
+ipcMain.handle('benchmark:open-project', async (_e, id, index) => {
+  if (typeof id !== 'string' || !/^[\w.-]+$/.test(id) || !Number.isInteger(index)) throw new Error('Aquesta tasca no és vàlida.');
+  const report = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.json`), 'utf8'));
+  const folder = report.results?.[index]?.folder;
+  if (typeof folder !== 'string') throw new Error('Aquesta avaluació no va guardar el projecte.');
+  const real = await fs.realpath(folder).catch(() => null);
+  const base = await fs.realpath(benchmarksDirectory());
+  if (!real || !real.startsWith(base + path.sep)) throw new Error('El projecte d’aquesta tasca ja no hi és.');
+  selectedProject = real;
+  await saveSettings();
+  return { path: selectedProject, files: await listFiles(selectedProject) };
 });
 
 ipcMain.handle('learning:train-status', async () => ({ running: Boolean(trainingRun), ...(trainingRun ? { name: trainingRun.name, base: trainingRun.base } : {}) }));
@@ -1244,7 +1261,7 @@ ipcMain.handle('learning:train-start', async (_e, request) => {
     try {
       const result = await runTrainingPipeline({
         datasetDirectory: candidate.directory, base: { id: base.id, label: base.label, modelId: base.modelId, directory }, name,
-        modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), run: runStreaming, benchmark, onProgress: sendTraining, signal: controller.signal,
+        modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), mlxLauncher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming, benchmark, onProgress: sendTraining, signal: controller.signal,
       });
       sendTraining({ step: 'finished', published: result.published, message: result.published ? `Nova versió: ${result.model.label}` : `Es manté la versió actual: ${result.reason}`, ...(result.published ? { modelId: result.model.id } : {}) });
     } catch (error) {

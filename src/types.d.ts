@@ -9,7 +9,7 @@ export type BenchmarkCount = { runs: number; passed: number };
 export type BenchmarkModelSummary = { model: string; label: string; at: string; open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount; meanSeconds: number; tasks: Record<string, { runs: number; passed: number; meanSeconds: number; details: string[] }> };
 export type BenchmarkList = { runs: { id: string; at: string; model: string; adapter: string | null; summary: { runs: number; passed: number } }[]; models: BenchmarkModelSummary[]; chart: string };
 export type BenchmarkTurn = { input: { role: string; content: string } | null; output: string; seconds: number };
-export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string }[] };
+export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
 export type TrainingProgress = { step: string; message: string; progress?: number; published?: boolean; modelId?: string };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string; task?: string; sessionTurns?: { role: 'user' | 'assistant'; content: string }[] };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; localBranches?: string[]; remotes?: string[]; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
@@ -59,6 +59,7 @@ export interface AgenticBridge {
   benchmarkStatus(): Promise<{ running: boolean; model?: string }>;
   listBenchmarks(): Promise<BenchmarkList>;
   benchmarkReport(id: string): Promise<BenchmarkReport>;
+  openBenchmarkProject(id: string, index: number): Promise<ProjectInfo>;
   onBenchmarkProgress(callback: (value: { step: string; message: string; id?: string }) => void): () => void;
   startTraining(request: { name: string; baseModelId?: string }): Promise<{ started: boolean; dataset: string }>;
   cancelTraining(): Promise<{ cancelled: boolean }>;

@@ -24,7 +24,7 @@ async function setup(t, { trainingReady = true } = {}) {
 function fakeRunner({ baseLoss = 2.0, adapterLoss = 1.5, failStep } = {}) {
   const calls = [];
   const run = async (command, args, { onLine } = {}) => {
-    const sub = args[2];
+    const sub = args.find((arg) => arg === 'lora' || arg === 'fuse');
     const isTest = args.includes('--test');
     const adapter = args[args.indexOf('--adapter-path') + 1];
     calls.push({ command, sub, isTest, adapter, args });

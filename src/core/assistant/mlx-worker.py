@@ -5,12 +5,20 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mlx_text  # noqa: E402
+import mlx_lock  # noqa: E402
 
 
 def emit(value):
     sys.stdout.write(json.dumps(value, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
+
+try:
+    # Only one model on the GPU on this Mac at a time (see mlx_lock.py); kept until this process ends.
+    _gpu_lock = mlx_lock.acquire()
+except RuntimeError as error:
+    emit({"type": "result", "error": str(error)})
+    sys.exit(1)
 
 try:
     from mlx_lm import load, generate
