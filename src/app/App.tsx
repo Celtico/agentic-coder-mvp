@@ -1413,8 +1413,9 @@ export function App(): React.JSX.Element {
     </Flex>
   );
   // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
+  // Sections (with an icon) are sm and semibold; the rows inside them are xs and medium.
   const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
-    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize={Icon ? 'sm' : 'xs'} fontWeight={Icon ? 'semibold' : 'medium'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
   </>;
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
@@ -1491,12 +1492,12 @@ export function App(): React.JSX.Element {
               {(evaluationList?.runs || []).map((run) => {
                 const report = evaluationReports[run.id];
                 return <Accordion.Item key={run.id} value={run.id}>
-                  <Accordion.ItemTrigger>{rowHeader(`${run.model} · ${new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}${run.adapter ? ' · amb adaptador' : ''}`, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
+                  <Accordion.ItemTrigger>{rowHeader(<><Text as="span" color="fg">{run.model}</Text><Text as="span" color="fg.muted"> · {new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}{run.adapter ? ' · amb adaptador' : ''}</Text></>, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
                   <Accordion.ItemContent><Accordion.ItemBody pt="0">
                     {!report ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
                       : <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="outline">
                         {report.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)}>
-                          <Accordion.ItemTrigger><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                          <Accordion.ItemTrigger><Badge size="xs" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" fontWeight="medium" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
                           <Accordion.ItemContent><Accordion.ItemBody pt="0">
                             {!result.pass && result.detail && <Text fontSize="xs" color="fg.error" mb="1.5">{result.detail}</Text>}
                             {result.hasProject && <Button mb="2" size="xs" variant="outline" onClick={async () => {
