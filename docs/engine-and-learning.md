@@ -4,7 +4,26 @@
 
 El model generatiu és `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` amb MLX natiu d’Apple Silicon, en un procés aïllat de la interfície. Els pesos MLX de 4,28 GB queden a `models/.hf/` i el runtime Python local a `models/.mlx-venv/`. El Qwen2.5-Coder-1.5B amb Transformers.js s’ha retirat el 13 de novembre de 2026 (pesos esborrats; els ajustos desats amb ell passen al 7B). La inferència és local un cop instal·lat. La prova amb la xarxa físicament desactivada encara queda pendent. No hi ha cap servei LLM extern, Ollama ni procés `llama.cpp`.
 
-El codi separa el contracte `InferenceEngine` de l’orquestrador. `MlxInferenceEngine` és el motor per defecte; `TransformersJsInferenceEngine` es conserva (amb `AGENT_MODEL_RUNTIME=transformers`) i Transformers.js continua servint els embeddings MiniLM. L’app només mostra el 7B com a disponible quan troba tant els pesos com el runtime.
+El codi separa el contracte `InferenceEngine` de l’orquestrador. `MlxInferenceEngine` és el motor per defecte; `TransformersJsInferenceEngine` es conserva (amb `AGENT_MODEL_RUNTIME=transformers`) i Transformers.js continua servint els embeddings MiniLM.
+
+### Models MLX (13 de novembre de 2026)
+
+| Model | Pesos | Llicència | Format de crides | Memòria en ús |
+| --- | --- | --- | --- | --- |
+| `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` | 4,28 GB a `models/.hf` | Apache-2.0 | `<tool_call>{json}</tool_call>` (el de l’agent) | ~4,4 GB |
+| `lmstudio-community/gemma-4-12B-it-MLX-4bit` | 6,7 GB a `models/mlx/gemma-4-12b-it-4bit` | Apache-2.0 | `<|tool_call>call:nom{…}<tool_call|>` | 7,2-9,6 GB |
+| `mlx-community/MiMo-V2.6-Distill-Qwen-9B-OptiQ-4bit` | 7,1 GB a `models/mlx/mimo-v2.6-distill-qwen-9b-4bit` | MIT | XML de Qwen 3.5 dins de `<tool_call>` | — |
+
+La llista és a `src/electron/mlx-models.cjs`; el selector de l’app només ofereix els que tenen els pesos al Mac, més les versions pròpies (`models/mlx/<carpeta>/agentic-model.json`). `mlx-lm` 0.32.2 ja suporta les tres arquitectures.
+
+El treballador (`mlx-worker.py`, amb la part de text a `mlx_text.py`) fa que l’agent no depengui de la família del model:
+
+- Tradueix les crides natives de cada model a `<tool_call>{json}</tool_call>` amb el parser de `mlx_lm` del model carregat, i llegeix també un JSON escrit després de `call:`.
+- Torna les crides anteriors al model en el seu format natiu (`tool_calls` del missatge i el missatge següent com a `tool`). Sense això Gemma 4 començava a barrejar formats i l’agent no el podia llegir. El Qwen 2.5, que ja escriu el format de l’agent, no canvia.
+- Desactiva el raonament ocult (`AGENT_MLX_THINKING=1` el torna a activar) i prohibeix el primer token de la seva marca: amb el raonament apagat, Gemma 4 tornava a obrir `<|channel>thought` en bucle a partir del segon torn i no responia mai.
+- Carrega un adaptador LoRA opcional (`AGENT_MLX_ADAPTER_PATH`) sense tocar els pesos base.
+
+**Un sol model a la GPU.** El 13 de novembre el Mac es va reiniciar amb un *kernel panic* del controlador de la GPU (`IOGPUGroupMemory`, «Mem object in pending hash found in main memory hash») mentre un procés Python d’MLX treballava: una prova amb el 7B i el model de l’app compartien la GPU d’un Mac de 16 GB. Des de llavors, cada procés que carrega un model (el xat, el benchmark, l’entrenament amb `mlx-locked.py`) agafa un pany comú (`mlx_lock.py`, `~/.agentic-coder/mlx.lock`). El segon espera fins a 30 s i després falla dient qui el té.
 
 Qwen3-Coder-Next no s’activa com a candidat encara. La fitxa oficial el descriu com a 80B paràmetres totals (3B activats) en BF16; “3B actius” no implica que el model càpiga en 16 GB de RAM. La cerca feta no ha localitzat una distribució ONNX compatible i verificada per Transformers.js. Per tant, no es descarrega, no es converteix automàticament i no substitueix el model estable.
 
@@ -26,9 +45,12 @@ La prova mostra que un model local més gran amb MLX és viable en aquesta màqu
 - Els casos verificats són una col·lecció curada amb procedència, no un procés d’entrenament ni una garantia que el contingut sigui correcte. L’agent només recupera exemples del mateix directori de projecte; pot fer servir embeddings locals i manté una cerca per paraules com a alternativa.
 - Les còpies de seguretat dels fitxers editats són separades de la memòria de l’agent.
 - La recuperació semàntica és un component independent de la generació: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` calcula embeddings locals amb Transformers.js. Només classifica casos verificats del mateix directori de projecte. Els vectors es desen en un índex JSON local versionat a `userData/learning/embedding-index-v1.json`, amb permisos restringits; l’índex conté vectors i identificadors, no els textos de les converses. La càrrega inicial necessita internet; després, els pesos queden a `models/`. Si la càrrega o inferència falla, s’utilitza la cerca per paraules i no s’interromp la resposta.
-- No hi ha fine-tuning ni tasca nocturna activa. La curació manual desa casos a `userData/learning/verified-experiences.jsonl`. El panell d’aprenentatge pot preparar una candidata local només amb registres confirmats: descarta registres invàlids, duplicats i credencials detectables; separa les dades de manera determinista en entrenament, validació i prova; conserva els identificadors i hashes de procedència, però no la ruta absoluta del projecte. Cada versió es desa en un directori nou amb permisos restringits i hash per fitxer. Això no garanteix que els exemples siguin correctes: abans d’entrenar cal revisar-ne la qualitat, ampliar les avaluacions repetibles i validar un runtime d’entrenament compatible amb el model i el Mac.
-- Els pesos estables no s’han de sobreescriure. Qualsevol candidat futur s’ha de guardar en una ubicació versionada, avaluar amb tasques fixes i activar només després de superar els criteris objectius.
-- El llindar de 30 exemples és només una comprovació tècnica mínima per al panell; no és una aprovació d’entrenament ni una afirmació de qualitat.
+- Quan l’usuari aprova una resposta, l’app hi desa també la **trajectòria** de la conversa (`src/electron/learning-trajectory.cjs`): cada petició, cada eina que el model va cridar amb els arguments i el missatge exacte que va rebre de tornada, i la resposta; més la **petició general** que l’usuari escriu. La trajectòria la recull l’agent (`lastTrajectory`) i l’app la relaciona amb la resposta pel seu text; només es guarda per a les respostes generades mentre l’app està oberta.
+- El conjunt preparat té també una còpia `mlx/{train,valid,test}.jsonl` en el format de xat de `mlx_lm.lora`. Cada exemple comença per la petició general i segueix amb les crides que van funcionar i els seus resultats, fins a la resposta final. Els missatges de guia de l’usuari i les instruccions de sistema de l’agent no hi són: les primeres perquè el model aprengui a fer-ho sol, i les segones perquè ocuparien tota la seqüència d’entrenament. Els casos sense trajectòria (els desats abans) entren com a petició i resposta.
+- **Entrenar** (`src/electron/learning-training.cjs`, botó del panell a partir de 30 casos): LoRA amb `mlx_lm lora` (300 iteracions, 8 capes, lot 1, *gradient checkpointing*, seqüència de 2048) → pèrdua del conjunt de prova amb i sense adaptador → benchmark de l’agent amb i sense adaptador → si la pèrdua millora i el benchmark no empitjora, `mlx_lm fuse` en `models/mlx/<nom>-vN` amb `agentic-model.json` (model base, dades i el seu hash, data, mètriques). Si no millora, no es publica res; l’adaptador i `report.json` queden a `models/adapters/<model>/<data>/`. Mentre entrena, el xat, el canvi de model i l’avaluació esperen. La lògica té proves amb un executor simulat; encara no s’ha entrenat cap versió amb casos reals.
+- La curació manual desa casos a `userData/learning/verified-experiences.jsonl`. El panell d’aprenentatge pot preparar una candidata local només amb registres confirmats: descarta registres invàlids, duplicats i credencials detectables; separa les dades de manera determinista en entrenament, validació i prova; conserva els identificadors i hashes de procedència, però no la ruta absoluta del projecte. Cada versió es desa en un directori nou amb permisos restringits i hash per fitxer. Això no garanteix que els exemples siguin correctes: abans d’entrenar cal revisar-ne la qualitat, ampliar les avaluacions repetibles i validar un runtime d’entrenament compatible amb el model i el Mac.
+- Els pesos base no se sobreescriuen mai: cada versió va a una carpeta nova i s’hi pot tornar triant-la al selector.
+- El llindar de 30 exemples és un mínim tècnic; no és una afirmació de qualitat. Per ensenyar a fer apps, els casos útils són sessions amb passos, iniciades en una carpeta buida.
 
 ## Estat del flux de l’agent
 
