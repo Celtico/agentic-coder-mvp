@@ -70,6 +70,8 @@ async function main() {
   try {
     report = await runBenchmark({
       LocalCodingAgent, engine, taskIds: options.tasks, repeat: options.repeat, keep: options.keep, timeoutMs: options.timeoutMinutes * 60000,
+      // «TASCA n/total id #run» as each task starts: the app's evaluation panel shows it live.
+      onStart: ({ task, run, index, total }) => console.error(`TASCA ${index}/${total} ${task} #${run}`),
       onResult: (result) => console.error(`${result.pass ? 'PASSA' : 'FALLA'}  ${result.task} #${result.run}  ${result.seconds}s  eines:${result.toolCalls}  ${result.detail}`),
     });
   } finally {

@@ -4,10 +4,10 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport } from '../types';
+import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect
+  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -244,6 +244,13 @@ export function App(): React.JSX.Element {
   const [evaluationReport, setEvaluationReport] = useState<BenchmarkReport | null>(null);
   const [evaluationResultIndex, setEvaluationResultIndex] = useState<number | null>(null);
   const [evaluationError, setEvaluationError] = useState('');
+  const [evaluationProjects, setEvaluationProjects] = useState<BenchmarkProject[]>([]);
+  const [evaluationTasks, setEvaluationTasks] = useState<BenchmarkTask[]>([]);
+  const [evaluationChosen, setEvaluationChosen] = useState<Set<string>>(() => new Set());
+  const [evaluationCurrent, setEvaluationCurrent] = useState<BenchmarkCurrent | null>(null);
+  const [evaluationNow, setEvaluationNow] = useState(() => Date.now());
+  const [evaluationOpenRun, setEvaluationOpenRun] = useState<string[]>([]);
+  const [evaluationOpenTask, setEvaluationOpenTask] = useState<string[]>([]);
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
   const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
   const [terminalResizing, setTerminalResizing] = useState(false);
@@ -774,30 +781,48 @@ export function App(): React.JSX.Element {
   }
 
   async function refreshEvaluations() {
-    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationError(''); }
+    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationProjects(await window.agentic.listBenchmarkProjects()); setEvaluationError(''); }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   async function openEvaluationPanel() {
     if (evaluationOpen) { setEvaluationOpen(false); return; }
     setEvaluationOpen(true);
-    void window.agentic.benchmarkStatus().then((value) => setEvaluationRunning(value.running)).catch(() => {});
+    void window.agentic.benchmarkStatus().then((value) => { setEvaluationRunning(value.running); setEvaluationCurrent(value.current || null); }).catch(() => {});
+    void window.agentic.benchmarkTasks().then((tasks) => {
+      setEvaluationTasks(tasks);
+      setEvaluationChosen((current) => (current.size ? current : new Set(tasks.map((task) => task.id))));
+    }).catch(() => {});
     await refreshEvaluations();
   }
+  // The elapsed time of the running task ticks every second.
+  useEffect(() => {
+    if (!evaluationRunning) return;
+    const timer = setInterval(() => setEvaluationNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [evaluationRunning]);
   async function openEvaluationReport(id: string) {
     try { setEvaluationReport(await window.agentic.benchmarkReport(id)); setEvaluationResultIndex(null); setEvaluationError(''); }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   async function startEvaluation() {
     setEvaluationLog([]); setEvaluationError('');
-    try { await window.agentic.startBenchmark({ repeat: evaluationRepeat }); setEvaluationRunning(true); }
+    const tasks = evaluationTasks.filter((task) => evaluationChosen.has(task.id)).map((task) => task.id);
+    try {
+      await window.agentic.startBenchmark({ repeat: evaluationRepeat, ...(tasks.length < evaluationTasks.length ? { tasks } : {}) });
+      setEvaluationRunning(true); setEvaluationCurrent(null);
+      setStatus(`Avaluant ${modelOptions.find((item) => item.id === selectedModel)?.label || 'el model'}…`);
+    }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   useEffect(() => window.agentic.onBenchmarkProgress((event) => {
     setEvaluationLog((current) => [...current, event].slice(-200));
+    if (event.current) setEvaluationCurrent(event.current);
+    if (event.step === 'task') setStatus(`Avaluació en marxa · ${event.message}`);
     if (event.step === 'finished' || event.step === 'failed') {
-      setEvaluationRunning(false);
+      setEvaluationRunning(false); setEvaluationCurrent(null);
+      setStatus(event.message);
       void refreshEvaluations();
-      if (event.step === 'finished' && event.id) void openEvaluationReport(event.id);
+      if (event.step === 'finished' && event.id) { setEvaluationOpenRun([event.id]); void openEvaluationReport(event.id); }
     }
   }), []);
 
@@ -1388,7 +1413,10 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
-  const evaluationResult = evaluationReport && evaluationResultIndex !== null ? evaluationReport.results[evaluationResultIndex] : null;
+  const sectionTitle = (text: string) => <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em">{text}</Text>;
+  const kindLabel: Record<BenchmarkTask['kind'], string> = { open: 'Tasques obertes de codi', app: 'Apps des d’una carpeta buida', reference: 'Tasca dirigida (referència)' };
+  const chosenCount = evaluationTasks.filter((task) => evaluationChosen.has(task.id)).length;
+  const elapsed = evaluationCurrent ? Math.max(0, Math.round((evaluationNow - evaluationCurrent.since) / 1000)) : 0;
   const evaluationPane = (
     <Flex direction="column" gap="3" h="full" overflowY="auto" p="3">
       <HStack gap="2" flexWrap="wrap">
@@ -1396,16 +1424,34 @@ export function App(): React.JSX.Element {
         <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
           ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
-          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark</Button>}
+          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark{chosenCount && chosenCount < evaluationTasks.length ? ` (${chosenCount})` : ''}</Button>}
       </HStack>
-      <Text fontSize="xs" color="fg.muted">Les mateixes tasques fixes per a qualsevol model: arreglar codi, fer pàgines, respondre sense tocar res i tres apps des d’una carpeta buida. Una ronda dura entre 30 minuts i 2 hores; mentrestant el xat i l’entrenament esperen.</Text>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
-      {(evaluationRunning || evaluationLog.length > 0) && <Box maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">
-        {evaluationRunning && <HStack gap="2"><Spinner size="xs"/><Text>Avaluant…</Text></HStack>}
+      {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.600" borderRadius="md" p="2">
+        <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
+        {evaluationCurrent && <Box h="5px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.400" style={{ width: `${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%` }}/></Box>}
+        {evaluationCurrent && <Text mt="1" fontSize="2xs" color="fg.muted">{evaluationTasks.find((task) => task.id === evaluationCurrent.task)?.description}</Text>}
+      </Box>}
+      {evaluationLog.length > 0 && <Box maxH="120px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">
         {evaluationLog.slice(-60).map((event, index) => <Text key={index} color={event.step === 'failed' || event.message.startsWith('FALLA') ? 'red.300' : event.message.startsWith('PASSA') || event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}
       </Box>}
+      <Accordion.Root collapsible multiple defaultValue={['tasks']} size="sm" variant="plain">
+        <Accordion.Item value="tasks">
+          <Accordion.ItemTrigger px="0"><Box flex="1">{sectionTitle(`Tasques · ${chosenCount} de ${evaluationTasks.length}`)}</Box><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody px="0" pt="1">
+            <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
+            <Stack gap="2">{(['open', 'app', 'reference'] as const).map((kind) => <Box key={kind}>
+              <Text fontSize="xs" fontWeight="semibold" mb="1">{kindLabel[kind]}</Text>
+              <Stack gap="1">{evaluationTasks.filter((task) => task.kind === kind).map((task) => <Checkbox.Root key={task.id} size="sm" alignItems="flex-start" disabled={evaluationRunning} checked={evaluationChosen.has(task.id)} onCheckedChange={(details) => setEvaluationChosen((current) => { const next = new Set(current); if (details.checked) next.add(task.id); else next.delete(task.id); return next; })}>
+                <Checkbox.HiddenInput/><Checkbox.Control mt="0.5"/>
+                <Checkbox.Label fontSize="xs"><b>{task.id}</b> · {task.description}<Text as="span" display="block" color="fg.muted">«{task.prompt}»</Text></Checkbox.Label>
+              </Checkbox.Root>)}</Stack>
+            </Box>)}</Stack>
+          </Accordion.ItemBody></Accordion.ItemContent>
+        </Accordion.Item>
+      </Accordion.Root>
       {evaluationList && evaluationList.models.length > 0 && <Box>
-        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Comparativa</Text>
+        <Box mb="1.5">{sectionTitle('Comparativa')}</Box>
         <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
           <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
           {([['Obertes', model.open, 'agentic.400'], ['Apps', model.apps, 'orange.400'], ['Dirigida', model.reference, 'gray.400']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
@@ -1415,36 +1461,51 @@ export function App(): React.JSX.Element {
           </HStack>)}
         </Box>)}</Stack>
       </Box>}
-      {evaluationList && evaluationList.runs.length > 0 && <Box>
-        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Avaluacions</Text>
-        <Stack gap="1">{evaluationList.runs.map((run) => <Button key={run.id} size="xs" justifyContent="space-between" variant={evaluationReport?.id === run.id ? 'subtle' : 'ghost'} colorPalette={evaluationReport?.id === run.id ? 'agentic' : 'gray'} onClick={() => void openEvaluationReport(run.id)}>
-          <Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{new Date(run.at).toLocaleString('ca')} · {run.model}{run.adapter ? ' · amb adaptador' : ''}</Text><Badge size="sm" colorPalette="gray">{run.summary.passed}/{run.summary.runs}</Badge>
-        </Button>)}</Stack>
-      </Box>}
-      {evaluationList && evaluationList.runs.length === 0 && !evaluationRunning && <Notice tone="info">Encara no hi ha cap avaluació feta des de l’app.</Notice>}
-      {evaluationReport && <Box>
-        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Tasques · clica’n una per veure què ha fet el model</Text>
-        <Stack gap="1">{evaluationReport.results.map((result, index) => <Button key={`${result.task}-${result.run}`} size="xs" h="auto" py="1" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={evaluationResultIndex === index ? 'subtle' : 'ghost'} colorPalette={evaluationResultIndex === index ? 'agentic' : 'gray'} onClick={() => setEvaluationResultIndex(index)}>
-          <Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge>
-          <Text flex="1" fontSize="xs">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines{result.pass ? '' : ` · ${result.detail}`}</Text>
-        </Button>)}</Stack>
-        {evaluationResultIndex !== null && evaluationReport.results[evaluationResultIndex]?.hasProject && <Button mt="2" size="xs" variant="outline" onClick={async () => {
-          try {
-            const opened = await window.agentic.openBenchmarkProject(evaluationReport.id, evaluationResultIndex);
-            activateProject(opened, true);
-            setStatus(`Obert el projecte que el model va fer a ${evaluationReport.results[evaluationResultIndex].task}`);
-          } catch (error) { setEvaluationError(errorText(error)); }
-        }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
-      </Box>}
-      {evaluationResult && <Box>
-        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Què ha fet el model a {evaluationResult.task} #{evaluationResult.run}</Text>
-        {evaluationResult.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
-        <Stack gap="2">{evaluationResult.transcript.map((turn, index) => <Box key={index} borderWidth="1px" borderColor="border" borderRadius="md" p="2">
-          <Text fontSize="2xs" color="fg.muted" mb="1">Torn {index + 1} · {turn.seconds} s</Text>
-          {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist ({turn.input.role === 'user' ? 'missatge' : turn.input.role})</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
-          <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
-        </Box>)}</Stack>
-      </Box>}
+      <Box>
+        <Box mb="1.5">{sectionTitle('Avaluacions')}</Box>
+        {evaluationList && evaluationList.runs.length === 0 && !evaluationRunning && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
+        <Accordion.Root collapsible size="sm" variant="enclosed" value={evaluationOpenRun} onValueChange={(details) => {
+          setEvaluationOpenRun(details.value); setEvaluationOpenTask([]);
+          if (details.value[0]) void openEvaluationReport(details.value[0]);
+        }}>
+          {(evaluationList?.runs || []).map((run) => <Accordion.Item key={run.id} value={run.id}>
+            <Accordion.ItemTrigger><Text flex="1" fontSize="xs" textAlign="left">{new Date(run.at).toLocaleString('ca')} · {run.model}{run.adapter ? ' · amb adaptador' : ''}</Text><Badge size="sm" colorPalette="gray">{run.summary.passed}/{run.summary.runs}</Badge><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody>
+              {evaluationReport?.id !== run.id ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
+                : <Accordion.Root collapsible size="sm" variant="plain" value={evaluationOpenTask} onValueChange={(details) => setEvaluationOpenTask(details.value)}>
+                  {evaluationReport.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)}>
+                    <Accordion.ItemTrigger py="1"><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody pt="1">
+                      {!result.pass && result.detail && <Text fontSize="xs" color="red.300" mb="1.5">{result.detail}</Text>}
+                      {result.hasProject && <Button mb="2" size="xs" variant="outline" onClick={async () => {
+                        try { const opened = await window.agentic.openBenchmarkProject(evaluationReport.id, index); activateProject(opened, true); setStatus(`Obert el projecte que el model va fer a ${result.task}`); }
+                        catch (error) { setEvaluationError(errorText(error)); }
+                      }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
+                      {result.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
+                      <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="md" p="2">
+                        <Text fontSize="2xs" color="fg.muted" mb="1">Torn {turnIndex + 1} · {turn.seconds} s</Text>
+                        {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
+                        <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
+                      </Box>)}</Stack>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>)}
+                </Accordion.Root>}
+            </Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>)}
+        </Accordion.Root>
+      </Box>
+      <Box>
+        <Box mb="1.5">{sectionTitle('Projectes fets pel model')}</Box>
+        {evaluationProjects.length === 0
+          ? <Text fontSize="xs" color="fg.muted">Cada avaluació desa aquí la carpeta on el model ha treballat a cada tasca. Encara no n’hi ha cap: apareixeran quan passis el benchmark.</Text>
+          : <Stack gap="1">{evaluationProjects.map((item) => <Button key={`${item.id}-${item.index}`} size="xs" h="auto" py="1" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant="ghost" colorPalette="gray" title="Obre aquest projecte" onClick={async () => {
+              try { const opened = await window.agentic.openBenchmarkProject(item.id, item.index); activateProject(opened, true); setStatus(`Obert el projecte que ${item.model} va fer a ${item.task}`); }
+              catch (error) { setEvaluationError(errorText(error)); }
+            }}>
+              <FolderOpen size={13}/><Badge size="sm" flex="none" colorPalette={item.pass ? 'green' : 'red'}>{item.pass ? 'PASSA' : 'FALLA'}</Badge>
+              <Text flex="1" fontSize="xs">{item.task} #{item.run} · {item.model} · {new Date(item.at).toLocaleString('ca')}</Text>
+            </Button>)}</Stack>}
+      </Box>
     </Flex>
   );
   const dockItems = [

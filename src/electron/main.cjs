@@ -1137,11 +1137,11 @@ function runStreaming(command, args, { onLine, signal, env } = {}) {
  * Runs scripts/evaluate-agent.cjs for one model in its own process, as the developer runs it from the
  * terminal. Null when the benchmark is not there (it ships with the app, but not in every build).
  */
-async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = 'off', repeat = 1, keepIn = '', signal, onLine }) {
+async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = 'off', repeat = 1, keepIn = '', tasks = [], signal, onLine }) {
   const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs');
   if (!fsSync.existsSync(script)) return null;
   const nodeExecutable = findNodeExecutable();
-  return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : [])], {
+  return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : []), ...(tasks.length ? ['--task', tasks.join(',')] : [])], {
     signal, onLine,
     env: { ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   });
@@ -1153,7 +1153,15 @@ let benchmarkRun = null;
 const benchmarksDirectory = () => path.join(app.getPath('userData'), 'benchmarks');
 const sendBenchmark = (event) => { if (win && !win.isDestroyed()) win.webContents.send('benchmark:progress', event); };
 
-ipcMain.handle('benchmark:status', async () => ({ running: Boolean(benchmarkRun), ...(benchmarkRun ? { model: benchmarkRun.label } : {}) }));
+// The benchmark's tasks, for choosing which ones to run (scripts/agent-benchmark/).
+function benchmarkTasks() {
+  try {
+    const { tasks } = require(path.join(__dirname, '..', '..', 'scripts', 'agent-benchmark', 'run.cjs'));
+    return tasks.map((task) => ({ id: task.id, description: task.description, prompt: task.prompt, kind: /^app-/.test(task.id) ? 'app' : task.reference ? 'reference' : 'open' }));
+  } catch { return []; }
+}
+ipcMain.handle('benchmark:tasks', async () => benchmarkTasks());
+ipcMain.handle('benchmark:status', async () => ({ running: Boolean(benchmarkRun), ...(benchmarkRun ? { model: benchmarkRun.label, current: benchmarkRun.current || null } : {}) }));
 ipcMain.handle('benchmark:cancel', async () => { benchmarkRun?.controller.abort(); return { cancelled: Boolean(benchmarkRun) }; });
 ipcMain.handle('benchmark:start', async (_e, request) => {
   if (benchmarkRun) throw new Error('Ja hi ha una avaluació en marxa.');
@@ -1162,6 +1170,9 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
   const model = await currentModel();
   if (!model || !await mlxModels.modelDirectory(model, projectModelsDirectory())) throw new Error('El model triat no és disponible en aquest Mac.');
   const repeat = request?.repeat === 2 ? 2 : 1;
+  const known = new Set(benchmarkTasks().map((task) => task.id));
+  const tasks = Array.isArray(request?.tasks) ? request.tasks.filter((id) => typeof id === 'string' && known.has(id)) : [];
+  if (Array.isArray(request?.tasks) && tasks.length === 0) throw new Error('Tria almenys una tasca.');
   await fs.mkdir(benchmarksDirectory(), { recursive: true });
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${model.id}`;
   const out = path.join(benchmarksDirectory(), `${id}.json`);
@@ -1173,10 +1184,16 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
     let result = null;
     try {
       result = await runBenchmarkProcess({
-        modelId: model.id, out, repeat, signal: controller.signal, turnLog: path.join(benchmarksDirectory(), `${id}.turns.jsonl`),
+        modelId: model.id, out, repeat, tasks, signal: controller.signal, turnLog: path.join(benchmarksDirectory(), `${id}.turns.jsonl`),
         // What the model built is kept, to be opened from the panel as a project.
         keepIn: path.join(benchmarksDirectory(), `${id}-projectes`),
-        onLine: (line) => { if (/^(PASSA|FALLA|Model:)/.test(line) || /carregat amb MLX/.test(line)) sendBenchmark({ step: 'progress', message: line.slice(0, 300) }); },
+        onLine: (line) => {
+          const started = /^TASCA (\d+)\/(\d+) (\S+) #(\d+)/.exec(line);
+          if (started) {
+            benchmarkRun.current = { index: Number(started[1]), total: Number(started[2]), task: started[3], run: Number(started[4]), since: Date.now() };
+            sendBenchmark({ step: 'task', message: `Tasca ${started[1]} de ${started[2]}: ${started[3]} #${started[4]}`, current: benchmarkRun.current });
+          } else if (/^(PASSA|FALLA|Model:)/.test(line) || /carregat amb MLX/.test(line)) sendBenchmark({ step: 'progress', message: line.slice(0, 300) });
+        },
       });
     } finally {
       benchmarkRun = null;
@@ -1212,6 +1229,20 @@ ipcMain.handle('benchmark:report', async (_e, id) => {
   if (typeof id !== 'string' || !/^[\w.-]+$/.test(id)) throw new Error('Aquesta avaluació no és vàlida.');
   const report = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.json`), 'utf8'));
   return { id, at: report.at, model: report.model, summary: report.summary, results: report.results.map(({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript, error, folder }) => ({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript: transcript || [], error, hasProject: typeof folder === 'string' && fsSync.existsSync(folder) })) };
+});
+
+// Every project a model built in the evaluations run from the app that is still on disk, newest first.
+ipcMain.handle('benchmark:projects', async () => {
+  const labels = Object.fromEntries((await allModels()).map((model) => [model.modelId, model.label]));
+  const projects = [];
+  for (const report of await readBenchmarkReports()) {
+    (report.results || []).forEach((result, index) => {
+      if (typeof result.folder === 'string' && fsSync.existsSync(result.folder)) {
+        projects.push({ id: report.id, index, at: report.at, model: labels[report.model] || report.model, task: result.task, run: result.run, pass: result.pass === true, detail: String(result.detail || '').slice(0, 200) });
+      }
+    });
+  }
+  return projects.reverse();
 });
 
 // Opens, as the current project, the folder where the model worked on one task of an evaluation.

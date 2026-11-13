@@ -150,13 +150,17 @@ function summarize(results) {
  * Runs the fixed tasks against one engine. `LocalCodingAgent` comes from the built runtime
  * (src/core/assistant/agent-runtime.cjs), so this measures the same orchestrator the app uses.
  */
-async function runBenchmark({ LocalCodingAgent, engine, taskIds, repeat = 1, timeoutMs = 10 * 60 * 1000, keep = false, onResult = () => {} }) {
+async function runBenchmark({ LocalCodingAgent, engine, taskIds, repeat = 1, timeoutMs = 10 * 60 * 1000, keep = false, onStart = () => {}, onResult = () => {} }) {
   const selected = taskIds?.length ? allTasks.filter((task) => taskIds.includes(task.id)) : allTasks;
   const unknown = (taskIds || []).filter((id) => !allTasks.some((task) => task.id === id));
   if (unknown.length) throw new Error(`Tasques desconegudes: ${unknown.join(', ')}`);
   const results = [];
+  const total = selected.length * repeat;
+  let done = 0;
   for (let run = 1; run <= repeat; run += 1) {
     for (const task of selected) {
+      done += 1;
+      onStart({ task: task.id, run, index: done, total });
       const result = await runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run });
       results.push(result);
       onResult(result);
