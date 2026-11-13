@@ -42,6 +42,8 @@ export const system = createSystem(defaultConfig, defineConfig({
       // round, 8 px apart and 12 px in from the edge, centred in the bar (src/app/window-controls.tsx).
       sizes: {
         windowTitleBar: { value: "28px" },
+        // The app's own title bar on macOS (App.tsx, data-drag-region); floating windows stay below it.
+        appTitleBar: { value: "36px" },
         windowLight: { value: "12px" },
         windowLights: { value: "52px" },
       },

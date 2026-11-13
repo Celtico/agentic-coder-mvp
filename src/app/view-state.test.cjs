@@ -76,3 +76,24 @@ test('the app wires it: panels, the evaluation sections and the history window a
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   for (const piece of ['loadViewState(localStorage)', 'initialView.panels.browser', 'initialView.panels.evaluation', 'initialView.evaluationSections', 'initialView.history.position', 'initialView.history.size', '<RestoreWindowStage', 'onPositionChangeEnd', 'onSizeChangeEnd', 'setProjectView(state, projectPath']) assert.ok(app.includes(piece), piece);
 });
+
+test('a floating window is kept inside the app, below its title bar', () => {
+  const area = { x: 0, y: 36, width: 1440, height: 884 };
+  // Dragged or saved above the top (over the title bar and the macOS buttons): moved down to it.
+  assert.deepEqual(view.clampWindowRect({ x: 100, y: -50, width: 800, height: 500 }, area), { x: 100, y: 36, width: 800, height: 500 });
+  // Off the left, or past the right and the bottom: brought back in.
+  assert.deepEqual(view.clampWindowRect({ x: -300, y: 100, width: 800, height: 500 }, area), { x: 0, y: 100, width: 800, height: 500 });
+  assert.deepEqual(view.clampWindowRect({ x: 1300, y: 800, width: 800, height: 500 }, area), { x: 640, y: 420, width: 800, height: 500 });
+  // Saved bigger than the window now is: it is as big as the area, no bigger.
+  assert.deepEqual(view.clampWindowRect({ x: 0, y: 0, width: 3000, height: 2000 }, area), { x: 0, y: 36, width: 1440, height: 884 });
+});
+
+test('the history window opens, moves and grows only inside the area below the app title bar', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /getBoundaryEl=\{\(\) => appAreaRef\.current\}/);
+  assert.match(app, /<Grid ref=\{appAreaRef\}/);
+  assert.match(app, /h="appTitleBar"/);
+  assert.match(app, /clampWindowRect\(saved, \{ x: 0, y: top/);
+  const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
+  assert.ok(theme.includes('appTitleBar: { value: "36px" }'));
+});

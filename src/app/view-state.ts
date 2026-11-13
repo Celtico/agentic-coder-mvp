@@ -38,6 +38,20 @@ export const reopenableUrl = (value: unknown) => {
   return url && /^https?:\/\//i.test(url) ? url : undefined
 }
 
+type Rect = { x: number; y: number; width: number; height: number }
+
+/**
+ * Puts a floating window inside the area it may use (the app below its title bar): never above its
+ * top, nor past its sides or bottom, and never bigger than the area itself.
+ */
+export function clampWindowRect(rect: Rect, area: Rect): Rect {
+  const width = Math.min(rect.width, area.width)
+  const height = Math.min(rect.height, area.height)
+  const x = Math.min(Math.max(rect.x, area.x), area.x + area.width - width)
+  const y = Math.min(Math.max(rect.y, area.y), area.y + area.height - height)
+  return { x, y, width, height }
+}
+
 /** Reads the saved state; whatever is missing or broken takes its default. */
 export function loadViewState(storage: Storage): ViewState {
   const state = defaultViewState()

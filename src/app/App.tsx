@@ -6,7 +6,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
-  Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
+  Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
 } from '@chakra-ui/react';
 import {
@@ -18,7 +18,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
-import { loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
+import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -195,6 +195,15 @@ const MAX_CHAT_ATTACHMENT_CHARS = 32_000;
 export function App(): React.JSX.Element {
   // How the app was left when it was closed (src/app/view-state.ts), read once when it opens.
   const [initialView] = useState<ViewState>(() => loadViewState(localStorage));
+  // Everything below the app's own title bar: floating windows (the local history) move, grow and
+  // open only inside it, never over the title bar or the macOS window buttons.
+  const appAreaRef = useRef<HTMLDivElement | null>(null);
+  const chakraSystem = useChakraContext();
+  const [historyStart] = useState(() => {
+    const top = ownTitleBar ? parseFloat(String(chakraSystem.token('sizes.appTitleBar', '36px'))) || 36 : 0;
+    const saved = { ...(initialView.history.position ?? { x: 76, y: top + 28 }), ...(initialView.history.size ?? { width: 1120, height: 720 }) };
+    return clampWindowRect(saved, { x: 0, y: top, width: window.innerWidth, height: window.innerHeight - top });
+  });
   const [project, setProject] = useState<ProjectInfo | null>(null);
   const projectFileCollection = useMemo(() => createFileTreeCollection(project?.files.map((file) => file.path) || []), [project?.files]);
   const projectDirectoryPaths = useMemo(() => new Set(project?.files.filter((file) => file.directory).map((file) => file.path) || []), [project?.files]);
@@ -1685,12 +1694,12 @@ export function App(): React.JSX.Element {
   return (
     <>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
-    {ownTitleBar && <Flex flex="none" h="36px" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
+    {ownTitleBar && <Flex flex="none" h="appTitleBar" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
       <Text fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">Agentic Coder</Text>
       {project && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">— {project.path.split(/[\\/]/).filter(Boolean).at(-1)}</Text>}
     </Flex>}
-    <Grid flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
+    <Grid ref={appAreaRef} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
           {!ownTitleBar && <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>}
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
@@ -1897,7 +1906,7 @@ export function App(): React.JSX.Element {
       onStageChange={({ stage }) => { setFileHistoryStage(stage as WindowStage); updateViewState(localStorage, (state) => { state.history.stage = stage as WindowStage; }); }}
       onPositionChangeEnd={({ position }) => updateViewState(localStorage, (state) => { state.history.position = position; })}
       onSizeChangeEnd={({ size }) => updateViewState(localStorage, (state) => { state.history.size = size; })}
-      persistRect defaultPosition={initialView.history.position ?? { x: 24, y: 64 }} defaultSize={initialView.history.size ?? { width: 1120, height: 720 }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
+      getBoundaryEl={() => appAreaRef.current} persistRect defaultPosition={{ x: historyStart.x, y: historyStart.y }} defaultSize={{ width: historyStart.width, height: historyStart.height }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
         <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
