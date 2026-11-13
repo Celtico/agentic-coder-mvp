@@ -1280,3 +1280,4 @@ export class LocalCodingAgent {
 }
 
 export { LocalExperienceEmbedder, cosineSimilarity, rankExperiences } from './local-embeddings';
+export { MlxInferenceEngine, TransformersJsInferenceEngine } from './inference-engine';

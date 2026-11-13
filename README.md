@@ -41,6 +41,8 @@ La primera inferència pot trigar i descarregar fitxers de model. La primera cer
 
 Per executar l’avaluació sintètica de recuperació semàntica sense llegir dades personals, fes servir `npm run evaluate:memory`. Compara `Recall@3` i `MRR@3` amb la cerca per paraules; és una prova petita, no una validació suficient per entrenar ni substituir cap model.
 
+Per mesurar l’agent sencer amb el model real, fes servir `npm run evaluate:agent` (o `npm run evaluate:agent -- --model 7b` per al Qwen 7B amb MLX). Executa un conjunt fix de tasques petites de programació (corregir una prova que falla, afegir una funció que una prova ja espera, crear una pàgina, respondre una pregunta sense tocar res), cadascuna en una carpeta temporal nova i sense xarxa. El resultat es decideix amb comprovacions objectives sobre la carpeta: `npm test` passa, els fitxers de prova no s’han modificat, el fitxer demanat hi és. No hi ha cap model fent de jutge. L’informe JSON i els torns del model es desen a `logs/benchmarks/`. Opcions: `--task <id>` (o diversos separats per comes), `--repeat <n>`, `--keep` per conservar les carpetes i `--list` per veure les tasques. Les tasques són a [`scripts/agent-benchmark/tasks.cjs`](scripts/agent-benchmark/tasks.cjs); compara sempre amb el mateix conjunt i el mateix nombre de repeticions abans i després d’un canvi d’instruccions o de model.
+
 ### Què surt de la màquina
 
 - La descàrrega inicial dels models des de Hugging Face.
