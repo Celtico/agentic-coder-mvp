@@ -28,8 +28,8 @@ def normalize_tool_calls(text, tools, start, end, parser):
         body, found_end, rest = after.partition(end) if end else (after, "", "")
         out += before
         try:
-            json.loads(body)
-            out += "<tool_call>" + body + "</tool_call>"
+            for call in _tool_call_objects(body):
+                out += "<tool_call>" + json.dumps({"name": call["name"], "arguments": call.get("arguments") or {}}, ensure_ascii=False) + "</tool_call>"
             continue
         except Exception:
             pass
@@ -40,3 +40,52 @@ def normalize_tool_calls(text, tools, start, end, parser):
         except Exception:
             out += start + body + found_end
     return out + rest
+
+
+def _tool_call_objects(body):
+    """A tool call written as JSON, also after a «call:» prefix (Gemma 4 sometimes mixes both forms)."""
+    text = body.strip()
+    if text.startswith("call:"):
+        text = text[len("call:"):].strip()
+    value = json.loads(text)
+    calls = value if isinstance(value, list) else [value]
+    if not all(isinstance(call, dict) and isinstance(call.get("name"), str) for call in calls):
+        raise ValueError("not a tool call")
+    return calls
+
+
+def native_history(messages):
+    """The agent keeps every tool call of the model in its history as <tool_call>{json}</tool_call>. A
+    model whose own format is different (Gemma 4, Qwen 3.5) starts mixing both forms after seeing it,
+    so the calls go back to it in its own format: as the `tool_calls` of the assistant message, which
+    its chat template renders natively, and the message that follows a call (the app's reply to it)
+    as the `tool` message the template expects."""
+    out = []
+    pending_tool = None
+    for message in messages:
+        if pending_tool is not None and message.get("role") == "user":
+            out.append({"role": "tool", "name": pending_tool, "content": message.get("content", "")})
+            pending_tool = None
+            continue
+        pending_tool = None
+        content = message.get("content", "")
+        if message.get("role") != "assistant" or "<tool_call>" not in content:
+            out.append(message)
+            continue
+        text, calls, rest = "", [], content
+        while "<tool_call>" in rest:
+            before, _, after = rest.partition("<tool_call>")
+            body, found, rest = after.partition("</tool_call>")
+            text += before
+            try:
+                for call in _tool_call_objects(body):
+                    calls.append({"type": "function", "function": {"name": call["name"], "arguments": call.get("arguments") or {}}})
+            except Exception:
+                text += "<tool_call>" + body + found
+        text += rest
+        if not calls:
+            out.append(message)
+            continue
+        out.append({"role": "assistant", "content": text.strip(), "tool_calls": calls})
+        pending_tool = calls[-1]["function"]["name"]
+    return out

@@ -31,6 +31,13 @@ THINKING = os.environ.get("AGENT_MLX_THINKING") == "1"
 # With reasoning off, a model whose chat template has a reasoning section must not open it: Gemma 4,
 # greedy and after a few turns, starts the section again and again («<|channel>thought…») and never
 # answers. Its first token is banned, so the model answers directly.
+# Whether the model writes tool calls in a format other than the agent's <tool_call>{json}</tool_call>
+# (Gemma 4's <|tool_call>call:…, Qwen 3.5's XML). Qwen 2.5 writes that same JSON: its history is left as is.
+_parser = getattr(tokenizer, "tool_parser", None)
+NATIVE_FORMAT_DIFFERS = bool(getattr(tokenizer, "tool_call_start", None)) and (
+    tokenizer.tool_call_start != "<tool_call>" or (getattr(_parser, "__module__", "") or "").split(".")[-1] not in ("json_tools", "qwen3", "")
+)
+
 LOGITS_PROCESSORS = []
 _think_tokens = getattr(tokenizer, "think_start_tokens", None)
 if not THINKING and _think_tokens:
@@ -55,6 +62,8 @@ for line in sys.stdin:
     try:
         request = json.loads(line)
         messages = request.get("messages", [])
+        if NATIVE_FORMAT_DIFFERS:
+            messages = mlx_text.native_history(messages)
         tools = request.get("tools") or None
         prompt = tokenizer.apply_chat_template(
             messages,

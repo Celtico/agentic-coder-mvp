@@ -46,3 +46,42 @@ print(json.dumps([
 ]))`);
   assert.deepEqual(out, ['{"type":"final","content":"fet"}', 'Resposta', 'Hola', 'Sense secció', 'Sense marques']);
 });
+
+test('a Gemma call written as JSON after «call:» is read too', { skip: !available && 'no MLX runtime' }, () => {
+  const out = run(`${header}
+print(json.dumps(mlx_text.normalize_tool_calls('<|tool_call>call:{"name":"run_tests"}<tool_call|>', tools, gemma4.tool_call_start, gemma4.tool_call_end, gemma4.parse_tool_call)))`);
+  assert.equal(out, '<tool_call>{"name": "run_tests", "arguments": {}}</tool_call>');
+});
+
+test('past calls go back to the model in its own format, with the reply as a tool message', { skip: !available && 'no MLX runtime' }, () => {
+  const out = run(`${header}
+history = [
+  {"role": "system", "content": "S"},
+  {"role": "user", "content": "Executa les proves"},
+  {"role": "assistant", "content": 'Les executo. <tool_call>{"name": "run_tests", "arguments": {}}</tool_call>'},
+  {"role": "user", "content": "Resultat: ok"},
+  {"role": "assistant", "content": '{"type":"final","content":"Fet."}'},
+  {"role": "user", "content": "Gràcies"},
+]
+print(json.dumps(mlx_text.native_history(history)))`);
+  assert.deepEqual(out, [
+    { role: 'system', content: 'S' },
+    { role: 'user', content: 'Executa les proves' },
+    { role: 'assistant', content: 'Les executo.', tool_calls: [{ type: 'function', function: { name: 'run_tests', arguments: {} } }] },
+    { role: 'tool', name: 'run_tests', content: 'Resultat: ok' },
+    { role: 'assistant', content: '{"type":"final","content":"Fet."}' },
+    { role: 'user', content: 'Gràcies' },
+  ]);
+});
+
+const gemmaWeights = path.join(__dirname, '..', '..', '..', 'models', 'mlx', 'gemma-4-12b-it-4bit', 'chat_template.jinja');
+test('the Gemma 4 template renders that history in its native form', { skip: (!available || !fs.existsSync(gemmaWeights)) && 'no Gemma 4 weights' }, () => {
+  const out = run(`${header}
+from pathlib import Path
+from mlx_lm.tokenizer_utils import load
+t = load(Path(${JSON.stringify(path.dirname(gemmaWeights))}))
+h = mlx_text.native_history([{"role": "user", "content": "Executa"}, {"role": "assistant", "content": '<tool_call>{"name": "run_tests", "arguments": {}}</tool_call>'}, {"role": "user", "content": "Resultat: ok"}])
+print(json.dumps(t.apply_chat_template(h, tokenize=False, add_generation_prompt=True, enable_thinking=False)))`);
+  assert.match(out, /<\|tool_call>call:run_tests\{\}<tool_call\|><\|tool_response>response:run_tests\{value:<\|"\|>Resultat: ok<\|"\|>\}<tool_response\|>$/);
+  assert.doesNotMatch(out, /<tool_call>\{/);
+});
