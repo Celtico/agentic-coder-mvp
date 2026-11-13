@@ -198,15 +198,28 @@ function parseAction(raw: string): AgentAction | null {
   };
 
   const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  // A model may send several calls in one answer, some of them empty (MiMo writes
+  // `{"name":"write_file","arguments":{}}` a few times before the real one). The first call that is
+  // valid is the one that runs; the next step comes in the next turn. If none is valid, the first
+  // one is returned, and the loop tells the model it was not valid.
+  let firstCall: AgentAction | null = null;
   for (const match of raw.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)) {
+    let action: AgentAction | null = null;
     try {
       const value: unknown = JSON.parse(match[1].trim());
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         const call = value as Record<string, unknown>;
-        if (typeof call.name === 'string') return { type: 'tool_call', name: call.name, arguments: call.arguments };
+        if (typeof call.name === 'string') action = { type: 'tool_call', name: call.name, arguments: call.arguments };
       }
-    } catch {}
+    } catch {
+      // A file's content with real line breaks, or a missing closing brace.
+      action = parseLenient(match[1]);
+    }
+    if (action?.type !== 'tool_call') continue;
+    if (validateToolCall(action)) return action;
+    firstCall ??= action;
   }
+  if (firstCall) return firstCall;
   const directAction = parseLenient(normalized);
   if (directAction) return directAction;
 

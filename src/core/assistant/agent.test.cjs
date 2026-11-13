@@ -1628,3 +1628,57 @@ test('a plan followed by its tool call in the same answer runs the call instead 
   assert.match(answer, /index\.html/);
   assert.ok(calls <= 3, `the model was asked ${calls} times`);
 });
+
+// MiMo sometimes answers with several calls at once, most of them empty («arguments: {}»).
+async function askWithResponses(t, responses, request = 'Llegeix src/App.vue i digues què fa') {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-many-calls-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const prompts = [];
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages.at(-1)?.content || ''); return responses.shift() ?? 'El fitxer mostra el component HelloWorld.'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask(request, projectRoot, async (tool) => { calls.push(tool); return { content: '<template><HelloWorld /></template>' }; });
+  return { calls, prompts, answer };
+}
+
+const empty = '<tool_call>{"name": "read_file", "arguments": {}}</tool_call>';
+
+test('of several calls in one answer, the first valid one runs and the empty ones are ignored', async (t) => {
+  const { calls, answer } = await askWithResponses(t, [
+    `${empty}${empty}<tool_call>{"name": "read_file", "arguments": {"path": "src/App.vue"}}</tool_call>${empty}`,
+    'El fitxer mostra el component HelloWorld.',
+  ]);
+  assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
+  assert.match(answer, /HelloWorld/);
+});
+
+test('when every call in the answer is empty, nothing runs and the model is told the call is not valid', async (t) => {
+  const { calls, prompts } = await askWithResponses(t, [`${empty}${empty}${empty}`, 'El fitxer mostra el component HelloWorld.']);
+  assert.deepEqual(calls, []);
+  const invalid = (await fs.readFile(path.join(__dirname, '..', '..', '..', 'prompts', 'nudge-invalid-call.md'), 'utf8')).trim().slice(0, 25);
+  assert.ok(prompts.some((prompt) => prompt.includes(invalid)), 'the usual «not valid» message goes back to the model');
+});
+
+test('of several valid calls in one answer only the first runs; the next one comes in the next turn', async (t) => {
+  const { calls } = await askWithResponses(t, [
+    '<tool_call>{"name": "read_file", "arguments": {"path": "src/App.vue"}}</tool_call><tool_call>{"name": "read_file", "arguments": {"path": "src/main.js"}}</tool_call>',
+    'El fitxer mostra el component HelloWorld.',
+  ]);
+  assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
+});
+
+test('a valid call missing its closing brace is still found after an empty one', async (t) => {
+  const { calls } = await askWithResponses(t, [
+    `${empty}<tool_call>{"name": "read_file", "arguments": {"path": "src/App.vue"}</tool_call>`,
+    'El fitxer mostra el component HelloWorld.',
+  ]);
+  assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
+});
