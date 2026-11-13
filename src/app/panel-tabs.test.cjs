@@ -1,5 +1,5 @@
-// Panes opened from an icon of the left bar have no × of their own: the icon is their tab
-// (src/app/App.tsx, dockPane and sidePane).
+// Every pane opens and closes from its icon in the left bar, its tab; no pane has a × of its own
+// (src/app/App.tsx, dockPane, sidePane, the evaluation card and the terminal).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -8,17 +8,17 @@ const path = require('node:path');
 const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
 const closeButtons = [...app.matchAll(/icon=\{X\} label=\{?["'`]?([^"'`}]*)/g)].map((match) => match[1]);
 
-test('the browser, evaluation, Git, learning and terminal panes have no close button: their icon opens and closes them', () => {
-  for (const label of ['Tanca el navegador web', 'Tanca l’avaluació', 'Tanca Git', 'Tanca l’aprenentatge local', 'Tanca el terminal']) {
+test('no pane has a close button in its header', () => {
+  for (const label of ['Tanca l’editor', 'Tanca el navegador web', 'Tanca l’avaluació', 'Tanca Git', 'Tanca l’aprenentatge local', 'Tanca la consola', 'Tanca el terminal']) {
     assert.ok(!closeButtons.includes(label), `${label} should be gone`);
   }
-  // Their icons in the left bar are toggles that show which pane is open.
-  for (const [icon, open] of [['Globe2', 'browserOpen'], ['ChartBar', 'evaluationOpen'], ['TerminalIcon', 'terminalOpen'], ['GitBranch', 'gitOpen'], ['Brain', 'learningOpen']]) {
-    assert.match(app, new RegExp(`icon=\\{${icon}\\}[^\\n]*variant=\\{${open} \\? 'subtle' : 'ghost'\\} colorPalette=\\{${open} \\? 'agentic' : 'gray'\\}`), icon);
-  }
+  assert.doesNotMatch(app, /close\?: \{ label/);
 });
 
-test('the editor keeps its ×, and the console has one only while the browser (where its button is) is closed', () => {
-  assert.match(app, /\{ label: 'Tanca l’editor', onClose: closeEditor \}/);
-  assert.match(app, /browserOpen \? undefined : \{ label: 'Tanca la consola', onClose: \(\) => setConsoleOpen\(false\) \}/);
+test('each pane has a toggle in the left bar that shows when it is open', () => {
+  for (const [icon, open] of [['FileCode', 'editorOpen'], ['Globe2', 'browserOpen'], ['ChartBar', 'evaluationOpen'], ['Bug', 'consoleOpen'], ['TerminalIcon', 'terminalOpen'], ['GitBranch', 'gitOpen'], ['Brain', 'learningOpen']]) {
+    assert.match(app, new RegExp(`icon=\\{${icon}\\}[^\\n]*w="38px" h="38px" variant=\\{${open} \\? 'subtle' : 'ghost'\\} colorPalette=\\{${open} \\? 'agentic'`), icon);
+  }
+  // The console is opened only from the bar now, not from the browser's toolbar as well.
+  assert.equal((app.match(/icon=\{Bug\}/g) || []).length, 1);
 });

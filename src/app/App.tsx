@@ -13,7 +13,7 @@ import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
-  LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw,
+  LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -27,7 +27,6 @@ const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
 const SPLIT_KEY = 'agentic-split-size-v1';
-const GIT_SPLIT_KEY = 'agentic-git-split-size-v1';
 const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 const TERMINAL_HEIGHT_KEY = 'agentic-terminal-height-v1';
 /** Dragged shorter than this, the terminal dock closes. */
@@ -155,10 +154,6 @@ function getSplitSize(): number[] {
   catch { return [62, 38]; }
 }
 
-function getGitSplitSize(): number[] {
-  try { const value = JSON.parse(localStorage.getItem(GIT_SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
-  catch { return [62, 38]; }
-}
 
 function getNavigationSectionsSplitSize(): number[] {
   try { const value = JSON.parse(localStorage.getItem(NAVIGATION_SECTIONS_SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [36, 64]; }
@@ -279,6 +274,15 @@ export function App(): React.JSX.Element {
   const [gitCommitDetails, setGitCommitDetails] = useState<GitCommitDetails | null>(null);
   const [gitDetailLoading, setGitDetailLoading] = useState(false);
   const [gitSearch, setGitSearch] = useState('');
+  // The Git pane is two columns only when it is wide enough (it lives in the bottom dock, beside others).
+  const [gitPaneNode, setGitPaneNode] = useState<HTMLDivElement | null>(null);
+  const [gitWide, setGitWide] = useState(false);
+  useEffect(() => {
+    if (!gitPaneNode) return;
+    const observer = new ResizeObserver(([entry]) => setGitWide(entry.contentRect.width >= 560));
+    observer.observe(gitPaneNode);
+    return () => observer.disconnect();
+  }, [gitPaneNode]);
   const [gitLoading, setGitLoading] = useState(false);
   const [datasetPreview, setDatasetPreview] = useState<TrainingDatasetPreview | null>(null);
   // Training a version of our own runs in the background in the main process; the panel shows its steps.
@@ -1058,6 +1062,18 @@ export function App(): React.JSX.Element {
     setEditorOpen(false); setEditingPath(null);
   }
 
+  // The editor's icon in the left bar: closes it, or opens the last file it had (or the file selected in
+  // the list of files).
+  const lastEditorPathRef = useRef<string | null>(null);
+  useEffect(() => { if (editingPath) lastEditorPathRef.current = editingPath; }, [editingPath]);
+  async function toggleEditor() {
+    if (editorOpen) { closeEditor(); return; }
+    const selected = selectedTreePath && !projectDirectoryPaths.has(selectedTreePath) ? selectedTreePath : null;
+    const file = selected || lastEditorPathRef.current;
+    if (file) await openEditor(file);
+    else setStatus('Tria un fitxer a la llista de Fitxers per obrir-lo a l’editor');
+  }
+
   async function navigateBrowser() {
     let raw = browserAddress.trim(); if (!raw) return;
     if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
@@ -1249,7 +1265,6 @@ export function App(): React.JSX.Element {
         <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" size="sm" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
-          <IconButton icon={Bug} label={consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola'} size="sm" variant={consoleOpen ? 'subtle' : 'ghost'} colorPalette={consoleOpen ? 'agentic' : 'gray'} onClick={() => setConsoleOpen((open) => !open)}/>
           {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
         </Box>
       </Flex>
@@ -1306,53 +1321,40 @@ export function App(): React.JSX.Element {
       </Flex>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
         : !gitHistory?.available ? <Box p="3"><Notice tone="info">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Notice></Box>
-          : <Splitter.Root flex="1" minH="0" minW="0" orientation="vertical" panels={[{ id: 'git-history', minSize: 12 }, { id: 'git-details', minSize: 12 }]} defaultSize={getGitSplitSize()} onResizeEnd={(details) => localStorage.setItem(GIT_SPLIT_KEY, JSON.stringify(details.size))}>
-            <Splitter.Panel id="git-history" minH="0" minW="0" overflow="hidden">
-              <Grid h="full" minH="0" minW="0" templateColumns="minmax(105px, 0.8fr) minmax(190px, 1.5fr)">
-            <Flex minW="0" minH="0" direction="column" borderRightWidth="1px" borderColor="border" overflowY="auto">
-              <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">HEAD (Branca actual)</Text>
-              <HStack px="3" py="2" fontSize="sm" color="agentic.fg"><GitBranch size={14}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{gitHistory.branch || 'Detached HEAD'}</Text></HStack>
-              <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">Local</Text>
-              {gitHistory.branches.filter((branch) => !branch.remote).map((branch) => <HStack key={branch.name} px="3" py="1.5" fontSize="sm" color={branch.current ? 'agentic.fg' : 'fg'} title={branch.name}><GitBranch size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{branch.name}</Text></HStack>)}
-              {gitHistory.branches.some((branch) => branch.remote) && <>
-                <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">Remot</Text>
-                {gitHistory.branches.filter((branch) => branch.remote).map((branch) => <HStack key={branch.name} px="3" py="1.5" fontSize="xs" color="fg.muted" title={branch.name}><GitBranch size={12}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{branch.name}</Text></HStack>)}
-              </>}
-              <Box mt="auto" p="3" borderTopWidth="1px" borderColor="border">
-                <Text fontSize="xs" color="fg.muted">Canvis locals</Text>
-                <Text fontSize="sm" color="agentic.fg">{gitSnapshot?.available ? (gitSnapshot.status?.split(/\r?\n/).filter((line) => line && !line.startsWith('##')).length || 'Cap') : '—'}</Text>
-              </Box>
+          // The pane sits in the bottom dock and its width changes: narrow, everything is one column
+          // (branch and changes, then commits, then the selected commit); wide (gitWide), the commits
+          // and the selected commit are side by side. An empty repository is one message.
+          : <Flex ref={setGitPaneNode} flex="1" minH="0" minW="0" direction="column" overflow="hidden">
+            <Flex flex="none" wrap="wrap" align="center" gap="2" px="3" py="2" borderBottomWidth="1px" borderColor="border">
+              <HStack gap="1.5" minW="0" maxW="full" fontSize="sm" color="agentic.fg" title={gitHistory.branch || 'Detached HEAD'}><GitBranch size={14}/><Text truncate>{gitHistory.branch || 'Detached HEAD'}</Text></HStack>
+              <Badge size="sm" variant="subtle" colorPalette="gray">Canvis locals: {gitSnapshot?.available ? (gitSnapshot.status?.split(/\r?\n/).filter((line) => line && !line.startsWith('##')).length || 'cap') : '—'}</Badge>
+              {gitHistory.branches.filter((branch) => !branch.current).map((branch) => <Badge key={branch.name} size="sm" variant="outline" colorPalette="gray" maxW="full" title={branch.name}><GitBranch size={11}/><Text as="span" truncate>{branch.name}</Text></Badge>)}
             </Flex>
-            <Flex minW="0" minH="0" direction="column" borderRightWidth="1px" borderColor="border">
-              <Flex p="2" borderBottomWidth="1px" borderColor="border"><Input size="sm" value={gitSearch} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setGitSearch(event.target.value)} placeholder="Missatge o hash" aria-label="Filtra commits"/></Flex>
-              <Box flex="1" minH="0" overflowY="auto">
-                {gitHistory.commits.filter((commit) => `${commit.subject} ${commit.shortHash} ${commit.author} ${commit.decorations}`.toLowerCase().includes(gitSearch.toLowerCase())).map((commit, index) => <Button key={commit.hash} w="full" h="auto" minH="54px" px="2" py="1.5" justifyContent="flex-start" textAlign="left" whiteSpace="normal" rounded="none" variant={gitSelectedCommit?.hash === commit.hash ? 'subtle' : 'ghost'} colorPalette={gitSelectedCommit?.hash === commit.hash ? 'agentic' : 'gray'} onClick={() => void loadGitCommitDetails(commit)}>
+            {gitHistory.commits.length === 0 ? <Text p="3" fontSize="sm" color="fg.muted">Aquest repositori encara no té commits.</Text>
+              : <Grid flex="1" minH="0" minW="0" templateColumns={gitWide ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'} templateRows={gitWide || !gitSelectedCommit ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)'}>
+                <Flex minW="0" minH="0" direction="column" borderRightWidth={gitWide ? '1px' : '0'} borderColor="border">
+                  <Box flex="none" p="2" borderBottomWidth="1px" borderColor="border"><Input size="sm" value={gitSearch} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setGitSearch(event.target.value)} placeholder="Missatge o hash" aria-label="Filtra commits"/></Box>
+                  <Box flex="1" minH="0" overflowY="auto">
+                    {gitHistory.commits.filter((commit) => `${commit.subject} ${commit.shortHash} ${commit.author} ${commit.decorations}`.toLowerCase().includes(gitSearch.toLowerCase())).map((commit, index) => <Button key={commit.hash} w="full" h="auto" minH="54px" px="2" py="1.5" justifyContent="flex-start" textAlign="left" whiteSpace="normal" rounded="none" variant={gitSelectedCommit?.hash === commit.hash ? 'subtle' : 'ghost'} colorPalette={gitSelectedCommit?.hash === commit.hash ? 'agentic' : 'gray'} onClick={() => void loadGitCommitDetails(commit)}>
                   <HStack align="stretch" gap="2" w="full" minW="0">
                     <Flex position="relative" w="16px" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.solid' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
                     <Stack minW="0" gap="0"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.subject}</Text><Text fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.author} · {Number.isNaN(Date.parse(commit.date)) ? commit.date : new Date(commit.date).toLocaleString()}</Text>{commit.decorations && <Text fontSize="xs" color="agentic.fg" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.decorations}</Text>}</Stack>
                   </HStack>
                 </Button>)}
-                {gitHistory.commits.length === 0 && <Text p="3" fontSize="sm" color="fg.muted">Aquest repositori encara no té commits.</Text>}
-                {gitHistory.truncated && <Text p="3" fontSize="xs" color="fg.muted">Es mostren els 120 commits més recents.</Text>}
-              </Box>
-            </Flex>
-              </Grid>
-            </Splitter.Panel>
-            <Splitter.ResizeTrigger id="git-history:git-details" aria-label="Arrossega per ajustar l’alçada de l’historial Git" h="8px" flex="none" cursor="row-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
-              <Center h="full"><Box w="32px" h="2px" rounded="full" bg="border"/></Center>
-            </Splitter.ResizeTrigger>
-            <Splitter.Panel id="git-details" minH="0" minW="0" overflow="hidden">
-            <Flex minW="0" minH="0" direction="column" overflow="hidden">
-              {gitDetailLoading ? <HStack p="3" color="fg.muted"><Spinner size="sm"/><Text>Carregant el commit…</Text></HStack>
+                    {gitHistory.truncated && <Text p="3" fontSize="xs" color="fg.muted">Es mostren els 120 commits més recents.</Text>}
+                  </Box>
+                </Flex>
+                {(gitWide || gitSelectedCommit) && <Flex minW="0" minH="0" direction="column" overflow="hidden" borderTopWidth={gitWide ? '0' : '1px'} borderColor="border">
+                  {gitDetailLoading ? <HStack p="3" color="fg.muted"><Spinner size="sm"/><Text>Carregant el commit…</Text></HStack>
                 : gitCommitDetails ? <>
                   <Box p="3" borderBottomWidth="1px" borderColor="border"><Text fontWeight="semibold" fontSize="sm" overflowWrap="anywhere">{gitCommitDetails.subject}</Text><Text mt="2" fontSize="xs" color="fg.muted">{gitCommitDetails.author} · {Number.isNaN(Date.parse(gitCommitDetails.date)) ? gitCommitDetails.date : new Date(gitCommitDetails.date).toLocaleString()}</Text><Text mt="1" fontSize="xs" color="fg.muted" fontFamily="mono">{gitCommitDetails.shortHash}</Text>{gitCommitDetails.decorations && <Badge mt="2" colorPalette="agentic" variant="subtle">{gitCommitDetails.decorations}</Badge>}</Box>
                   <Text px="3" py="2" fontSize="xs" color="fg.muted">{gitCommitDetails.files.length} fitxers canviats</Text>
                   <Box flex="1" minH="0" overflowY="auto">{gitCommitDetails.files.map((file) => <HStack key={`${file.status}-${file.path}`} px="3" py="1.5" gap="2" title={file.path}><Badge size="sm" colorPalette={file.status === 'A' ? 'green' : file.status === 'D' ? 'red' : 'yellow'}>{file.status}</Badge><Text fontSize="xs" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{file.path}</Text></HStack>)}{!gitCommitDetails.files.length && <Text px="3" fontSize="sm" color="fg.muted">No hi ha fitxers modificats en aquest commit.</Text>}</Box>
                   {gitCommitDetails.truncated && <Text p="3" fontSize="xs" color="fg.warning">La llista de fitxers s’ha limitat.</Text>}
                 </> : <Text p="3" fontSize="sm" color="fg.muted">Selecciona un commit per veure’n els detalls.</Text>}
-            </Flex>
-            </Splitter.Panel>
-          </Splitter.Root>}
+                </Flex>}
+              </Grid>}
+          </Flex>}
     </Flex>
   );
 
@@ -1452,13 +1454,11 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
-  // Panes opened from an icon of the left bar have no × of their own: the icon is their tab, and
-  // it opens and closes them. Only a pane without an icon gets a close button (`close`).
-  const dockPane = (title: string, content: React.ReactNode, badge?: React.ReactNode, close?: { label: string; onClose: () => void }) => (
+  // Panes have no × of their own: each has an icon in the left bar, its tab, that opens and closes it.
+  const dockPane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
         <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
-        {close && <IconButton icon={X} label={close.label} size="xs" onClick={close.onClose}/>}
       </Flex>
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
@@ -1594,9 +1594,7 @@ export function App(): React.JSX.Element {
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
     learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', learningPane) } : null,
-    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined,
-      // Its tab is the console button of the browser: with the browser closed it needs its own ×.
-      browserOpen ? undefined : { label: 'Tanca la consola', onClose: () => setConsoleOpen(false) }) } : null,
+    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const dockKey = dockItems.map((item) => item.id).join('+');
@@ -1616,17 +1614,16 @@ export function App(): React.JSX.Element {
       )}
     </Flex>
   );
-  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode, close?: { label: string; onClose: () => void }) => (
+  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
         <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
-        {close && <IconButton icon={X} label={close.label} size="xs" onClick={close.onClose}/>}
       </Flex>
       <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
   const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>, { label: 'Tanca l’editor', onClose: closeEditor }) } : null,
+    editorOpen ? { id: 'side-editor', node: sidePane('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', browserPane) } : null,
     // The evaluation opens beside the chat, like the browser, with the whole height.
     // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
@@ -1683,10 +1680,12 @@ export function App(): React.JSX.Element {
           {!ownTitleBar && <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>}
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
+          <IconButton icon={FileCode} label={editorOpen ? 'Tanca l’editor' : 'Obre l’editor'} w="38px" h="38px" variant={editorOpen ? 'subtle' : 'ghost'} colorPalette={editorOpen ? 'agentic' : 'gray'} onClick={() => void toggleEditor()}/>
           <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
           <IconButton icon={ChartBar} label={evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models'} w="38px" h="38px" variant={evaluationOpen ? 'subtle' : 'ghost'} colorPalette={evaluationOpen ? 'agentic' : 'gray'} onClick={() => void openEvaluationPanel()}/>
           {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
           <Box flex="1" minH="2"/>
+          <IconButton icon={Bug} label={consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola'} w="38px" h="38px" variant={consoleOpen ? 'subtle' : 'ghost'} colorPalette={consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray'} onClick={() => setConsoleOpen((open) => !open)}/>
           <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="38px" h="38px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
           <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
