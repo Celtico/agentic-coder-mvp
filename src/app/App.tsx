@@ -1440,13 +1440,17 @@ export function App(): React.JSX.Element {
           <Accordion.ItemTrigger px="0"><Box flex="1">{sectionTitle(`Tasques · ${chosenCount} de ${evaluationTasks.length}`)}</Box><Accordion.ItemIndicator/></Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="0" pt="1">
             <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
-            <Stack gap="2">{(['open', 'app', 'reference'] as const).map((kind) => <Box key={kind}>
-              <Text fontSize="xs" fontWeight="semibold" mb="1">{kindLabel[kind]}</Text>
+            <Accordion.Root collapsible multiple size="sm" variant="enclosed">{(['open', 'app', 'reference'] as const).map((kind) => {
+              const group = evaluationTasks.filter((task) => task.kind === kind);
+              return <Accordion.Item key={kind} value={kind}>
+              <Accordion.ItemTrigger><Text flex="1" fontSize="xs" fontWeight="semibold" textAlign="left">{kindLabel[kind]} · {group.filter((task) => evaluationChosen.has(task.id)).length} de {group.length}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+              <Accordion.ItemContent><Accordion.ItemBody>
               <Stack gap="1">{evaluationTasks.filter((task) => task.kind === kind).map((task) => <Checkbox.Root key={task.id} size="sm" alignItems="flex-start" disabled={evaluationRunning} checked={evaluationChosen.has(task.id)} onCheckedChange={(details) => setEvaluationChosen((current) => { const next = new Set(current); if (details.checked) next.add(task.id); else next.delete(task.id); return next; })}>
                 <Checkbox.HiddenInput/><Checkbox.Control mt="0.5"/>
                 <Checkbox.Label fontSize="xs"><b>{task.id}</b> · {task.description}<Text as="span" display="block" color="fg.muted">«{task.prompt}»</Text></Checkbox.Label>
               </Checkbox.Root>)}</Stack>
-            </Box>)}</Stack>
+              </Accordion.ItemBody></Accordion.ItemContent>
+            </Accordion.Item>; })}</Accordion.Root>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
       </Accordion.Root>
