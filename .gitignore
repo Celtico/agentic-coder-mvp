@@ -10,3 +10,7 @@ src/core/assistant/agent-runtime.cjs
 models/
 *.before-*
 logs/
+
+# Python bytecode (the MLX worker)
+__pycache__/
+*.pyc
