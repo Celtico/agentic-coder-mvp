@@ -540,21 +540,39 @@ async function startModelWorker() {
   return child;
 }
 
+// The project tools (Vite 6/7, Chakra 3's CLI…) need Node.js 20 or later. With several versions installed
+// (nvm), which one comes first depends on how the app was started: after a restart on 13-11-2026 the app
+// got Node 18 and an evaluation ran on it, while the earlier ones had run on Node 24. So the newest Node
+// 20+ found is used (AGENT_NODE_EXECUTABLE still wins), and the same one for the project's npm commands.
+const MIN_NODE_MAJOR = 20;
+function nodeMajor(executable) {
+  const fromPath = /[\\/]v(\d+)\.\d+\.\d+[\\/]/.exec(executable);
+  if (fromPath) return Number(fromPath[1]);
+  try { return Number(/^v(\d+)/.exec(require('node:child_process').execFileSync(executable, ['-v'], { encoding: 'utf8', timeout: 3000 }))?.[1] || 0); }
+  catch { return 0; }
+}
+let foundNode;
 function findNodeExecutable() {
+  if (foundNode) return foundNode;
   const name = process.platform === 'win32' ? 'node.exe' : 'node';
-  const candidates = [process.env.AGENT_NODE_EXECUTABLE, process.env.npm_node_execpath];
+  if (process.env.AGENT_NODE_EXECUTABLE) return (foundNode = process.env.AGENT_NODE_EXECUTABLE);
+  const candidates = [process.env.npm_node_execpath];
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {
     if (directory) candidates.push(path.join(directory, name));
   }
-  // Opened from Finder, an app gets a short PATH without Homebrew or the usual installers.
+  // Opened from Finder, an app gets a short PATH without Homebrew, nvm or the usual installers.
   if (process.platform === 'darwin') candidates.push('/opt/homebrew/bin/node', '/usr/local/bin/node');
-  for (const candidate of candidates) {
-    if (!candidate || path.resolve(candidate) === path.resolve(process.execPath)) continue;
-    try {
-      fsSync.accessSync(candidate, fsSync.constants.X_OK);
-      return candidate;
-    } catch {}
+  const nvmVersions = path.join(app.getPath('home'), '.nvm', 'versions', 'node');
+  for (const version of fsSync.existsSync(nvmVersions) ? fsSync.readdirSync(nvmVersions) : []) candidates.push(path.join(nvmVersions, version, 'bin', name));
+  const usable = [];
+  for (const candidate of [...new Set(candidates.filter(Boolean))]) {
+    if (path.resolve(candidate) === path.resolve(process.execPath)) continue;
+    try { fsSync.accessSync(candidate, fsSync.constants.X_OK); } catch { continue; }
+    usable.push({ path: candidate, major: nodeMajor(candidate) });
   }
+  // The newest Node 20+, or else the first one found (as before).
+  const best = usable.filter((item) => item.major >= MIN_NODE_MAJOR).sort((a, b) => b.major - a.major)[0] || usable[0];
+  if (best) return (foundNode = best.path);
   if (app.isPackaged) return process.execPath;
   throw new Error('No he trobat Node.js per executar el treballador local. Configura AGENT_NODE_EXECUTABLE o obre l’app des d’un entorn amb Node.js al PATH.');
 }
@@ -714,6 +732,8 @@ app.whenReady().then(async () => {
     await fs.mkdir(selectedProject, { recursive: true });
     await saveSettings();
   }
+  // Every command the app runs for a project (npm, npx, Vite…) uses the Node chosen above.
+  try { const node = findNodeExecutable(); if (node !== process.execPath) process.env.PATH = [path.dirname(node), process.env.PATH || ''].join(path.delimiter); } catch { /* no Node: the worker reports it */ }
   if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
   addCaptureToMenu();
   createWindow();
@@ -1201,7 +1221,8 @@ async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = '
   const nodeExecutable = findNodeExecutable();
   return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : []), ...(tasks.length ? ['--task', tasks.join(',')] : [])], {
     signal, onLine,
-    env: { ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+    // The project's npm, npx and Vite run on that same Node.
+    env: { PATH: [path.dirname(nodeExecutable), process.env.PATH || ''].join(path.delimiter), ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   });
 }
 
