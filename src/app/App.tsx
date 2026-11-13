@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, chakra
+  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -1425,8 +1425,8 @@ export function App(): React.JSX.Element {
   const evaluationPane = (
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
     // shrinking flex column the accordions, which clip their content, were squeezed to nothing).
-    <Box h="full" minH="0" overflowY="auto"><Stack gap="6px">
-      <Stack gap="3" bg="bg" borderRadius="panel" p="3">
+    <Stack gap="3">
+      <Stack gap="3">
       <HStack gap="2" flexWrap="wrap">
         <Text flex="1" minW="160px" fontSize="sm">Model: <b>{modelOptions.find((item) => item.id === selectedModel)?.label || selectedModel}</b></Text>
         <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
@@ -1537,7 +1537,7 @@ export function App(): React.JSX.Element {
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
       </Accordion.Root>
-    </Stack></Box>
+    </Stack>
   );
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
@@ -1575,13 +1575,14 @@ export function App(): React.JSX.Element {
     editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
     // The evaluation opens beside the chat, like the browser, with the whole height.
-    evaluationOpen ? { id: 'side-evaluation', node: <Flex flex="1" h="full" minW="0" minH="0" direction="column" gap="6px">
-      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3" bg="bg" borderRadius="panel">
-        <HStack gap="2" minW="0"><Text fontSize="xs" fontWeight="semibold">Avaluació</Text>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
+    // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
+    evaluationOpen ? { id: 'side-evaluation', node: <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
+      <Card.Header flexDirection="row" alignItems="center" justifyContent="space-between" gap="3" py="1.5" px="3">
+        <HStack gap="2" minW="0"><Card.Title fontSize="xs">Avaluació</Card.Title>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
         <IconButton icon={X} label="Tanca l’avaluació" size="xs" onClick={() => setEvaluationOpen(false)}/>
-      </Flex>
-      <Box flex="1" minH="0">{evaluationPane}</Box>
-    </Flex> } : null,
+      </Card.Header>
+      <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
+    </Card.Root> } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
   const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
