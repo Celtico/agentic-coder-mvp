@@ -1416,7 +1416,7 @@ export function App(): React.JSX.Element {
   // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
   const rowProps = { borderBottomWidth: '1px', borderColor: 'border', _last: { borderBottomWidth: 0 } } as const;
   const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
-    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="outline" colorPalette="gray" color="fg.muted" bg="bg" borderRadius="sm">{count}</Badge>}</HStack>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="outline" colorPalette="gray" color="fg.muted" bg="canvas" borderRadius="sm">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
   </>;
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
@@ -1436,15 +1436,15 @@ export function App(): React.JSX.Element {
           : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark{chosenCount && chosenCount < evaluationTasks.length ? ` (${chosenCount})` : ''}</Button>}
       </HStack>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
-      {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.600" borderRadius="sm" p="2">
+      {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.emphasized" borderRadius="sm" p="2">
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
-        {evaluationCurrent && <Box h="5px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.400" style={{ width: `${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%` }}/></Box>}
+        {evaluationCurrent && <Box h="5px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%`}/></Box>}
         {evaluationCurrent && <Text mt="1" fontSize="2xs" color="fg.muted">{evaluationTasks.find((task) => task.id === evaluationCurrent.task)?.description}</Text>}
-        {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'red.300' : 'agentic.200'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
+        {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'fg.error' : 'agentic.fg'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="bg">
+      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="canvas">
         <Accordion.Item value="tasks" {...rowProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
@@ -1471,9 +1471,9 @@ export function App(): React.JSX.Element {
             {rowNote('Tasques superades per model, de totes les avaluacions.')}
             <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
               <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
-              {([['Obertes', model.open, 'agentic.400'], ['Apps', model.apps, 'orange.400'], ['Dirigida', model.reference, 'gray.400']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
+              {([['Obertes', model.open, 'agentic.solid'], ['Apps', model.apps, 'orange.solid'], ['Dirigida', model.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
                 <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
-                <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} style={{ width: `${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%` }}/></Box>
+                <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
                 <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
               </HStack>)}
             </Box>)}</Stack>
@@ -1498,15 +1498,18 @@ export function App(): React.JSX.Element {
                         {report.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)} {...rowProps}>
                           <Accordion.ItemTrigger px="3" py="1.5"><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
                           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
-                            {!result.pass && result.detail && <Text fontSize="xs" color="red.300" mb="1.5">{result.detail}</Text>}
+                            {!result.pass && result.detail && <Text fontSize="xs" color="fg.error" mb="1.5">{result.detail}</Text>}
                             {result.hasProject && <Button mb="2" size="xs" variant="outline" onClick={async () => {
                               try { const opened = await window.agentic.openBenchmarkProject(report.id, index); activateProject(opened, true); setStatus(`Obert el projecte que el model va fer a ${result.task}`); }
                               catch (error) { setEvaluationError(errorText(error)); }
                             }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
                             {result.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
-                            <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="sm" p="2" bg="bg">
+                            <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="sm" p="2" bg="canvas">
                               <Text fontSize="2xs" color="fg.muted" mb="1">Torn {turnIndex + 1} · {turn.seconds} s</Text>
-                              {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
+                              {turn.input && <Accordion.Root collapsible size="sm" variant="plain"><Accordion.Item value="input" borderWidth="0">
+                                <Accordion.ItemTrigger py="0.5" px="0"><Text flex="1" fontSize="2xs" color="fg.muted" textAlign="left">El que ha vist</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                                <Accordion.ItemContent><Accordion.ItemBody px="0" py="1"><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted">{turn.input.content}</Box></Accordion.ItemBody></Accordion.ItemContent>
+                              </Accordion.Item></Accordion.Root>}
                               <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
                             </Box>)}</Stack>
                           </Accordion.ItemBody></Accordion.ItemContent>
