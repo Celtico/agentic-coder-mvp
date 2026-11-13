@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox
+  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, chakra
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -70,13 +70,13 @@ const Button = ({ size: _size, ...props }: ButtonProps) => <ChakraButton {...pro
 type IconButtonProps = ButtonProps & { icon: IconType; label: string };
 /** A boxed note: blue for plain information, yellow for something to look at, green for done. */
 const noticeTones = {
-  info: { bg: '#10263b', border: '#1f4a73', fg: '#a9d1f7', icon: Info },
-  warning: { bg: '#33290d', border: '#6b5516', fg: '#f0d88a', icon: AlertTriangle },
-  success: { bg: '#0b2a20', border: '#09543f', fg: '#91e9ca', icon: CircleCheck },
+  info: { palette: 'blue', icon: Info },
+  warning: { palette: 'yellow', icon: AlertTriangle },
+  success: { palette: 'agentic', icon: CircleCheck },
 } as const;
 const Notice = ({ tone = 'info', children }: { tone?: keyof typeof noticeTones; children: React.ReactNode }) => {
-  const { bg, fg, icon: Icon } = noticeTones[tone];
-  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2" px="2.5" py="1.5" borderRadius="md" fontSize="xs" lineHeight="1.4" fontFamily="body" style={{ background: bg, color: fg }}>
+  const { palette, icon: Icon } = noticeTones[tone];
+  return <Flex role={tone === 'warning' ? 'alert' : 'note'} align="flex-start" gap="2" px="2.5" py="1.5" borderRadius="md" fontSize="xs" lineHeight="1.4" fontFamily="body" colorPalette={palette} bg="colorPalette.subtle" color="colorPalette.fg">
     <Box flex="none" mt="1px"><Icon size={13}/></Box><Box minW="0" overflowWrap="anywhere">{children}</Box>
   </Flex>;
 };
@@ -90,19 +90,18 @@ const Stat = ({ label, value, dim = false }: { label: string; value: number; dim
 
 /** The app's mark. Still when the model is ready; it turns and breathes while the model works. */
 const Mark = ({ size = 16, busy = false }: { size?: number; busy?: boolean }) => (
-  <Box as="span" display="inline-flex" flex="none" color="agentic.300" aria-hidden="true" style={{ width: size, height: size }}>
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" style={busy ? { animation: 'agentic-turn 2.4s linear infinite' } : undefined}>
-      <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" style={busy ? { animation: 'agentic-breathe 1.2s ease-in-out infinite', transformOrigin: '12px 12px' } : undefined}/>
-      <path d="M12 8 16 12 12 16 8 12Z" fill="currentColor" style={busy ? { animation: 'agentic-beat 1.2s ease-in-out infinite', transformOrigin: '12px 12px' } : undefined}/>
-    </svg>
+  <Box as="span" display="inline-flex" flex="none" color="agentic.fg" aria-hidden="true" w={`${size}px`} h={`${size}px`}>
+    <chakra.svg viewBox="0 0 24 24" width={size} height={size} fill="none" animation={busy ? 'agenticTurn 2.4s linear infinite' : undefined} _motionReduce={{ animation: 'none' }}>
+      <chakra.path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" animation={busy ? 'agenticBreathe 1.2s ease-in-out infinite' : undefined} transformOrigin="12px 12px" _motionReduce={{ animation: 'none' }}/>
+      <chakra.path d="M12 8 16 12 12 16 8 12Z" fill="currentColor" animation={busy ? 'agenticBeat 1.2s ease-in-out infinite' : undefined} transformOrigin="12px 12px" _motionReduce={{ animation: 'none' }}/>
+    </chakra.svg>
   </Box>
 );
-const markKeyframes = `
-@keyframes agentic-turn { to { transform: rotate(360deg); } }
-@keyframes agentic-breathe { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
-@keyframes agentic-beat { 0%, 100% { transform: scale(.55); } 50% { transform: scale(1.15); } }
-@media (prefers-reduced-motion: reduce) { svg[style*="agentic-turn"], svg[style*="agentic-turn"] * { animation: none !important; } }
-`;
+
+/** The webview of the integrated browser, styled with Chakra props like any other element. */
+const WebView = chakra('webview');
+/** A colour of the Chakra theme, read at runtime, for libraries that need a plain colour (xterm). */
+const tokenColor = (token: string) => getComputedStyle(document.documentElement).getPropertyValue(`--chakra-colors-${token.replace(/\./g, '-')}`).trim();
 
 /** On macOS the app draws its own title bar (the main process hides the system one). */
 const ownTitleBar = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) && typeof window !== 'undefined' && 'agentic' in window;
@@ -137,9 +136,9 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
 }
 type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
 const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
-  <Splitter.ResizeTrigger id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" minW="6px" m="0" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
+  <Splitter.ResizeTrigger data-group id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" minW="6px" m="0" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
     <Splitter.ResizeTriggerSeparator bg="transparent"/>
-    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="transparent" borderWidth="0" boxShadow="none" css={{ '[data-part=resize-trigger]:hover &': { background: 'var(--chakra-colors-border)' } }}/>
+    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="transparent" borderWidth="0" boxShadow="none" _groupHover={{ bg: 'border' }}/>
   </Splitter.ResizeTrigger>
 );
 
@@ -174,7 +173,7 @@ function ProjectTreeNodeActions({ node, isDirectory, onCreate, onDelete, onRenam
       <Menu.Item value="create-file" onClick={() => onCreate(childPath('nou-fitxer.txt'), false)}><IconLabel icon={FilePlus}>Crea un fitxer aquí</IconLabel></Menu.Item>
       {isDirectory && <Menu.Item value="create-directory" onClick={() => onCreate(childPath('nova-carpeta'), true)}><IconLabel icon={FolderPlus}>Crea un directori aquí</IconLabel></Menu.Item>}
       <Menu.Item value="rename" onClick={() => onRename(node.value)}><IconLabel icon={Pencil}>Canvia el nom</IconLabel></Menu.Item>
-      <Menu.Item value="delete" color="red.300" onClick={() => onDelete(node.value, isDirectory)}><IconLabel icon={Trash}>{isDirectory ? 'Elimina la carpeta buida' : 'Elimina el fitxer'}</IconLabel></Menu.Item>
+      <Menu.Item value="delete" color="fg.error" onClick={() => onDelete(node.value, isDirectory)}><IconLabel icon={Trash}>{isDirectory ? 'Elimina la carpeta buida' : 'Elimina el fitxer'}</IconLabel></Menu.Item>
     </Menu.Content></Menu.Positioner></Portal>
   </Menu.Root>;
 }
@@ -1059,7 +1058,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainerRef.current) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: '#212121', foreground: '#e6e6e6', cursor: '#eeeeee', selectionBackground: '#424242' } });
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor('bg'), foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainerRef.current);
@@ -1101,7 +1100,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, gitOpen, learningOpen, evaluationOpen, consoleOpen]);
+  }, [terminalOpen, gitOpen, learningOpen, consoleOpen]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1154,11 +1153,11 @@ export function App(): React.JSX.Element {
           <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
         </HStack>
       </Flex>
-      <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" css={{ scrollbarGutter: "stable" }}>
+      <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" scrollbarGutter="stable">
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
           const experienceKey = `${activeSessionId}:${index}`;
-          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'red.200' : 'fg'}>
+          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode="dark" style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
@@ -1168,10 +1167,10 @@ export function App(): React.JSX.Element {
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
-        {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
-        <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.400' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
+        {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
+        <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="surface.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
-          {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar al model.</Text>}
+          {chatDropActive && <Text px="2" pb="2" color="agentic.fg" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar al model.</Text>}
           <Flex align="flex-end" gap="2">
             <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
@@ -1201,12 +1200,12 @@ export function App(): React.JSX.Element {
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" size="sm" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
           <IconButton icon={Bug} label={consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola'} size="sm" variant={consoleOpen ? 'subtle' : 'ghost'} colorPalette={consoleOpen ? 'agentic' : 'gray'} onClick={() => setConsoleOpen((open) => !open)}/>
-          {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.500" color="white" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
+          {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
         </Box>
       </Flex>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
-        : <webview ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" style={{ display: 'flex', flex: 1, width: '100%', height: '100%', minHeight: 0, border: 0, background: '#212121' }}/>}
+        : <WebView ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" display="flex" flex="1" w="full" h="full" minH="0" borderWidth="0" bg="bg"/>}
     </Flex>
   );
 
@@ -1246,7 +1245,7 @@ export function App(): React.JSX.Element {
           options={{ ariaLabel: editingPath ? `Editor de ${editingPath}` : 'Editor de codi', automaticLayout: true, fontSize: 11, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, tabSize: 2, wordWrap: 'on' }}
         />
       </Box>
-      {editorStatus && <Text color="yellow.200" fontSize="xs" mt="2">No s’ha pogut desar: {editorStatus}</Text>}
+      {editorStatus && <Text color="fg.warning" fontSize="xs" mt="2">No s’ha pogut desar: {editorStatus}</Text>}
     </Flex>
   );
 
@@ -1263,16 +1262,16 @@ export function App(): React.JSX.Element {
               <Grid h="full" minH="0" minW="0" templateColumns="minmax(105px, 0.8fr) minmax(190px, 1.5fr)">
             <Flex minW="0" minH="0" direction="column" borderRightWidth="1px" borderColor="border" overflowY="auto">
               <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">HEAD (Branca actual)</Text>
-              <HStack px="3" py="2" fontSize="sm" color="agentic.200"><GitBranch size={14}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{gitHistory.branch || 'Detached HEAD'}</Text></HStack>
+              <HStack px="3" py="2" fontSize="sm" color="agentic.fg"><GitBranch size={14}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{gitHistory.branch || 'Detached HEAD'}</Text></HStack>
               <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">Local</Text>
-              {gitHistory.branches.filter((branch) => !branch.remote).map((branch) => <HStack key={branch.name} px="3" py="1.5" fontSize="sm" color={branch.current ? 'agentic.200' : 'fg'} title={branch.name}><GitBranch size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{branch.name}</Text></HStack>)}
+              {gitHistory.branches.filter((branch) => !branch.remote).map((branch) => <HStack key={branch.name} px="3" py="1.5" fontSize="sm" color={branch.current ? 'agentic.fg' : 'fg'} title={branch.name}><GitBranch size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{branch.name}</Text></HStack>)}
               {gitHistory.branches.some((branch) => branch.remote) && <>
                 <Text px="3" pt="3" pb="2" fontSize="xs" color="fg.muted">Remot</Text>
                 {gitHistory.branches.filter((branch) => branch.remote).map((branch) => <HStack key={branch.name} px="3" py="1.5" fontSize="xs" color="fg.muted" title={branch.name}><GitBranch size={12}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{branch.name}</Text></HStack>)}
               </>}
               <Box mt="auto" p="3" borderTopWidth="1px" borderColor="border">
                 <Text fontSize="xs" color="fg.muted">Canvis locals</Text>
-                <Text fontSize="sm" color="agentic.200">{gitSnapshot?.available ? (gitSnapshot.status?.split(/\r?\n/).filter((line) => line && !line.startsWith('##')).length || 'Cap') : '—'}</Text>
+                <Text fontSize="sm" color="agentic.fg">{gitSnapshot?.available ? (gitSnapshot.status?.split(/\r?\n/).filter((line) => line && !line.startsWith('##')).length || 'Cap') : '—'}</Text>
               </Box>
             </Flex>
             <Flex minW="0" minH="0" direction="column" borderRightWidth="1px" borderColor="border">
@@ -1280,8 +1279,8 @@ export function App(): React.JSX.Element {
               <Box flex="1" minH="0" overflowY="auto">
                 {gitHistory.commits.filter((commit) => `${commit.subject} ${commit.shortHash} ${commit.author} ${commit.decorations}`.toLowerCase().includes(gitSearch.toLowerCase())).map((commit, index) => <Button key={commit.hash} w="full" h="auto" minH="54px" px="2" py="1.5" justifyContent="flex-start" textAlign="left" whiteSpace="normal" rounded="none" variant={gitSelectedCommit?.hash === commit.hash ? 'subtle' : 'ghost'} colorPalette={gitSelectedCommit?.hash === commit.hash ? 'agentic' : 'gray'} onClick={() => void loadGitCommitDetails(commit)}>
                   <HStack align="stretch" gap="2" w="full" minW="0">
-                    <Flex position="relative" w="16px" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.300' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
-                    <Stack minW="0" gap="0"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.subject}</Text><Text fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.author} · {Number.isNaN(Date.parse(commit.date)) ? commit.date : new Date(commit.date).toLocaleString()}</Text>{commit.decorations && <Text fontSize="xs" color="agentic.200" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.decorations}</Text>}</Stack>
+                    <Flex position="relative" w="16px" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.solid' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
+                    <Stack minW="0" gap="0"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.subject}</Text><Text fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.author} · {Number.isNaN(Date.parse(commit.date)) ? commit.date : new Date(commit.date).toLocaleString()}</Text>{commit.decorations && <Text fontSize="xs" color="agentic.fg" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.decorations}</Text>}</Stack>
                   </HStack>
                 </Button>)}
                 {gitHistory.commits.length === 0 && <Text p="3" fontSize="sm" color="fg.muted">Aquest repositori encara no té commits.</Text>}
@@ -1300,7 +1299,7 @@ export function App(): React.JSX.Element {
                   <Box p="3" borderBottomWidth="1px" borderColor="border"><Text fontWeight="semibold" fontSize="sm" overflowWrap="anywhere">{gitCommitDetails.subject}</Text><Text mt="2" fontSize="xs" color="fg.muted">{gitCommitDetails.author} · {Number.isNaN(Date.parse(gitCommitDetails.date)) ? gitCommitDetails.date : new Date(gitCommitDetails.date).toLocaleString()}</Text><Text mt="1" fontSize="xs" color="fg.muted" fontFamily="mono">{gitCommitDetails.shortHash}</Text>{gitCommitDetails.decorations && <Badge mt="2" colorPalette="agentic" variant="subtle">{gitCommitDetails.decorations}</Badge>}</Box>
                   <Text px="3" py="2" fontSize="xs" color="fg.muted">{gitCommitDetails.files.length} fitxers canviats</Text>
                   <Box flex="1" minH="0" overflowY="auto">{gitCommitDetails.files.map((file) => <HStack key={`${file.status}-${file.path}`} px="3" py="1.5" gap="2" title={file.path}><Badge size="sm" colorPalette={file.status === 'A' ? 'green' : file.status === 'D' ? 'red' : 'yellow'}>{file.status}</Badge><Text fontSize="xs" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{file.path}</Text></HStack>)}{!gitCommitDetails.files.length && <Text px="3" fontSize="sm" color="fg.muted">No hi ha fitxers modificats en aquest commit.</Text>}</Box>
-                  {gitCommitDetails.truncated && <Text p="3" fontSize="xs" color="yellow.200">La llista de fitxers s’ha limitat.</Text>}
+                  {gitCommitDetails.truncated && <Text p="3" fontSize="xs" color="fg.warning">La llista de fitxers s’ha limitat.</Text>}
                 </> : <Text p="3" fontSize="sm" color="fg.muted">Selecciona un commit per veure’n els detalls.</Text>}
             </Flex>
             </Splitter.Panel>
@@ -1309,7 +1308,7 @@ export function App(): React.JSX.Element {
   );
 
   const learningPane = (
-    <Flex h="full" minH="0" direction="column" p="3" bg="bg" gap="3" overflowY="auto" css={{ '& > *': { flexShrink: 0 } }}>
+    <Box h="full" minH="0" p="3" bg="bg" overflowY="auto"><Stack gap="3">
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : datasetPreview ? <>
           <Box>
@@ -1347,13 +1346,13 @@ export function App(): React.JSX.Element {
                 : <Button size="sm" flex="none" colorPalette="agentic" disabled={!datasetPreview.trainingReady || !trainingName.trim()} onClick={() => void startTraining()}><Brain size={15}/>Entrena</Button>}
             </HStack>
             <Text mt="1.5" fontSize="xs" color="fg.muted">Entrena un adaptador sobre {modelOptions.find((item) => item.id === selectedModel)?.label || 'el model actual'} amb els casos verificats, el compara amb el model base (casos de prova i benchmark) i només si millora en desa una versió nova al selector de models. Les versions anteriors es queden i s’hi pot tornar triant-les.</Text>
-            {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.400" style={{ width: `${Math.round(trainingProgress * 100)}%` }}/></Box>}
-            {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'red.300' : event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}</Box>}
+            {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
+            {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
           </Box>
         </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
-    </Flex>
+    </Stack></Box>
   );
 
   useEffect(() => {
@@ -1385,7 +1384,7 @@ export function App(): React.JSX.Element {
     setStatus('Errors de la consola afegits al context del xat');
     promptRef.current?.focus();
   }
-  const consoleTone = { error: '#ff9b9b', warn: '#f0d88a', info: 'var(--chakra-colors-fg-muted)' } as const;
+  const consoleTone = { error: 'fg.error', warn: 'fg.warning', info: 'fg.muted' } as const;
   const consolePane = (
     <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
       <HStack flex="none" gap="2" px="3" py="1.5" borderBottomWidth="1px" borderColor="border">
@@ -1396,7 +1395,7 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" overflowY="auto" px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
         {consoleEntries.length === 0
           ? <Notice tone="info">{browserUrl === 'about:blank' ? 'Obre una pàgina al navegador i aquí hi sortirà el que escrigui a la consola.' : 'La pàgina no ha escrit res a la consola.'}</Notice>
-          : consoleEntries.map((entry, index) => <Flex key={index} gap="3" py="0.5" borderBottomWidth="1px" borderColor="border" style={{ color: consoleTone[entry.level] }}>
+          : consoleEntries.map((entry, index) => <Flex key={index} gap="3" py="0.5" borderBottomWidth="1px" borderColor="border" color={consoleTone[entry.level]}>
             <Text flex="1" minW="0" whiteSpace="pre-wrap" overflowWrap="anywhere">{entry.text}</Text>
             {entry.source && <Text flex="none" color="fg.muted">{entry.source}</Text>}
           </Flex>)}
@@ -1542,7 +1541,6 @@ export function App(): React.JSX.Element {
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
     learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
-    evaluationOpen ? { id: 'dock-evaluation', node: dockPane('Avaluació', 'Tanca l’avaluació', () => setEvaluationOpen(false), evaluationPane, evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined) } : null,
     consoleOpen ? { id: 'dock-console', node: dockPane('Consola', 'Tanca la consola', () => setConsoleOpen(false), consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
@@ -1550,8 +1548,8 @@ export function App(): React.JSX.Element {
   const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
   const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
-    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" style={{ height: `${terminalHeight}px`, maxHeight: 'calc(100vh - 240px)' }}>
-      <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} css={{ '&:hover > div': { background: 'var(--chakra-colors-border)' } }}><Box w="32px" h="2px" rounded="full" bg="transparent"/></Center>
+    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" h={`${terminalHeight}px`} maxH="calc(100vh - 240px)">
+      <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} data-group><Box w="32px" h="2px" rounded="full" bg="transparent" _groupHover={{ bg: 'border' }}/></Center>
       {dockItems.length === 1 ? dockItems[0].node : (
         // One splitter per arrangement of open panes; each arrangement remembers its own widths.
         <Splitter.Root key={dockKey} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockPanels} size={paneSizes[dockKey] ?? dockEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [dockKey]: details.size }))}>
@@ -1575,6 +1573,8 @@ export function App(): React.JSX.Element {
   const sideItems = [
     editorOpen ? { id: 'side-editor', node: sidePane('Editor', 'Tanca l’editor', closeEditor, editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
     browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', 'Tanca el navegador web', () => setBrowserOpen(false), browserPane) } : null,
+    // The evaluation opens beside the chat, like the browser, with the whole height.
+    evaluationOpen ? { id: 'side-evaluation', node: sidePane('Avaluació', 'Tanca l’avaluació', () => setEvaluationOpen(false), evaluationPane, evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined) } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
   const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
@@ -1611,9 +1611,8 @@ export function App(): React.JSX.Element {
 
   return (
     <>
-    <style>{markKeyframes}</style>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
-    {ownTitleBar && <Flex flex="none" h="36px" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+    {ownTitleBar && <Flex flex="none" h="36px" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
       <Text fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">Agentic Coder</Text>
       {project && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">— {project.path.split(/[\\/]/).filter(Boolean).at(-1)}</Text>}
@@ -1624,12 +1623,12 @@ export function App(): React.JSX.Element {
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
           <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
+          <IconButton icon={ChartBar} label={evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models'} w="38px" h="38px" variant={evaluationOpen ? 'subtle' : 'ghost'} colorPalette={evaluationOpen ? 'agentic' : 'gray'} onClick={() => void openEvaluationPanel()}/>
           {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
           <Box flex="1" minH="2"/>
           <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="38px" h="38px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
           <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
-          <IconButton icon={ChartBar} label={evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models'} w="38px" h="38px" variant={evaluationOpen ? 'subtle' : 'ghost'} colorPalette={evaluationOpen ? 'agentic' : 'gray'} onClick={() => void openEvaluationPanel()}/>
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
@@ -1682,12 +1681,12 @@ export function App(): React.JSX.Element {
                   </Flex>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" p="0" overflowY="auto"><Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
-                      <Menu.ContextTrigger asChild><Box position="relative" css={{ '&:hover .chat-delete, &:focus-within .chat-delete': { opacity: 1 } }}>
+                      <Menu.ContextTrigger asChild><Box position="relative" data-group>
                         <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
-                        <IconButton className="chat-delete" icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" opacity="0" color="fg.muted" _hover={{ color: 'red.300' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); void deleteChatSession(session.id); }}/>
+                        <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" opacity="0" _groupHover={{ opacity: 1 }} _groupFocusWithin={{ opacity: 1 }} color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); void deleteChatSession(session.id); }}/>
                       </Box></Menu.ContextTrigger>
                       <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="delete-chat" color="red.300" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
+                        <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>)}
                   </Stack></Accordion.ItemBody></Accordion.ItemContent>
@@ -1696,13 +1695,13 @@ export function App(): React.JSX.Element {
             </Splitter.Panel>
             <Splitter.ResizeTrigger id="recent-conversations:project-files" aria-label="Arrossega per ajustar l’alçada de les seccions" title="Arrossega per ajustar l’alçada de les seccions" h="6px" minH="6px" m="0" flex="none" cursor="row-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
               <Splitter.ResizeTriggerSeparator bg="transparent"/>
-              <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="transparent" borderWidth="0" boxShadow="none" css={{ '[data-part=resize-trigger]:hover &': { background: 'var(--chakra-colors-border)' } }}/>
+              <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="transparent" borderWidth="0" boxShadow="none" _groupHover={{ bg: 'border' }}/>
             </Splitter.ResizeTrigger>
             <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden" bg="bg" borderRadius="10px" px="2">
               <Accordion.Root collapsible defaultValue={['files']} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
                 <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
-                  <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative" style={{ width: '100%' }}>
-                    <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0" style={{ width: '100%', flex: '1 1 auto' }}><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
+                  <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative">
+                    <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0"><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
                   </HStack>
                   <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" px="0" py="2" overflowY="auto">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
@@ -1731,7 +1730,7 @@ export function App(): React.JSX.Element {
                         <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                         <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
                         <Menu.Separator borderColor="border"/>
-                        <Menu.Item value="clear" color="red.300" disabled={loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
+                        <Menu.Item value="clear" color="fg.error" disabled={loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>}
                     </Box>
@@ -1861,7 +1860,7 @@ export function App(): React.JSX.Element {
         </Grid>
         </FloatingPanel.Body>
         <Flex flex="none" minH="54px" align="center" justify="space-between" gap="3" px="4" borderTopWidth="1px" borderColor="border">
-          <Text fontSize="sm" color={fileHistoryStatus.startsWith('Restaurada') ? 'agentic.200' : 'fg.muted'}>{fileHistoryStatus || 'La restauració desa primer la versió actual a l’historial.'}</Text>
+          <Text fontSize="sm" color={fileHistoryStatus.startsWith('Restaurada') ? 'agentic.fg' : 'fg.muted'}>{fileHistoryStatus || 'La restauració desa primer la versió actual a l’historial.'}</Text>
           <HStack><Button size="sm" variant="outline" onClick={() => setFileHistoryPath(null)}>Tanca</Button><Button size="sm" colorPalette="agentic" disabled={!fileHistorySelectedId || fileHistoryBusy || fileHistoryLoading} onClick={() => void restoreFileHistoryVersion()}>{fileHistoryBusy ? <Spinner size="sm"/> : <History size={15}/>}Restaura la versió</Button></HStack>
         </Flex>
         <FloatingPanel.ResizeTriggers/>

@@ -1,4 +1,4 @@
-import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react"
+import { createSystem, defaultConfig, defineConfig, type SystemStyleObject } from "@chakra-ui/react"
 
 // Tema de l'aplicació: els components Chakra consumeixen aquests colors semàntics.
 export const system = createSystem(defaultConfig, defineConfig({
@@ -14,8 +14,17 @@ export const system = createSystem(defaultConfig, defineConfig({
     // gris fosc del mode clar per damunt del fons fosc.
     '.chakra-button[data-variant="outline"], .chakra-button[data-variant="ghost"]': { color: "fg" },
     "webview": { display: "flex" },
+    // The app's own title bar on macOS: the part marked data-drag-region moves the window.
+    // (an Electron property, not in Chakra's style types).
+    "[data-drag-region]": { WebkitAppRegion: "drag" } as unknown as SystemStyleObject,
   },
   theme: {
+    // The mark turns and breathes while the model works (src/app/App.tsx, Mark).
+    keyframes: {
+      agenticTurn: { to: { transform: "rotate(360deg)" } },
+      agenticBreathe: { "0%, 100%": { opacity: 0.45 }, "50%": { opacity: 1 } },
+      agenticBeat: { "0%, 100%": { transform: "scale(.55)" }, "50%": { transform: "scale(1.15)" } },
+    },
     tokens: {
       colors: {
         agentic: {
