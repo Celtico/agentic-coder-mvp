@@ -649,7 +649,8 @@ async function saveWindowCapture() {
   if (!result.canceled && result.filePath) await fs.writeFile(result.filePath, image.toPNG());
 }
 
-// For the README: AGENT_SCREENSHOT=<file.png> opens the app, sets its size (AGENT_SCREENSHOT_SIZE=1600x1000),
+// For the README: AGENT_SCREENSHOT=<file.png> opens the app (on AGENT_SCREENSHOT_PROJECT if given, without saving
+// it as the selected project), sets its size (AGENT_SCREENSHOT_SIZE=1600x1000),
 // clicks what AGENT_SCREENSHOT_CLICKS lists, in order («label:<aria-label>» or «text:<visible text>»,
 // separated by «|»), waits, saves the window and quits.
 async function captureForDocs() {
@@ -662,7 +663,7 @@ async function captureForDocs() {
     const value = JSON.stringify(rest.join(':'));
     const found = await win.webContents.executeJavaScript(kind === 'label'
       ? `(() => { const el = document.querySelector('[aria-label=' + JSON.stringify(${value}) + ']'); if (el) el.click(); return Boolean(el); })()`
-      : `(() => { const el = [...document.querySelectorAll('button, [role=button], [role=treeitem], span, div')].reverse().find((node) => node.textContent.trim() === ${value} && node.offsetParent); if (el) el.click(); return Boolean(el); })()`);
+      : `(() => { const el = [...document.querySelectorAll('button, [role=button], [role=treeitem], p, span, div')].reverse().find((node) => node.textContent.trim() === ${value} && node.offsetParent); if (el) el.click(); return Boolean(el); })()`);
     if (!found) console.error(`Captura: no s’ha trobat «${step}».`);
     await wait(900);
   }
@@ -680,6 +681,19 @@ function addCaptureToMenu() {
   view.submenu.append(new MenuItem({ type: 'separator' }));
   view.submenu.append(new MenuItem({ label: 'Desa una captura de la finestra…', accelerator: 'CmdOrCtrl+Shift+S', click: () => void saveWindowCapture() }));
   Menu.setApplicationMenu(menu);
+}
+
+// The capture for the README runs as a second copy of the app: it gets a data folder of its own (a temporary
+// copy of the evaluations, which the Avaluació column shows), so it never shares the open app's folder.
+// Sharing it closed the open app on 13-11-2026 while an evaluation was running.
+if (process.env.AGENT_SCREENSHOT) {
+  const own = fsSync.mkdtempSync(path.join(app.getPath('temp'), 'agentic-capture-'));
+  const evaluations = path.join(app.getPath('userData'), 'benchmarks');
+  if (fsSync.existsSync(evaluations)) {
+    fsSync.mkdirSync(path.join(own, 'benchmarks'));
+    for (const name of fsSync.readdirSync(evaluations).filter((item) => item.endsWith('.json'))) fsSync.copyFileSync(path.join(evaluations, name), path.join(own, 'benchmarks', name));
+  }
+  app.setPath('userData', own);
 }
 
 app.whenReady().then(async () => {
@@ -700,6 +714,7 @@ app.whenReady().then(async () => {
     await fs.mkdir(selectedProject, { recursive: true });
     await saveSettings();
   }
+  if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
   addCaptureToMenu();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
