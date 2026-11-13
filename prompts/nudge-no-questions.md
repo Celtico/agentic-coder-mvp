@@ -1,0 +1,1 @@
+No demanis confirmació ni aclariments per a aquesta tasca. L’usuari ja l’ha demanat. Tria els valors per defecte més raonables, continua amb les eines disponibles i completa la feina. Pregunta només si hi ha un impediment real que no puguis resoldre inspeccionant el projecte.

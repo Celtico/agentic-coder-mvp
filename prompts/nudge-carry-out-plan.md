@@ -1,0 +1,1 @@
+Això és només el pla i encara no has fet res. Executa’l ara: respon únicament amb la primera crida d’eina en JSON, sense text al voltant. Exemples: {"type":"tool_call","name":"install_package","arguments":{"packageName":"<paquet>","dev":false}} o {"type":"tool_call","name":"read_file","arguments":{"path":"src/main.jsx"}}.

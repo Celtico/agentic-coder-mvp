@@ -1,0 +1,1 @@
+Aquesta comprovació ja ha fallat i no s’ha tornat a executar. No la repeteixis encara. Inspecciona l’error i els fitxers rellevants amb read_file, corregeix el codi amb write_file i només llavors torna a executar la comprovació.

@@ -1,0 +1,1 @@
+No hi ha cercador. Per consultar Internet fes servir read_web_page amb una adreça completa i real (la pàgina de documentació que toqui); no t’inventis adreces. Si no en saps cap de segura, continua amb el que ja saps i amb les instruccions del projecte.

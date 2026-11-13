@@ -112,6 +112,29 @@ En començar una tasca, l’app inicia els servidors declarats (transport stdio)
 
 A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor: quan el programador acaba, el mateix model rellegeix els fitxers escrits amb unes altres instruccions i el pot fer tornar una vegada.
 
+## Instruccions del model (carpeta `prompts/`)
+
+Tot el text que l’agent envia al model és fora del codi, a [`prompts/`](prompts/): un fitxer Markdown per bloc. Hi ha les instruccions de sistema, el context de cada petició, les descripcions de les eines, els recordatoris que afegeix durant una tasca, l’enquadrament dels resultats de les eines i les preguntes del revisor. El codi només hi omple les parts variables, escrites `{{així}}` (per exemple `{{folder}}`, `{{files}}`, `{{projectInstructions}}`).
+
+- Es poden editar, retallar o buidar. Cada fitxer es llegeix cada vegada que es fa servir, així que un canvi s’aplica a la petició següent sense reiniciar l’app.
+- Un fitxer buit o que no hi és vol dir «cap text»: l’agent continua funcionant sense aquell text, i el codi no el torna a posar. L’ordre dels passos (per exemple, demanar un pla abans del primer canvi) és lògica del codi i no depèn de cap text.
+- Les instruccions pròpies d’un projecte continuen a `AGENTS.md` i `SKILLS.md` de l’arrel de cada projecte; `prompts/` és el comportament general de l’agent.
+- Amb `AGENT_PROMPTS_DIR=/una/carpeta` l’app llegeix els textos d’una altra carpeta. L’app instal·lada porta una còpia de `prompts/` dins del paquet.
+- Els missatges que es mostren a la interfície no hi són: no els llegeix el model.
+
+Quan es van treure del codi (13-11-2026) es va comprovar que el model rebia exactament els mateixos textos que abans en onze escenaris simulats (instruccions, eines, recordatoris, resultats, revisor, agents delegats).
+
+| Bloc | Fitxers |
+| --- | --- |
+| Instruccions de sistema | `system`, `system-compact`, `system-delegation`, `system-delegated-agent`, `system-web-search`, `system-web-pages`, `system-tools-delegation`, `system-tools-no-delegation` |
+| Context que acompanya cada petició | `context-agents-md`, `context-compact-contents`, `context-folder-empty`, `context-folder-no-entry`, `context-folder-project`, `context-mcp`, `context-skills-active`, `context-skills-list`, `context-web-pages` |
+| Descripcions de les eines | `tools` |
+| Recordatoris durant la tasca | `assistant-plan-brief`, `assistant-plan-published`, `nudge-after-list-files`, `nudge-app-entry-missing`, `nudge-app-no-files`, `nudge-carry-out-plan`, `nudge-check-failed-repeat`, `nudge-context-limit`, `nudge-execute-plan`, `nudge-invalid-call`, `nudge-no-change`, `nudge-no-commit`, `nudge-no-questions`, `nudge-no-web-search`, `nudge-not-validated`, `nudge-plan-visible`, `nudge-repeated-call`, `nudge-write-plan` |
+| Resultats d’eines i comprovacions | `check-retry-incomplete`, `check-retry-passed`, `check-retry-result`, `check-retry-still-failing`, `tool-result`, `tool-result-check-failed`, `tool-result-continue`, `tool-result-page-problem` |
+| Pistes quan la pàgina no funciona | `page-hint-changed-file`, `page-hint-console-error`, `page-hint-file`, `page-hint-missing-export`, `page-hint-missing-import`, `page-hint-no-error`, `page-hint-not-defined`, `page-hint-provider` |
+| Revisor | `review-fix-recheck-page`, `review-fixes`, `review-page-not-opened`, `review-page-seen`, `review-request`, `review-system` |
+| Agents delegats | `delegated-task` |
+
 ## Model i llicència
 El codi d’aquest repositori es publica sota la llicència MIT (vegeu [`LICENSE`](LICENSE)). Els models tenen la seva pròpia llicència:
 

@@ -1,0 +1,1 @@
+«{{name}}» no existeix a la versió instal·lada d’aquest paquet. Mira primer quina versió hi ha a package.json: si les instruccions del projecte en demanen una altra, corregeix la versió a package.json i torna a instal·lar (install_dependencies). Si la versió és la correcta, treu aquest import i no el facis servir; no el tornis a escriure amb un altre nom inventat.

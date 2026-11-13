@@ -1,0 +1,1 @@
+L’usuari no ha demanat cap commit de Git i no se’n farà cap. No creïs .gitignore ni facis res més amb Git. Si la feina demanada ja està feta, dona ara la resposta final en prosa: què has creat, si el projecte està en marxa i a quina adreça.

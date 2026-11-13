@@ -58,7 +58,8 @@
       "src/core/assistant/mlx-worker.py",
       "scripts/evaluate-agent.cjs",
       "scripts/agent-benchmark/*.cjs",
-      "!scripts/agent-benchmark/*.test.cjs"
+      "!scripts/agent-benchmark/*.test.cjs",
+      "prompts/**"
     ],
     "mac": {
       "target": [

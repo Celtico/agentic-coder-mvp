@@ -1,0 +1,1 @@
+La comprovació ha fallat. Per a una tasca que demana canvis de codi, inspecciona la sortida i el fitxer implicat, corregeix el problema amb write_file i repeteix la comprovació. No instal·lis paquets ni canviïs d’àmbit per evitar aquest error. No acabis fins que la comprovació passi o hi hagi un impediment concret.

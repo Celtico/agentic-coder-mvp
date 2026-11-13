@@ -1,0 +1,1 @@
+Estat de la carpeta: hi ha {{files}} fitxers però cap punt d’entrada (no hi ha index.html ni src/main ni src/index). El projecte està a mig crear: escriu els fitxers que falten amb write_file abans d’arrencar-lo o de fer cap comprovació.

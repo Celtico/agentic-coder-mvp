@@ -1,0 +1,1 @@
+El manifest o la configuració no són una aplicació acabada. Encara falta un punt d’entrada real de la interfície. Crea la pàgina principal de l’app amb write_file i continua amb les comprovacions i l’obertura al navegador.
