@@ -28,6 +28,20 @@ except Exception as error:
 # tokens and memory on every turn, so it is off unless AGENT_MLX_THINKING=1.
 THINKING = os.environ.get("AGENT_MLX_THINKING") == "1"
 
+# With reasoning off, a model whose chat template has a reasoning section must not open it: Gemma 4,
+# greedy and after a few turns, starts the section again and again («<|channel>thought…») and never
+# answers. Its first token is banned, so the model answers directly.
+LOGITS_PROCESSORS = []
+_think_tokens = getattr(tokenizer, "think_start_tokens", None)
+if not THINKING and _think_tokens:
+    _banned = _think_tokens[0]
+
+    def _no_reasoning(tokens, logits):
+        logits[:, _banned] = -float("inf")
+        return logits
+
+    LOGITS_PROCESSORS.append(_no_reasoning)
+
 
 def strip_thinking(text):
     return mlx_text.strip_thinking(text, getattr(tokenizer, "think_start", None), getattr(tokenizer, "think_end", None))
@@ -55,6 +69,7 @@ for line in sys.stdin:
             prompt=prompt,
             max_tokens=int(request.get("max_tokens", 700)),
             sampler=make_sampler(temp=float(request.get("temperature", 0.0))),
+            logits_processors=LOGITS_PROCESSORS or None,
         )
         emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip()})
     except Exception as error:
