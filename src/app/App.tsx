@@ -1404,7 +1404,17 @@ export function App(): React.JSX.Element {
         {evaluationRunning && <HStack gap="2"><Spinner size="xs"/><Text>Avaluant…</Text></HStack>}
         {evaluationLog.slice(-60).map((event, index) => <Text key={index} color={event.step === 'failed' || event.message.startsWith('FALLA') ? 'red.300' : event.message.startsWith('PASSA') || event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}
       </Box>}
-      {evaluationList?.chart && <Box bg="white" borderRadius="md" p="1"><img alt="Comparativa dels models avaluats" style={{ width: '100%', display: 'block' }} src={`data:image/svg+xml;utf8,${encodeURIComponent(evaluationList.chart)}`}/></Box>}
+      {evaluationList && evaluationList.models.length > 0 && <Box>
+        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Comparativa</Text>
+        <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
+          <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
+          {([['Obertes', model.open, 'agentic.400'], ['Apps', model.apps, 'orange.400'], ['Dirigida', model.reference, 'gray.400']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
+            <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
+            <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} style={{ width: `${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%` }}/></Box>
+            <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
+          </HStack>)}
+        </Box>)}</Stack>
+      </Box>}
       {evaluationList && evaluationList.runs.length > 0 && <Box>
         <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Avaluacions</Text>
         <Stack gap="1">{evaluationList.runs.map((run) => <Button key={run.id} size="xs" justifyContent="space-between" variant={evaluationReport?.id === run.id ? 'subtle' : 'ghost'} colorPalette={evaluationReport?.id === run.id ? 'agentic' : 'gray'} onClick={() => void openEvaluationReport(run.id)}>
