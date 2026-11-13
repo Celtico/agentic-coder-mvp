@@ -134,8 +134,8 @@ A part d’això, amb el model gran sempre hi ha un segon perfil fix, el revisor
 Resultats amb el conjunt fix de tasques (`npm run evaluate:agent` o el panell Avaluació), al MacBook Pro M2 Pro de 16 GB, 13 de novembre de 2026:
 
 - **Qwen2.5-Coder 7B** (2 rondes, amb el codi del matí, abans dels arreglos del tarda): tasques obertes de codi 6/10, apps des de carpeta buida 0/6, tasca dirigida 2/2. A les apps de Chakra UI instal·la sempre la v2 i fa servir la seva API; el build no passa per manca de Vite o de l’script.
-- **Gemma 4 12B** (amb els arreglos): 12/12 a les tasques de codi en dues rondes, inclosa la correcció sense indicacions que el 7B no aconseguia mai; 0/4 apps des de carpeta buida fins ara (sense `package.json` vàlid, API de v2 o temps esgotat: intenta escriure tota l’app en una sola resposta i supera el límit de 2.400 tokens per resposta).
-- **MiMo V2.6 9B**: 6/6 a les tasques de codi de la primera ronda; falten les apps.
+- **Gemma 4 12B** (amb els arreglos): tasques obertes de codi 10/10 en dues rondes, inclosa la correcció sense indicacions que el 7B no aconseguia mai; tasca dirigida 2/2; apps des de carpeta buida 0 de 6 intents fins ara (sense `package.json` vàlid, API de v2 o temps esgotat: intenta escriure tota l’app en una sola resposta i supera el límit de 2.400 tokens per resposta).
+- **MiMo V2.6 9B** (primera ronda, abans de l’últim arreglo de l’agent): tasques obertes de codi 5/5, tasca dirigida 1/1; falten les apps.
 
 La comparativa completa, amb gràfic, es publicarà aquí quan acabi.
 
