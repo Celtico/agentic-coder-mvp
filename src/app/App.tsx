@@ -1435,10 +1435,10 @@ export function App(): React.JSX.Element {
       {evaluationLog.length > 0 && <Box maxH="120px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">
         {evaluationLog.slice(-60).map((event, index) => <Text key={index} color={event.step === 'failed' || event.message.startsWith('FALLA') ? 'red.300' : event.message.startsWith('PASSA') || event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}
       </Box>}
-      <Accordion.Root collapsible multiple defaultValue={['tasks']} size="sm" variant="plain">
+      <Accordion.Root collapsible size="sm" variant="enclosed">
         <Accordion.Item value="tasks">
-          <Accordion.ItemTrigger px="0"><Box flex="1">{sectionTitle(`Tasques · ${chosenCount} de ${evaluationTasks.length}`)}</Box><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-          <Accordion.ItemContent><Accordion.ItemBody px="0" pt="1">
+          <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="semibold" textAlign="left">Tasques · {chosenCount} de {evaluationTasks.length} marcades</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+          <Accordion.ItemContent><Accordion.ItemBody pt="1">
             <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
             <Accordion.Root collapsible multiple size="sm" variant="enclosed">{(['open', 'app', 'reference'] as const).map((kind) => {
               const group = evaluationTasks.filter((task) => task.kind === kind);
