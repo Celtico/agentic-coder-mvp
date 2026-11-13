@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
+  Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -19,6 +19,7 @@ import {
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
+import { closeTab, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -327,6 +328,10 @@ export function App(): React.JSX.Element {
   const [learningBusy, setLearningBusy] = useState(false);
   const [learningStatus, setLearningStatus] = useState('');
   const [editingPath, setEditingPath] = useState<string | null>(null);
+  // The files open in the editor, one tab each (src/app/editor-tabs.ts). What was typed in a tab that
+  // is not in front waits in tabBuffers until it is shown again, saved or closed.
+  const [editorTabs, setEditorTabs] = useState<string[]>([]);
+  const [tabBuffers, setTabBuffers] = useState<Record<string, { content: string; original: string }>>({});
   const [editorContent, setEditorContent] = useState('');
   const [editorOriginal, setEditorOriginal] = useState('');
   const [editorCursor, setEditorCursor] = useState({ line: 1, column: 1 });
@@ -593,6 +598,8 @@ export function App(): React.JSX.Element {
         const next = await window.agentic.renameProjectEntry(renameEntryPath, relativePath);
         setProject(next);
         if (editingPath === renameEntryPath || editingPath?.startsWith(`${renameEntryPath}/`)) setEditingPath(`${renamedPath}${editingPath.slice(renameEntryPath.length)}`);
+        setEditorTabs((tabs) => renameInTabs(tabs, renameEntryPath, renamedPath));
+        setTabBuffers((buffers) => Object.fromEntries(Object.entries(buffers).map(([tab, buffer]) => [renameInTabs([tab], renameEntryPath, renamedPath)[0], buffer])));
         setStatus(`Nom actualitzat: ${renameEntryPath} → ${renamedPath}`);
         setCreateEntryKind(null);
         return;
@@ -611,7 +618,15 @@ export function App(): React.JSX.Element {
     try {
       const next = await window.agentic.deleteProjectEntry(relativePath, directory);
       setProject(next);
-      if (!directory && editingPath === relativePath) { setEditingPath(null); setEditorOpen(false); }
+      // Its tab goes (a folder takes the tabs of the files inside); the one in front moves to another.
+      const remaining = removeFromTabs(editorTabs, relativePath);
+      if (remaining.length !== editorTabs.length) {
+        setEditorTabs(remaining);
+        if (editingPath && !remaining.includes(editingPath)) {
+          if (remaining.length) void openEditor(remaining[remaining.length - 1], { keepCurrent: false });
+          else { setEditingPath(null); setEditorOpen(false); }
+        }
+      }
       setStatus(directory ? `Carpeta buida eliminada: ${relativePath}` : `Fitxer eliminat i desat a les còpies recuperables: ${relativePath}`);
     } catch (error) { setStatus(`No s’ha pogut eliminar «${relativePath}»: ${errorText(error)}`); }
   }
@@ -912,12 +927,34 @@ export function App(): React.JSX.Element {
     } finally { setVerifiedExperienceBusy(false); }
   }
 
-  async function openEditor(relativePath: string) {
+  /**
+   * Opens a file in the editor, in its own tab (or brings its tab to the front). What was typed in the
+   * file that was in front stays in its tab, unless `keepCurrent` is false (its tab has just closed).
+   */
+  async function openEditor(relativePath: string, { keepCurrent = true } = {}) {
     try {
-      if (editingPath && editingPath !== relativePath && editorContent !== editorOriginal) setStatus(`Canvis de ${editingPath} descartats (no s’havien desat)`);
-      const content = await window.agentic.readFile(relativePath);
-      setEditingPath(relativePath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
+      if (editingPath === relativePath) { setEditorOpen(true); return; }
+      const kept = tabBuffers[relativePath];
+      const original = kept ? kept.original : await window.agentic.readFile(relativePath);
+      setTabBuffers((buffers) => {
+        const { [relativePath]: _shown, ...rest } = buffers;
+        return keepCurrent && editingPath && editorContent !== editorOriginal ? { ...rest, [editingPath]: { content: editorContent, original: editorOriginal } } : rest;
+      });
+      setEditorTabs((tabs) => openTab(tabs, relativePath));
+      setEditingPath(relativePath); setEditorOriginal(original); setEditorContent(kept ? kept.content : original); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
+  }
+
+  /** Closes one tab; unsaved changes in it are dropped (the status bar says so). */
+  function closeEditorTab(path: string) {
+    const unsaved = path === editingPath ? editorContent !== editorOriginal : Boolean(tabBuffers[path]);
+    if (unsaved) setStatus(`Canvis de ${path} descartats (no s’havien desat)`);
+    const { tabs, active } = closeTab(editorTabs, editingPath, path);
+    setTabBuffers(({ [path]: _closed, ...rest }) => rest);
+    setEditorTabs(tabs);
+    if (path !== editingPath) return;
+    if (active) void openEditor(active, { keepCurrent: false });
+    else { setEditingPath(null); setEditorOpen(false); }
   }
 
   /** The file's current content, or '' if it has been deleted (its history stays), without an error in the log. */
@@ -1026,15 +1063,19 @@ export function App(): React.JSX.Element {
     const saved = loadViewState(localStorage).projects[projectPath] || {};
     void (async () => {
       if (saved.browserUrl) { setBrowserAddress(saved.browserUrl); setBrowserUrl(saved.browserUrl); }
-      // A file deleted since is not opened, and is forgotten (no error: it is only checked).
-      if (saved.editorPath && !(await window.agentic.fileExists(saved.editorPath).catch(() => false))) {
-        updateViewState(localStorage, (state) => setProjectView(state, projectPath, { ...state.projects[projectPath], editorPath: undefined }));
-      } else if (saved.editorPath) {
+      // The editor's tabs come back; a file deleted since is left out, and so forgotten (no error: it
+      // is only checked). The one in front opens if the editor was open.
+      const { tabs: savedList, active } = savedTabs(saved);
+      const existing: string[] = [];
+      for (const tab of savedList) if (await window.agentic.fileExists(tab).catch(() => false)) existing.push(tab);
+      if (restoringViewRef.current !== projectPath) return;
+      setEditorTabs(existing);
+      if (active && existing.includes(active)) {
         try {
-          const content = await window.agentic.readFile(saved.editorPath);
+          const content = await window.agentic.readFile(active);
           if (restoringViewRef.current !== projectPath) return;
-          setEditingPath(saved.editorPath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
-        } catch { /* the file is gone: the editor stays closed */ }
+          setEditingPath(active); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
+        } catch { /* unreadable: the editor stays closed */ }
       }
       if (saved.historyPath && restoringViewRef.current === projectPath) {
         // A deleted file still has its history; it just has no current content.
@@ -1048,8 +1089,8 @@ export function App(): React.JSX.Element {
     const projectPath = project?.path;
     if (!projectPath || restoredView !== projectPath) return;
     const page = browserVisited || browserUrl;
-    updateViewState(localStorage, (state) => setProjectView(state, projectPath, { browserUrl: page, editorPath: editorOpen && editingPath ? editingPath : undefined, historyPath: fileHistoryPath || undefined }));
-  }, [project?.path, restoredView, browserVisited, browserUrl, editorOpen, editingPath, fileHistoryPath]);
+    updateViewState(localStorage, (state) => setProjectView(state, projectPath, { browserUrl: page, editorPath: editorOpen && editingPath ? editingPath : undefined, editorTabs, historyPath: fileHistoryPath || undefined }));
+  }, [project?.path, restoredView, browserVisited, browserUrl, editorOpen, editingPath, editorTabs, fileHistoryPath]);
 
   const editorStateRef = useRef({ path: null as string | null, content: '', original: '' });
   editorStateRef.current = { path: editingPath, content: editorContent, original: editorOriginal };
@@ -1088,20 +1129,16 @@ export function App(): React.JSX.Element {
     return () => { stopped = true; window.clearInterval(timer); };
   }, [editorOpen, editingPath]);
   // Nothing is written until the user says so: the small save button, or Cmd/Ctrl+S.
-  function closeEditor() {
-    const { path: filePath, content, original } = editorStateRef.current;
-    if (filePath && content !== original) setStatus(`Canvis de ${filePath} descartats (no s’havien desat)`);
-    setEditorOpen(false); setEditingPath(null);
-  }
 
-  // The editor's icon in the left bar: closes it, or opens the last file it had (or the file selected in
-  // the list of files).
+  // The editor's icon in the left bar hides the editor and shows it again with its tabs as they were;
+  // with no tab, it opens the file selected in the list of files (or the last one it had).
   const lastEditorPathRef = useRef<string | null>(null);
   useEffect(() => { if (editingPath) lastEditorPathRef.current = editingPath; }, [editingPath]);
   async function toggleEditor() {
-    if (editorOpen) { closeEditor(); return; }
+    if (editorOpen) { setEditorOpen(false); return; }
+    if (editingPath) { setEditorOpen(true); return; }
     const selected = selectedTreePath && !projectDirectoryPaths.has(selectedTreePath) ? selectedTreePath : null;
-    const file = selected || lastEditorPathRef.current;
+    const file = editorTabs[editorTabs.length - 1] || selected || lastEditorPathRef.current;
     if (file) await openEditor(file);
     else setStatus('Tria un fitxer a la llista de Fitxers per obrir-lo a l’editor');
   }
@@ -1321,9 +1358,24 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
+  const editorTabLabels = tabLabels(editorTabs);
   const editorPane = (
     <Flex h="full" minH="0" minW="0" direction="column" p="3" bg="bg">
-      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0"><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={editingPath ?? undefined}>{editingPath}</Text><HStack flex="none" gap="1"><IconButton icon={Check} label={editorContent === editorOriginal ? 'Sense canvis per desar' : 'Desa (⌘S)'} size="xs" variant={editorContent === editorOriginal ? 'ghost' : 'subtle'} colorPalette={editorContent === editorOriginal ? 'gray' : 'agentic'} disabled={editorBusy || editorContent === editorOriginal} onClick={() => void saveEdit()}/><Button size="xs" variant="outline" flex="none" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}><History size={15}/>Historial local</Button></HStack></Flex>
+      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0">
+        {/* One tab per open file; its × closes it (a dot before the name: changes not saved). */}
+        <Tabs.Root flex="1" minW="0" size="sm" variant="line" value={editingPath ?? ''} onValueChange={({ value }) => { if (value) void openEditor(value); }} activationMode="manual">
+          <Tabs.List minW="0" overflowX="auto" overflowY="hidden" borderBottomWidth="0" aria-label="Fitxers oberts">
+            {editorTabs.map((tab) => {
+              const unsaved = tab === editingPath ? editorContent !== editorOriginal : Boolean(tabBuffers[tab]);
+              return <Tabs.Trigger key={tab} value={tab} flex="none" gap="1.5" px="2" fontSize="xs" title={tab}>
+                {unsaved && <Box boxSize="1.5" flex="none" rounded="full" bg="fg.warning" aria-label="Canvis sense desar"/>}
+                <Text as="span" maxW="40" truncate>{editorTabLabels[tab]}</Text>
+                <CloseButton as="span" role="button" size="2xs" variant="ghost" aria-label={`Tanca ${tab}`} onClick={(event) => { event.stopPropagation(); closeEditorTab(tab); }}/>
+              </Tabs.Trigger>;
+            })}
+          </Tabs.List>
+        </Tabs.Root>
+        <HStack flex="none" gap="1"><IconButton icon={Check} label={editorContent === editorOriginal ? 'Sense canvis per desar' : 'Desa (⌘S)'} size="xs" variant={editorContent === editorOriginal ? 'ghost' : 'subtle'} colorPalette={editorContent === editorOriginal ? 'gray' : 'agentic'} disabled={editorBusy || editorContent === editorOriginal} onClick={() => void saveEdit()}/><IconButton icon={History} label="Historial local" size="xs" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}/></HStack></Flex>
       <Box flex="1" minH="0" overflow="hidden" onKeyDownCapture={(event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void saveEdit(); } }}>
         <Editor
           height="100%"

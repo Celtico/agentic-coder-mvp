@@ -115,8 +115,9 @@ test('projectFileExists says whether a file is there, without throwing, and neve
 
 test('the app checks that a remembered file is there before opening it, and forgets it if not', () => {
   const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
-  assert.match(app, /saved\.editorPath && !\(await window\.agentic\.fileExists\(saved\.editorPath\)/);
-  assert.match(app, /editorPath: undefined/);
+  // Every saved tab is checked; one whose file is gone is left out, and the next save forgets it.
+  assert.match(app, /for \(const tab of savedList\) if \(await window\.agentic\.fileExists\(tab\)/);
+  assert.match(app, /setEditorTabs\(existing\)/);
   assert.match(app, /if \(!\(await window\.agentic\.fileExists\(filePath\)\)\) return;/);
   const main = require('node:fs').readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
   assert.match(main, /ipcMain\.handle\('project:exists'/);
