@@ -231,6 +231,15 @@ function parseAction(raw: string): AgentAction | null {
         depth -= 1;
         if (depth === 0) {
           const leadingAction = parseLenient(normalized.slice(0, index + 1));
+          // A plan followed by the call that carries it out is that call, with its plan: answering
+          // only the plan would ask the model for the call it already wrote, and some models then
+          // repeat the same pair forever.
+          if (leadingAction?.type === 'plan') {
+            for (const candidate of topLevelObjects(normalized.slice(index + 1))) {
+              const next = parseLenient(candidate);
+              if (next?.type === 'tool_call') return { ...next, plan: leadingAction.content };
+            }
+          }
           if (leadingAction) return leadingAction;
           break;
         }

@@ -1607,3 +1607,24 @@ test('the window recognises the status that carries the plan (App.tsx matches th
   const runtime = await fs.readFile(path.join(__dirname, 'agent.ts'), 'utf8');
   assert.ok(runtime.includes(`\`${prefix} \${plan}\``), `the agent sends «${prefix} …»`);
 });
+
+test('a plan followed by its tool call in the same answer runs the call instead of asking again', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-plan-call-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const pair = '{"type":"plan","content":"Crearé index.html."}\n{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<h1>Hola</h1>"}}';
+  const responses = [pair, pair, pair, '{"type":"final","content":"He creat index.html."}'];
+  let calls = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => { calls += 1; return responses.shift() ?? '{"type":"final","content":"Fet."}'; },
+    getModelStatus: () => ({ modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {}, experienceRanker: { rank: async () => [] } });
+  agent.historyDir = path.join(tempRoot, 'history');
+  agent.reviewChanges = false;
+  const written = [];
+  const answer = await agent.ask('Crea una pàgina index.html amb un títol', tempRoot, async (tool) => { if (tool.name === 'write_file') { written.push(tool.arguments.path); return { applied: true, path: tool.arguments.path }; } return {}; });
+  assert.deepEqual(written, ['index.html']);
+  assert.match(answer, /index\.html/);
+  assert.ok(calls <= 3, `the model was asked ${calls} times`);
+});

@@ -97,3 +97,23 @@ test('the app tasks start empty, may install, and their check spots Chakra v2 co
   await assert.rejects(createSandboxExecutor(root, { allowInstall: true }).execute({ name: 'run_project_script', arguments: { script: 'dev' } }), /no s’acaba mai/);
   await assert.rejects(createSandboxExecutor(root, { allowInstall: true }).execute({ name: 'install_package', arguments: { packageName: 'bad name; rm', dev: false } }), /no vàlid/);
 });
+
+test('after a task runs out of time the model is stopped, so the next task finds it free', async () => {
+  let busy = false; let unloaded = 0; let first = true;
+  const engine = {
+    loadModel: async () => {}, getModelStatus: () => ({ modelId: 'scripted', state: 'ready', cacheDir: '' }), getMemoryUsage: () => ({}),
+    unloadModel: async () => { unloaded += 1; busy = false; },
+    generateResponse: async () => {
+      if (busy) throw new Error('El runtime MLX ja està generant una resposta.');
+      const slow = first; first = false;
+      if (!slow) return '{"type":"final","content":"Amb npm start, que arrenca server.cjs."}';
+      busy = true;
+      return new Promise((resolve) => setTimeout(() => { if (busy) busy = false; resolve('{"type":"final","content":"tard"}'); }, 2000));
+    },
+  };
+  const { results } = await runBenchmark({ LocalCodingAgent, engine, taskIds: ['answer-without-editing'], repeat: 2, timeoutMs: 100 });
+  assert.match(results[0].error, /Temps esgotat/);
+  assert.equal(unloaded, 1);
+  assert.equal(results[1].error, undefined, 'the second run did not find the model busy');
+  assert.equal(results[1].pass, true);
+});

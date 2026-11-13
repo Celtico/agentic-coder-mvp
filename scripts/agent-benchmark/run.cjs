@@ -52,14 +52,19 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
   let answer = '';
   let error;
   let timer;
+  // A request that runs out of time keeps generating until the model process stops; it is stopped
+  // (and loaded again by the next task), so the next task does not find the model busy.
+  const asked = agent.ask(task.prompt, root, tools.execute);
+  asked.catch(() => {});
   try {
     answer = await Promise.race([
-      agent.ask(task.prompt, root, tools.execute),
+      asked,
       new Promise((_, reject) => { const limit = Math.max(timeoutMs, (task.timeoutMinutes || 0) * 60000); timer = setTimeout(() => reject(new Error(`Temps esgotat (${Math.round(limit / 1000)} s).`)), limit); }),
     ]);
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
   } finally { clearTimeout(timer); }
+  if (error && /^Temps esgotat/.test(error)) await engine.unloadModel?.().catch(() => {});
   const seconds = Number(((Date.now() - started) / 1000).toFixed(1));
   const after = await snapshot(root);
   const changed = changedFiles(before, after);
