@@ -197,7 +197,10 @@ function parseAction(raw: string): AgentAction | null {
     return found;
   };
 
-  const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  // MiMo (Qwen 3.5 inside) sometimes writes the agent's JSON action and closes it with the tags of its
+  // own XML call format («…"}</parameter></function></tool_call>»): those closing tags are dropped,
+  // and the braces they stand for are put back by the lenient parse below.
+  const normalized = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').replace(/(?:\s*<\/(?:parameter|function|tool_call)>)+\s*$/i, '');
   // A model may send several calls in one answer, some of them empty (MiMo writes
   // `{"name":"write_file","arguments":{}}` a few times before the real one). The first call that is
   // valid is the one that runs; the next step comes in the next turn. If none is valid, the first

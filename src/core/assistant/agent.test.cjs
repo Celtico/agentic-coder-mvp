@@ -1682,3 +1682,12 @@ test('a valid call missing its closing brace is still found after an empty one',
   ]);
   assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
 });
+
+test('a JSON action closed with the tags of the Qwen 3.5 XML format is still carried out', async (t) => {
+  // As MiMo wrote it in the app on 13-11-2026: the agent's JSON, one brace short, then «</parameter></function></tool_call>».
+  const { calls } = await askWithResponses(t, [
+    '{"type":"tool_call","name":"read_file","arguments":{"path":"src/App.vue"}</parameter></function></tool_call>',
+    'El fitxer mostra el component HelloWorld.',
+  ]);
+  assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
+});
