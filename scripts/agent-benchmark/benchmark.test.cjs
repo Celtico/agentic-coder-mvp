@@ -117,3 +117,12 @@ test('after a task runs out of time the model is stopped, so the next task finds
   assert.equal(results[1].error, undefined, 'the second run did not find the model busy');
   assert.equal(results[1].pass, true);
 });
+
+test('each result keeps what the model saw and answered at every turn', async () => {
+  const engine = scriptedEngine(['{"type":"final","content":"Amb npm start, que arrenca server.cjs."}']);
+  const { results } = await runBenchmark({ LocalCodingAgent, engine, taskIds: ['answer-without-editing'] });
+  assert.equal(results[0].transcript.length, 1);
+  assert.equal(results[0].transcript[0].input.role, 'user');
+  assert.match(results[0].transcript[0].input.content, /arrenc|start/i);
+  assert.match(results[0].transcript[0].output, /npm start/);
+});

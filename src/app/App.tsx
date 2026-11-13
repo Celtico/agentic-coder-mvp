@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience } from '../types';
+import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport } from '../types';
 import {
   Accordion, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Text, Textarea, Tooltip, TreeView, NativeSelect
@@ -14,7 +14,7 @@ import {
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
-  LuBrain as Brain, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuChartBar as ChartBar, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -235,6 +235,15 @@ export function App(): React.JSX.Element {
   // the place of the browser or of each other.
   const [gitOpen, setGitOpen] = useState(false);
   const [learningOpen, setLearningOpen] = useState(false);
+  // The evaluation panel runs the agent benchmark with the selected model and shows what it did.
+  const [evaluationOpen, setEvaluationOpen] = useState(false);
+  const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
+  const [evaluationRunning, setEvaluationRunning] = useState(false);
+  const [evaluationLog, setEvaluationLog] = useState<{ step: string; message: string }[]>([]);
+  const [evaluationRepeat, setEvaluationRepeat] = useState<1 | 2>(1);
+  const [evaluationReport, setEvaluationReport] = useState<BenchmarkReport | null>(null);
+  const [evaluationResultIndex, setEvaluationResultIndex] = useState<number | null>(null);
+  const [evaluationError, setEvaluationError] = useState('');
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
   const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
   const [terminalResizing, setTerminalResizing] = useState(false);
@@ -764,6 +773,34 @@ export function App(): React.JSX.Element {
     finally { setGitDetailLoading(false); }
   }
 
+  async function refreshEvaluations() {
+    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationError(''); }
+    catch (error) { setEvaluationError(errorText(error)); }
+  }
+  async function openEvaluationPanel() {
+    if (evaluationOpen) { setEvaluationOpen(false); return; }
+    setEvaluationOpen(true);
+    void window.agentic.benchmarkStatus().then((value) => setEvaluationRunning(value.running)).catch(() => {});
+    await refreshEvaluations();
+  }
+  async function openEvaluationReport(id: string) {
+    try { setEvaluationReport(await window.agentic.benchmarkReport(id)); setEvaluationResultIndex(null); setEvaluationError(''); }
+    catch (error) { setEvaluationError(errorText(error)); }
+  }
+  async function startEvaluation() {
+    setEvaluationLog([]); setEvaluationError('');
+    try { await window.agentic.startBenchmark({ repeat: evaluationRepeat }); setEvaluationRunning(true); }
+    catch (error) { setEvaluationError(errorText(error)); }
+  }
+  useEffect(() => window.agentic.onBenchmarkProgress((event) => {
+    setEvaluationLog((current) => [...current, event].slice(-200));
+    if (event.step === 'finished' || event.step === 'failed') {
+      setEvaluationRunning(false);
+      void refreshEvaluations();
+      if (event.step === 'finished' && event.id) void openEvaluationReport(event.id);
+    }
+  }), []);
+
   async function openLearningPanel() {
     if (learningOpen) { setLearningOpen(false); return; }
     setLearningOpen(true);
@@ -1039,7 +1076,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, gitOpen, learningOpen, consoleOpen]);
+  }, [terminalOpen, gitOpen, learningOpen, evaluationOpen, consoleOpen]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1351,9 +1388,52 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
+  const evaluationResult = evaluationReport && evaluationResultIndex !== null ? evaluationReport.results[evaluationResultIndex] : null;
+  const evaluationPane = (
+    <Flex direction="column" gap="3" h="full" overflowY="auto" p="3">
+      <HStack gap="2" flexWrap="wrap">
+        <Text flex="1" minW="160px" fontSize="sm">Model: <b>{modelOptions.find((item) => item.id === selectedModel)?.label || selectedModel}</b></Text>
+        <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+        {evaluationRunning
+          ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
+          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark</Button>}
+      </HStack>
+      <Text fontSize="xs" color="fg.muted">Les mateixes tasques fixes per a qualsevol model: arreglar codi, fer pàgines, respondre sense tocar res i tres apps des d’una carpeta buida. Una ronda dura entre 30 minuts i 2 hores; mentrestant el xat i l’entrenament esperen.</Text>
+      {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
+      {(evaluationRunning || evaluationLog.length > 0) && <Box maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">
+        {evaluationRunning && <HStack gap="2"><Spinner size="xs"/><Text>Avaluant…</Text></HStack>}
+        {evaluationLog.slice(-60).map((event, index) => <Text key={index} color={event.step === 'failed' || event.message.startsWith('FALLA') ? 'red.300' : event.message.startsWith('PASSA') || event.step === 'finished' ? 'agentic.200' : undefined}>{event.message}</Text>)}
+      </Box>}
+      {evaluationList?.chart && <Box bg="white" borderRadius="md" p="1"><img alt="Comparativa dels models avaluats" style={{ width: '100%', display: 'block' }} src={`data:image/svg+xml;utf8,${encodeURIComponent(evaluationList.chart)}`}/></Box>}
+      {evaluationList && evaluationList.runs.length > 0 && <Box>
+        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Avaluacions</Text>
+        <Stack gap="1">{evaluationList.runs.map((run) => <Button key={run.id} size="xs" justifyContent="space-between" variant={evaluationReport?.id === run.id ? 'subtle' : 'ghost'} colorPalette={evaluationReport?.id === run.id ? 'agentic' : 'gray'} onClick={() => void openEvaluationReport(run.id)}>
+          <Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{new Date(run.at).toLocaleString('ca')} · {run.model}{run.adapter ? ' · amb adaptador' : ''}</Text><Badge size="sm" colorPalette="gray">{run.summary.passed}/{run.summary.runs}</Badge>
+        </Button>)}</Stack>
+      </Box>}
+      {evaluationList && evaluationList.runs.length === 0 && !evaluationRunning && <Notice tone="info">Encara no hi ha cap avaluació feta des de l’app.</Notice>}
+      {evaluationReport && <Box>
+        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Tasques · clica’n una per veure què ha fet el model</Text>
+        <Stack gap="1">{evaluationReport.results.map((result, index) => <Button key={`${result.task}-${result.run}`} size="xs" h="auto" py="1" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={evaluationResultIndex === index ? 'subtle' : 'ghost'} colorPalette={evaluationResultIndex === index ? 'agentic' : 'gray'} onClick={() => setEvaluationResultIndex(index)}>
+          <Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge>
+          <Text flex="1" fontSize="xs">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines{result.pass ? '' : ` · ${result.detail}`}</Text>
+        </Button>)}</Stack>
+      </Box>}
+      {evaluationResult && <Box>
+        <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Què ha fet el model a {evaluationResult.task} #{evaluationResult.run}</Text>
+        {evaluationResult.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
+        <Stack gap="2">{evaluationResult.transcript.map((turn, index) => <Box key={index} borderWidth="1px" borderColor="border" borderRadius="md" p="2">
+          <Text fontSize="2xs" color="fg.muted" mb="1">Torn {index + 1} · {turn.seconds} s</Text>
+          {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist ({turn.input.role === 'user' ? 'missatge' : turn.input.role})</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
+          <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
+        </Box>)}</Stack>
+      </Box>}
+    </Flex>
+  );
   const dockItems = [
     gitOpen ? { id: 'dock-git', node: dockPane('Git', 'Tanca Git', () => setGitOpen(false), gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
     learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', 'Tanca l’aprenentatge local', () => setLearningOpen(false), learningPane) } : null,
+    evaluationOpen ? { id: 'dock-evaluation', node: dockPane('Avaluació', 'Tanca l’avaluació', () => setEvaluationOpen(false), evaluationPane, evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined) } : null,
     consoleOpen ? { id: 'dock-console', node: dockPane('Consola', 'Tanca la consola', () => setConsoleOpen(false), consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
     terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
   ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
@@ -1440,6 +1520,7 @@ export function App(): React.JSX.Element {
           <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="38px" h="38px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
           <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
           <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
+          <IconButton icon={ChartBar} label={evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models'} w="38px" h="38px" variant={evaluationOpen ? 'subtle' : 'ghost'} colorPalette={evaluationOpen ? 'agentic' : 'gray'} onClick={() => void openEvaluationPanel()}/>
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">

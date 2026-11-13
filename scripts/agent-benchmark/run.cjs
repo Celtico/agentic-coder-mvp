@@ -19,15 +19,26 @@ function changedFiles(before, after) {
   return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((file) => before[file] !== after[file]).sort();
 }
 
-/** Counts the model's turns without changing what it answers. */
+/**
+ * Counts the model's turns without changing what it answers, and keeps what it saw last and what it
+ * answered at each one: the record of what the model did in a task, shown by the app's evaluation panel.
+ */
 function countingEngine(engine, counter) {
   return new Proxy(engine, {
     get(target, property) {
       if (property === 'generateResponse') {
-        return async (...args) => {
+        return async (messages, ...rest) => {
           const started = Date.now();
-          try { return await target.generateResponse(...args); }
-          finally { counter.generations += 1; counter.generationMs += Date.now() - started; }
+          const last = Array.isArray(messages) ? messages[messages.length - 1] : null;
+          let output = '';
+          try { output = await target.generateResponse(messages, ...rest); return output; }
+          catch (error) { output = `(error: ${error instanceof Error ? error.message : String(error)})`; throw error; }
+          finally {
+            counter.generations += 1; counter.generationMs += Date.now() - started;
+            if (counter.transcript && counter.transcript.length < 60) {
+              counter.transcript.push({ input: last && typeof last.content === 'string' ? { role: last.role, content: last.content.slice(0, 3000) } : null, output: String(output).slice(0, 6000), seconds: Number(((Date.now() - started) / 1000).toFixed(1)) });
+            }
+          }
         };
       }
       const value = target[property];
@@ -44,7 +55,7 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
     await fs.writeFile(path.join(root, file), content, 'utf8');
   }
   const before = await snapshot(root);
-  const counter = { generations: 0, generationMs: 0 };
+  const counter = { generations: 0, generationMs: 0, transcript: [] };
   const agent = new LocalCodingAgent({ engine: countingEngine(engine, counter), experienceRanker: { rank: async () => [] } });
   agent.historyDir = historyDir;
   const tools = createSandboxExecutor(root, { allowInstall: task.allowInstall === true });
@@ -96,6 +107,7 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
     filesChanged: changed,
     protectedChanged,
     answer: String(answer || '').slice(0, 800),
+    transcript: counter.transcript,
     ...(error ? { error } : {}),
     ...(keep ? { folder: root } : {}),
   };

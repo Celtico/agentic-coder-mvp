@@ -11,6 +11,7 @@ const { ChatStore } = require('./chat-store.cjs');
 const mlxModels = require('./mlx-models.cjs');
 const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory.cjs');
 const { runTrainingPipeline } = require('./learning-training.cjs');
+const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
 const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
@@ -1131,10 +1132,90 @@ function runStreaming(command, args, { onLine, signal, env } = {}) {
   });
 }
 
+/**
+ * Runs scripts/evaluate-agent.cjs for one model in its own process, as the developer runs it from the
+ * terminal. Null when the benchmark is not there (it ships with the app, but not in every build).
+ */
+async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = 'off', repeat = 1, signal, onLine }) {
+  const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs');
+  if (!fsSync.existsSync(script)) return null;
+  const nodeExecutable = findNodeExecutable();
+  return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out], {
+    signal, onLine,
+    env: { AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+  });
+}
+
+// The evaluation panel: the same benchmark, run from the window with the selected model. Each run is
+// kept in the data folder (benchmarks/<date>-<model>.json) with what the model did at every turn.
+let benchmarkRun = null;
+const benchmarksDirectory = () => path.join(app.getPath('userData'), 'benchmarks');
+const sendBenchmark = (event) => { if (win && !win.isDestroyed()) win.webContents.send('benchmark:progress', event); };
+
+ipcMain.handle('benchmark:status', async () => ({ running: Boolean(benchmarkRun), ...(benchmarkRun ? { model: benchmarkRun.label } : {}) }));
+ipcMain.handle('benchmark:cancel', async () => { benchmarkRun?.controller.abort(); return { cancelled: Boolean(benchmarkRun) }; });
+ipcMain.handle('benchmark:start', async (_e, request) => {
+  if (benchmarkRun) throw new Error('Ja hi ha una avaluació en marxa.');
+  if (trainingRun) throw new Error('Hi ha un entrenament en marxa; avalua quan acabi.');
+  if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans d’avaluar.');
+  const model = await currentModel();
+  if (!model || !await mlxModels.modelDirectory(model, projectModelsDirectory())) throw new Error('El model triat no és disponible en aquest Mac.');
+  const repeat = request?.repeat === 2 ? 2 : 1;
+  await fs.mkdir(benchmarksDirectory(), { recursive: true });
+  const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${model.id}`;
+  const out = path.join(benchmarksDirectory(), `${id}.json`);
+  // The chat model would take the memory the benchmark's own model process needs.
+  if (modelWorker) { const child = modelWorker; modelWorker = null; child.kill('SIGTERM'); }
+  const controller = new AbortController();
+  benchmarkRun = { controller, label: model.label };
+  (async () => {
+    let result = null;
+    try {
+      result = await runBenchmarkProcess({
+        modelId: model.id, out, repeat, signal: controller.signal, turnLog: path.join(benchmarksDirectory(), `${id}.turns.jsonl`),
+        onLine: (line) => { if (/^(PASSA|FALLA|Model:)/.test(line) || /carregat amb MLX/.test(line)) sendBenchmark({ step: 'progress', message: line.slice(0, 300) }); },
+      });
+    } finally {
+      benchmarkRun = null;
+      const done = fsSync.existsSync(out);
+      sendBenchmark(done
+        ? { step: 'finished', id, message: `Avaluació acabada: ${model.label}.` }
+        : { step: 'failed', message: controller.signal.aborted ? 'Avaluació cancel·lada.' : result ? `L’avaluació no ha donat resultat (codi ${result.code}).` : 'El benchmark no és en aquesta instal·lació.' });
+    }
+  })();
+  return { started: true, id };
+});
+
+async function readBenchmarkReports() {
+  const reports = [];
+  for (const name of (await fs.readdir(benchmarksDirectory()).catch(() => [])).filter((item) => item.endsWith('.json')).sort()) {
+    try { reports.push({ id: name.replace(/\.json$/, ''), ...JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), name), 'utf8')) }); } catch { /* an unreadable report is skipped */ }
+  }
+  return reports;
+}
+
+ipcMain.handle('benchmark:list', async () => {
+  const reports = await readBenchmarkReports();
+  const labels = Object.fromEntries((await allModels()).map((model) => [model.modelId, model.label]));
+  const models = summarizeReports(reports, { labels });
+  return {
+    runs: reports.map((report) => ({ id: report.id, at: report.at, model: labels[report.model] || report.model, adapter: report.adapter || null, summary: report.summary })).reverse(),
+    models,
+    chart: models.length ? renderBenchmarkSvg(models) : '',
+  };
+});
+
+ipcMain.handle('benchmark:report', async (_e, id) => {
+  if (typeof id !== 'string' || !/^[\w.-]+$/.test(id)) throw new Error('Aquesta avaluació no és vàlida.');
+  const report = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.json`), 'utf8'));
+  return { id, at: report.at, model: report.model, summary: report.summary, results: report.results.map(({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript, error }) => ({ task, run, pass, detail, seconds, toolCalls, toolsByName, filesChanged, answer, transcript: transcript || [], error })) };
+});
+
 ipcMain.handle('learning:train-status', async () => ({ running: Boolean(trainingRun), ...(trainingRun ? { name: trainingRun.name, base: trainingRun.base } : {}) }));
 ipcMain.handle('learning:train-cancel', async () => { trainingRun?.controller.abort(); return { cancelled: Boolean(trainingRun) }; });
 ipcMain.handle('learning:train-start', async (_e, request) => {
   if (trainingRun) throw new Error('Ja hi ha un entrenament en marxa.');
+  if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa; entrena quan acabi.');
   if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans d’entrenar.');
   const name = typeof request?.name === 'string' ? request.name.trim() : '';
   if (!name || name.length > 60) throw new Error('Tria un nom per al model (fins a 60 caràcters).');
@@ -1150,15 +1231,12 @@ ipcMain.handle('learning:train-start', async (_e, request) => {
   const controller = new AbortController();
   trainingRun = { controller, name, base: base.label };
   const benchmark = async (adapterPath) => {
-    const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs');
-    if (!fsSync.existsSync(script)) return null;
     const out = path.join(app.getPath('temp'), `agentic-benchmark-${Date.now()}.json`);
-    const nodeExecutable = findNodeExecutable();
-    const result = await runStreaming(nodeExecutable, [script, '--model', base.id, '--out', out], {
-      signal: controller.signal,
+    const result = await runBenchmarkProcess({
+      modelId: base.id, adapterPath, out, signal: controller.signal,
       onLine: (line) => { if (/^(PASSA|FALLA)/.test(line)) sendTraining({ step: adapterPath ? 'benchmark-adapter' : 'benchmark-base', message: line.slice(0, 300) }); },
-      env: { AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: 'off', ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
     });
+    if (!result) return null;
     try { const report = JSON.parse(await fs.readFile(out, 'utf8')); await fs.rm(out, { force: true }); return { passed: report.summary.passed, runs: report.summary.runs }; }
     catch { sendTraining({ step: 'benchmark', message: `El benchmark no ha donat resultat (codi ${result.code}).` }); return null; }
   };
@@ -1180,6 +1258,7 @@ ipcMain.handle('agent:ask', async (_e, request) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
   // Training uses the memory the chat model would need; both at once run out of GPU memory.
   if (trainingRun) throw new Error('Hi ha un entrenament en marxa. Espera que acabi o cancel·la’l al panell d’aprenentatge.');
+  if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa. Espera que acabi o cancel·la-la al panell d’avaluació.');
   const payload = request && typeof request === 'object' ? request : { prompt: request };
   return askModel(String(payload.prompt || ''), selectedProject, payload.history);
 });
@@ -1198,6 +1277,7 @@ ipcMain.handle('models:select', async (_e, modelId) => {
   const available = (await getAvailableModels()).find((candidate) => candidate.id === model.id);
   if (!available?.available) throw new Error(available?.reason || 'Aquest model encara no està disponible en aquest Mac.');
   if (trainingRun) throw new Error('Hi ha un entrenament en marxa; canvia de model quan acabi.');
+  if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa; canvia de model quan acabi.');
   if (selectedModel !== model.id && modelWorker) {
     const child = modelWorker;
     modelWorker = null;
