@@ -13,10 +13,11 @@ import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
-  LuGitBranch as GitBranch, LuGripHorizontal as GripHorizontal, LuMaximize2 as Maximize2, LuMinus as Minus, LuPlay as Play, LuRefreshCw as RefreshCw, LuSquare as Square,
+  LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
+import { WindowTitleBar, type WindowStage } from './window-controls';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -320,6 +321,7 @@ export function App(): React.JSX.Element {
   useEffect(() => { void window.agentic.getPermissionMode().then((mode) => setPermissionMode(mode === 'auto' ? 'auto' : 'ask')).catch(() => {}); }, []);
   const [editorStatus, setEditorStatus] = useState('');
   const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
+  const [fileHistoryStage, setFileHistoryStage] = useState<WindowStage>('default');
   const [fileHistoryScopePath, setFileHistoryScopePath] = useState('');
   const [fileHistoryVersionPath, setFileHistoryVersionPath] = useState('');
   const [fileHistoryCurrentPath, setFileHistoryCurrentPath] = useState('');
@@ -1833,24 +1835,11 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <FloatingPanel.Root open={!!fileHistoryPath} onOpenChange={({ open }) => { if (!open) setFileHistoryPath(null); }} persistRect defaultPosition={{ x: 24, y: 64 }} defaultSize={{ width: 1120, height: 720 }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
+    <FloatingPanel.Root open={!!fileHistoryPath} onOpenChange={({ open }) => { if (!open) { setFileHistoryPath(null); setFileHistoryStage('default'); } }} onStageChange={({ stage }) => setFileHistoryStage(stage as WindowStage)} persistRect defaultPosition={{ x: 24, y: 64 }} defaultSize={{ width: 1120, height: 720 }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
         <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
-        <FloatingPanel.Header>
-          <FloatingPanel.DragTrigger>
-            <GripHorizontal size={18} aria-hidden="true"/>
-            <FloatingPanel.Title truncate>Historial local: {fileHistoryScopePath || project?.path || fileHistoryPath}</FloatingPanel.Title>
-          </FloatingPanel.DragTrigger>
-          <FloatingPanel.Control>
-            <FloatingPanel.StageTrigger stage="minimized" asChild><ChakraIconButton aria-label="Minimitza l’historial" title="Minimitza" variant="ghost" size="xs"><Minus size={16}/></ChakraIconButton></FloatingPanel.StageTrigger>
-            <FloatingPanel.StageTrigger stage="maximized" asChild><ChakraIconButton aria-label="Maximitza l’historial" title="Maximitza" variant="ghost" size="xs"><Square size={16}/></ChakraIconButton></FloatingPanel.StageTrigger>
-            <FloatingPanel.StageTrigger stage="default" asChild><ChakraIconButton aria-label="Restaura la mida de l’historial" title="Restaura la mida" variant="ghost" size="xs"><Maximize2 size={16}/></ChakraIconButton></FloatingPanel.StageTrigger>
-            <FloatingPanel.CloseTrigger asChild>
-              <ChakraIconButton aria-label="Tanca l’historial" title="Tanca" variant="ghost" size="xs"><X size={16}/></ChakraIconButton>
-            </FloatingPanel.CloseTrigger>
-          </FloatingPanel.Control>
-        </FloatingPanel.Header>
+        <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<>Historial local: {fileHistoryScopePath || project?.path || fileHistoryPath}</>}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
         <Grid h="full" minH="0" minW="0" templateColumns="260px minmax(0, 1fr)">
           <Flex direction="column" minH="0" borderRightWidth="1px" borderColor="border">

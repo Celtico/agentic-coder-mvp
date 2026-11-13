@@ -38,6 +38,18 @@ export const system = createSystem(defaultConfig, defineConfig({
       radii: {
         panel: { value: "10px" },
       },
+      // A floating window's title bar is the size of the app's own macOS one: 36 px high (App.tsx,
+      // the bar with data-drag-region) and the traffic lights as the system draws them there
+      // (trafficLightPosition 14, 11 in main.cjs): 14 px round, 9 px apart.
+      sizes: {
+        windowTitleBar: { value: "36px" },
+        windowLight: { value: "14px" },
+        windowLights: { value: "60px" },
+      },
+      spacing: {
+        windowLightGap: { value: "9px" },
+        windowLightInset: { value: "14px" },
+      },
       shadows: {
         composer: { value: "0 4px 24px #0002" },
       },
@@ -73,6 +85,12 @@ export const system = createSystem(defaultConfig, defineConfig({
         "surface.subtle": { value: "#171717" },
         border: { value: "#393939" },
         accent: { value: "{colors.agentic.500}" },
+        // The traffic lights of a floating window, like macOS (src/app/window-controls.tsx).
+        "window.close": { value: "#ff5f57" },
+        "window.minimize": { value: "#febc2e" },
+        "window.maximize": { value: "#28c840" },
+        "window.lightBorder": { value: "#0000001f" },
+        "window.lightGlyph": { value: "#00000099" },
       },
     },
   },
