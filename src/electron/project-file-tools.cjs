@@ -178,4 +178,19 @@ async function restoreDeletedProjectFile(projectRoot, backupRoot, backupId) {
   return { restored: true, path: record.path, backupPath };
 }
 
-module.exports = { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory };
+/**
+ * Whether a file of the project is there and readable as a file, without throwing: for things that
+ * may point to a file deleted since (what the editor had open when the app was closed).
+ */
+async function projectFileExists(projectRoot, relativePath) {
+  try {
+    if (typeof relativePath !== 'string' || !relativePath || path.isAbsolute(relativePath)) return false;
+    const root = await fs.realpath(projectRoot);
+    const target = path.resolve(root, relativePath);
+    if (!isWithin(root, target)) return false;
+    const resolved = await fs.realpath(target);
+    return isWithin(root, resolved) && (await fs.stat(resolved)).isFile();
+  } catch { return false; }
+}
+
+module.exports = { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory };

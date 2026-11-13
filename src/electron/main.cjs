@@ -13,7 +13,7 @@ const mlxModels = require('./mlx-models.cjs');
 const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory.cjs');
 const { runTrainingPipeline } = require('./learning-training.cjs');
 const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
-const { inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
+const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
@@ -1010,6 +1010,9 @@ ipcMain.handle('project:for-chat', async (_event, sessionId) => {
     return { path: root, files: await listFiles(root) };
   } catch { return null; }
 });
+
+// Whether a file is there, without an error in the log when it is not (a file deleted since).
+ipcMain.handle('project:exists', async (_e, relativePath) => Boolean(selectedProject) && projectFileExists(selectedProject, relativePath));
 
 ipcMain.handle('project:read', async (_e, relativePath) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');

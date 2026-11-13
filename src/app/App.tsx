@@ -920,6 +920,12 @@ export function App(): React.JSX.Element {
     } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
   }
 
+  /** The file's current content, or '' if it has been deleted (its history stays), without an error in the log. */
+  async function readIfThere(relativePath: string) {
+    try { return await window.agentic.fileExists(relativePath) ? await window.agentic.readFile(relativePath) : ''; }
+    catch { return ''; }
+  }
+
   async function openFileHistory(relativePath: string, currentContent: string) {
     setFileHistoryPath(relativePath);
     setFileHistoryCurrentPath(relativePath);
@@ -941,8 +947,7 @@ export function App(): React.JSX.Element {
         setFileHistoryVersionPath(versions[0].path);
         const version = await window.agentic.fileHistoryVersion(versions[0].path, versions[0].id);
         setFileHistorySelectedContent(version.content || '');
-        try { setFileHistoryCurrent(await window.agentic.readFile(versions[0].path)); }
-        catch { setFileHistoryCurrent(''); }
+        setFileHistoryCurrent(await readIfThere(versions[0].path));
       }
     } catch (error) { setFileHistoryStatus(errorText(error)); }
     finally { setFileHistoryLoading(false); }
@@ -973,9 +978,7 @@ export function App(): React.JSX.Element {
     try {
       const content = await window.agentic.fileHistoryVersion(version.path, version.id);
       setFileHistorySelectedContent(content.content || '');
-      try {
-        setFileHistoryCurrent(version.path === fileHistoryCurrentPath ? fileHistoryCurrent : await window.agentic.readFile(version.path));
-      } catch { setFileHistoryCurrent(''); }
+      setFileHistoryCurrent(version.path === fileHistoryCurrentPath ? fileHistoryCurrent : await readIfThere(version.path));
     } catch (error) { setFileHistoryStatus(errorText(error)); }
     finally { setFileHistoryLoading(false); }
   }
@@ -1023,7 +1026,10 @@ export function App(): React.JSX.Element {
     const saved = loadViewState(localStorage).projects[projectPath] || {};
     void (async () => {
       if (saved.browserUrl) { setBrowserAddress(saved.browserUrl); setBrowserUrl(saved.browserUrl); }
-      if (saved.editorPath) {
+      // A file deleted since is not opened, and is forgotten (no error: it is only checked).
+      if (saved.editorPath && !(await window.agentic.fileExists(saved.editorPath).catch(() => false))) {
+        updateViewState(localStorage, (state) => setProjectView(state, projectPath, { ...state.projects[projectPath], editorPath: undefined }));
+      } else if (saved.editorPath) {
         try {
           const content = await window.agentic.readFile(saved.editorPath);
           if (restoringViewRef.current !== projectPath) return;
@@ -1031,8 +1037,8 @@ export function App(): React.JSX.Element {
         } catch { /* the file is gone: the editor stays closed */ }
       }
       if (saved.historyPath && restoringViewRef.current === projectPath) {
-        let current = '';
-        try { current = await window.agentic.readFile(saved.historyPath); } catch { /* a deleted file still has its history */ }
+        // A deleted file still has its history; it just has no current content.
+        const current = await readIfThere(saved.historyPath);
         if (restoringViewRef.current === projectPath) await openFileHistory(saved.historyPath, current);
       }
       if (restoringViewRef.current === projectPath) setRestoredView(projectPath);
@@ -1070,6 +1076,8 @@ export function App(): React.JSX.Element {
       const { path: filePath, content, original } = editorStateRef.current;
       if (stopped || !filePath) return;
       try {
+        // Deleted while open: nothing to compare, and no error every 1.5 s in the log.
+        if (!(await window.agentic.fileExists(filePath))) return;
         const onDisk = await window.agentic.readFile(filePath);
         if (stopped || editorStateRef.current.path !== filePath || onDisk === editorStateRef.current.original) return;
         if (content === original) { setEditorOriginal(onDisk); setEditorContent(onDisk); setEditorDiskChanged(false); }

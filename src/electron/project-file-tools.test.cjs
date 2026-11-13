@@ -98,3 +98,26 @@ test('deletion refuses hidden paths, traversal, folders and symlinks', async (t)
   await assert.rejects(inspectFileForDeletion(projectRoot, 'folder'), /fitxers normals/);
   await assert.rejects(inspectFileForDeletion(projectRoot, 'link.txt'), /enllaços/);
 });
+
+test('projectFileExists says whether a file is there, without throwing, and never outside the project', async (t) => {
+  const { projectFileExists } = require('./project-file-tools.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-exists-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'src'));
+  await fs.writeFile(path.join(root, 'src', 'App.tsx'), 'x');
+  assert.equal(await projectFileExists(root, 'src/App.tsx'), true);
+  assert.equal(await projectFileExists(root, 'vite.config.ts'), false, 'a file deleted since');
+  assert.equal(await projectFileExists(root, 'src'), false, 'a folder is not a file');
+  assert.equal(await projectFileExists(root, '../outside.txt'), false);
+  assert.equal(await projectFileExists(root, '/etc/hosts'), false);
+  assert.equal(await projectFileExists(root, ''), false);
+});
+
+test('the app checks that a remembered file is there before opening it, and forgets it if not', () => {
+  const app = require('node:fs').readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, /saved\.editorPath && !\(await window\.agentic\.fileExists\(saved\.editorPath\)/);
+  assert.match(app, /editorPath: undefined/);
+  assert.match(app, /if \(!\(await window\.agentic\.fileExists\(filePath\)\)\) return;/);
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('project:exists'/);
+});

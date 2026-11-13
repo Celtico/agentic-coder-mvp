@@ -43,6 +43,8 @@ export interface AgenticBridge {
   prepareLearningDataset(): Promise<{ prepared: boolean; cancelled?: boolean; directory?: string; manifest?: Record<string, unknown>; counts?: TrainingDatasetPreview['counts'] }>;
   projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
+  /** Whether the file is in the project, without throwing when it is not. */
+  fileExists(relativePath: string): Promise<boolean>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
   ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[] }): Promise<string>;
   getPermissionMode(): Promise<'ask' | 'auto'>;

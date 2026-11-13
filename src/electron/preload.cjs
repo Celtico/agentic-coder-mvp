@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('agentic', {
   restoreFileHistory: (relativePath, versionId) => ipcRenderer.invoke('project:restore-file-history', relativePath, versionId),
   projectForChat: (sessionId) => ipcRenderer.invoke('project:for-chat', sessionId),
   readFile: (relativePath) => ipcRenderer.invoke('project:read', relativePath),
+  fileExists: (relativePath) => ipcRenderer.invoke('project:exists', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (request) => ipcRenderer.invoke('agent:ask', request),
   getPermissionMode: () => ipcRenderer.invoke('permissions:get'),
