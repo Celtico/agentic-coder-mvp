@@ -56,6 +56,7 @@
       "src/core/assistant/agent-runtime.cjs",
       "src/core/assistant/agent-worker.cjs",
       "src/core/assistant/mlx-worker.py",
+      "src/core/assistant/mlx_text.py",
       "scripts/evaluate-agent.cjs",
       "scripts/agent-benchmark/*.cjs",
       "!scripts/agent-benchmark/*.test.cjs",
