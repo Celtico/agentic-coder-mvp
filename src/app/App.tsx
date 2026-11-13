@@ -1416,7 +1416,7 @@ export function App(): React.JSX.Element {
   // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
   const rowProps = { borderBottomWidth: '1px', borderColor: 'border', _last: { borderBottomWidth: 0 } } as const;
   const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
-    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="subtle" colorPalette="gray" borderRadius="sm">{count}</Badge>}</HStack>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="outline" colorPalette="gray" color="fg.muted" bg="bg" borderRadius="sm">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
   </>;
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
@@ -1444,7 +1444,7 @@ export function App(): React.JSX.Element {
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="surface">
+      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="bg">
         <Accordion.Item value="tasks" {...rowProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
@@ -1504,7 +1504,7 @@ export function App(): React.JSX.Element {
                               catch (error) { setEvaluationError(errorText(error)); }
                             }}><FolderOpen size={14}/>Obre el projecte que ha fet el model</Button>}
                             {result.transcript.length === 0 && <Text fontSize="xs" color="fg.muted">Aquesta avaluació no va guardar els torns del model.</Text>}
-                            <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="sm" p="2" bg="surface.subtle">
+                            <Stack gap="2">{result.transcript.map((turn, turnIndex) => <Box key={turnIndex} borderWidth="1px" borderColor="border" borderRadius="sm" p="2" bg="bg">
                               <Text fontSize="2xs" color="fg.muted" mb="1">Torn {turnIndex + 1} · {turn.seconds} s</Text>
                               {turn.input && <details><summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}>El que ha vist</summary><Box as="pre" fontSize="2xs" whiteSpace="pre-wrap" overflowWrap="anywhere" color="fg.muted" mt="1">{turn.input.content}</Box></details>}
                               <Box as="pre" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" mt="1">{turn.output}</Box>
