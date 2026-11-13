@@ -315,12 +315,6 @@ async function dispatchAgentTool(tool, projectRoot) {
     approvedInstallRoots.add(root);
     return executeNpmCommand(root, args, 300000);
   }
-  if (tool.name === 'install_playwright_browser') {
-    const executable = path.join(root, 'node_modules', '.bin', 'playwright');
-    try { await fs.access(executable, fs.constants.X_OK); }
-    catch { throw new Error('Playwright no està instal·lat en aquest projecte. Demana primer instal·lar @playwright/test o playwright.'); }
-    return executeBinary(executable, ['install', 'chromium'], root, 600000);
-  }
   if (tool.name === 'inspect_browser' && typeof tool.arguments?.url === 'string') {
     let target;
     try { target = new URL(tool.arguments.url); } catch { throw new Error('L’adreça local no és vàlida.'); }
