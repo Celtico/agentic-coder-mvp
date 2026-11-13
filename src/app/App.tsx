@@ -802,6 +802,9 @@ export function App(): React.JSX.Element {
   async function openEvaluationPanel() {
     if (evaluationOpen) { setEvaluationOpen(false); return; }
     setEvaluationOpen(true);
+    await loadEvaluationPanel();
+  }
+  async function loadEvaluationPanel() {
     void window.agentic.benchmarkStatus().then((value) => { setEvaluationRunning(value.running); setEvaluationCurrent(value.current || null); }).catch(() => {});
     void window.agentic.benchmarkTasks().then((tasks) => {
       setEvaluationTasks(tasks);
@@ -845,6 +848,9 @@ export function App(): React.JSX.Element {
   async function openLearningPanel() {
     if (learningOpen) { setLearningOpen(false); return; }
     setLearningOpen(true);
+    await loadLearningPanel();
+  }
+  async function loadLearningPanel() {
     setLearningStatus('');
     setLearningBusy(true);
     try { setDatasetPreview(await window.agentic.learningDatasetPreview()); }
@@ -990,6 +996,15 @@ export function App(): React.JSX.Element {
   }, [navigationOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, consoleOpen, terminalOpen]);
   // …and, per project, the page in the browser, the file in the editor (if it still exists) and the
   // local history. They are put back once per project, before anything is saved for it.
+  // Panes that come back open load what they show, as if their icon had been clicked.
+  const restoredPanesLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!project?.path || restoredPanesLoadedRef.current) return;
+    restoredPanesLoadedRef.current = true;
+    if (gitOpen) void refreshGitSnapshot();
+    if (evaluationOpen) void loadEvaluationPanel();
+    if (learningOpen) void loadLearningPanel();
+  }, [project?.path]);
   const restoringViewRef = useRef<string | null>(null);
   const [restoredView, setRestoredView] = useState<string | null>(null);
   useEffect(() => {
@@ -1315,8 +1330,8 @@ export function App(): React.JSX.Element {
 
   const gitPane = (
     <Flex h="full" minH="0" direction="column" bg="bg">
-      <Flex flex="none" h="46px" align="center" justify="space-between" px="3" borderBottomWidth="1px" borderColor="border" gap="3">
-        <HStack minW="0" gap="3"><Text fontWeight="semibold">Git</Text><Badge colorPalette="agentic" variant="subtle">Log</Badge><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path}</Text></HStack>
+      <Flex flex="none" h="36px" align="center" justify="space-between" px="3" borderBottomWidth="1px" borderColor="border" gap="3">
+        <HStack minW="0" gap="3"><Badge colorPalette="agentic" variant="subtle">Log</Badge><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path}</Text></HStack>
         <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/>
       </Flex>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
@@ -1331,7 +1346,7 @@ export function App(): React.JSX.Element {
               {gitHistory.branches.filter((branch) => !branch.current).map((branch) => <Badge key={branch.name} size="sm" variant="outline" colorPalette="gray" maxW="full" title={branch.name}><GitBranch size={11}/><Text as="span" truncate>{branch.name}</Text></Badge>)}
             </Flex>
             {gitHistory.commits.length === 0 ? <Text p="3" fontSize="sm" color="fg.muted">Aquest repositori encara no té commits.</Text>
-              : <Grid flex="1" minH="0" minW="0" templateColumns={gitWide ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'} templateRows={gitWide || !gitSelectedCommit ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)'}>
+              : <Grid flex="1" minH="0" minW="0" templateColumns={gitWide ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'} templateRows={gitWide || !gitSelectedCommit ? 'minmax(0, 1fr)' : 'minmax(0, 3fr) minmax(0, 2fr)'}>
                 <Flex minW="0" minH="0" direction="column" borderRightWidth={gitWide ? '1px' : '0'} borderColor="border">
                   <Box flex="none" p="2" borderBottomWidth="1px" borderColor="border"><Input size="sm" value={gitSearch} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setGitSearch(event.target.value)} placeholder="Missatge o hash" aria-label="Filtra commits"/></Box>
                   <Box flex="1" minH="0" overflowY="auto">
