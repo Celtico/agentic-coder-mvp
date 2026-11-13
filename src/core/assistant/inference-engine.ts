@@ -53,7 +53,11 @@ export class MlxInferenceEngine implements InferenceEngine {
       let stderr = '';
       child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-8000); });
       const lines = readline.createInterface({ input: child.stdout });
+      // A process that was stopped (to cancel, or after a timeout) may still report its exit or a late
+      // result while a new one is loading; only the current process may change the engine's state.
+      const current = () => this.child === child;
       lines.on('line', (line) => {
+        if (!current()) return;
         let message: Record<string, unknown>;
         try { message = JSON.parse(line); } catch { return; }
         if (message.type === 'ready') { this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
@@ -63,8 +67,9 @@ export class MlxInferenceEngine implements InferenceEngine {
           else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));
         }
       });
-      child.once('error', (error) => { this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/MLX: ${error.message}`)); });
+      child.once('error', (error) => { if (current()) this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/MLX: ${error.message}`)); });
       child.once('exit', (code) => {
+        if (!current()) { reject(new Error('S’ha aturat el runtime MLX.')); return; }
         const wasReady = this.state === 'ready';
         this.state = 'unloaded'; this.child = null;
         const error = new Error(`El procés MLX s’ha aturat (${code ?? 'sense codi'}). ${stderr.trim()}`);
