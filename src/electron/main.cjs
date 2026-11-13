@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require('electron');
 const path = require('node:path');
 const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
@@ -638,6 +638,48 @@ function createWindow() {
   win.webContents.on('will-navigate', (event, url) => { event.preventDefault(); openOutside(url); });
   win.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
   win.loadFile(path.join(__dirname, '..', 'index.html'));
+  if (process.env.AGENT_SCREENSHOT) win.webContents.once('did-finish-load', () => void captureForDocs());
+}
+
+/** The window as it is now, as a PNG (Electron's capturePage: no screen-recording permission needed). */
+async function saveWindowCapture() {
+  if (!win || win.isDestroyed()) return;
+  const image = await win.webContents.capturePage();
+  const result = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('pictures'), `agentic-coder-${new Date().toISOString().slice(0, 10)}.png`), filters: [{ name: 'PNG', extensions: ['png'] }] });
+  if (!result.canceled && result.filePath) await fs.writeFile(result.filePath, image.toPNG());
+}
+
+// For the README: AGENT_SCREENSHOT=<file.png> opens the app, sets its size (AGENT_SCREENSHOT_SIZE=1600x1000),
+// clicks what AGENT_SCREENSHOT_CLICKS lists, in order («label:<aria-label>» or «text:<visible text>»,
+// separated by «|»), waits, saves the window and quits.
+async function captureForDocs() {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const [width, height] = (process.env.AGENT_SCREENSHOT_SIZE || '1600x1000').split('x').map(Number);
+  if (width && height) win.setContentSize(width, height);
+  await wait(2500);
+  for (const step of (process.env.AGENT_SCREENSHOT_CLICKS || '').split('|').map((item) => item.trim()).filter(Boolean)) {
+    const [kind, ...rest] = step.split(':');
+    const value = JSON.stringify(rest.join(':'));
+    const found = await win.webContents.executeJavaScript(kind === 'label'
+      ? `(() => { const el = document.querySelector('[aria-label=' + JSON.stringify(${value}) + ']'); if (el) el.click(); return Boolean(el); })()`
+      : `(() => { const el = [...document.querySelectorAll('button, [role=button], [role=treeitem], span, div')].reverse().find((node) => node.textContent.trim() === ${value} && node.offsetParent); if (el) el.click(); return Boolean(el); })()`);
+    if (!found) console.error(`Captura: no s’ha trobat «${step}».`);
+    await wait(900);
+  }
+  await wait(Number(process.env.AGENT_SCREENSHOT_DELAY || 2500));
+  const image = await win.webContents.capturePage();
+  await fs.writeFile(path.resolve(process.env.AGENT_SCREENSHOT), image.toPNG());
+  console.error(`Captura desada: ${process.env.AGENT_SCREENSHOT} (${image.getSize().width}x${image.getSize().height})`);
+  app.quit();
+}
+
+function addCaptureToMenu() {
+  const menu = Menu.getApplicationMenu();
+  const view = menu?.items.find((item) => item.role === 'viewmenu' || /^(View|Visualització|Visualización)$/.test(item.label));
+  if (!menu || !view?.submenu) return;
+  view.submenu.append(new MenuItem({ type: 'separator' }));
+  view.submenu.append(new MenuItem({ label: 'Desa una captura de la finestra…', accelerator: 'CmdOrCtrl+Shift+S', click: () => void saveWindowCapture() }));
+  Menu.setApplicationMenu(menu);
 }
 
 app.whenReady().then(async () => {
@@ -658,6 +700,7 @@ app.whenReady().then(async () => {
     await fs.mkdir(selectedProject, { recursive: true });
     await saveSettings();
   }
+  addCaptureToMenu();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
