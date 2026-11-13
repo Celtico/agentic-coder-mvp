@@ -1416,7 +1416,7 @@ export function App(): React.JSX.Element {
   // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
   const rowProps = { borderBottomWidth: '1px', borderColor: 'border', _last: { borderBottomWidth: 0 } } as const;
   const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
-    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="sm" variant="outline" colorPalette="gray" color="fg.muted" bg="canvas" borderRadius="sm">{count}</Badge>}</HStack>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
   </>;
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
@@ -1444,13 +1444,13 @@ export function App(): React.JSX.Element {
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" bg="canvas">
+      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderTopWidth="1px" borderBottomWidth="1px" borderColor="border" bg="canvas">
         <Accordion.Item value="tasks" {...rowProps}>
           <Accordion.ItemTrigger px="3" py="2">{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Marca les tasques que vols passar; totes es fan en una carpeta nova.')}
             <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
-            <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm">{(['open', 'app', 'reference'] as const).map((kind) => {
+            <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderTopWidth="1px" borderColor="border">{(['open', 'app', 'reference'] as const).map((kind) => {
               const group = evaluationTasks.filter((task) => task.kind === kind);
               return <Accordion.Item key={kind} value={kind} {...rowProps}>
                 <Accordion.ItemTrigger px="3" py="1.5">{rowHeader(kindLabel[kind], `${group.filter((task) => evaluationChosen.has(task.id)).length}/${group.length}`)}</Accordion.ItemTrigger>
@@ -1484,7 +1484,7 @@ export function App(): React.JSX.Element {
           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="3">
             {rowNote('Cada passada del benchmark: obre’n una per veure què ha fet el model a cada tasca.')}
             {evaluationList && evaluationList.runs.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
-            <Accordion.Root multiple collapsible size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm" value={evaluationOpenRun} onValueChange={(details) => {
+            <Accordion.Root multiple collapsible size="sm" variant="plain" borderTopWidth="1px" borderColor="border" value={evaluationOpenRun} onValueChange={(details) => {
               setEvaluationOpenRun(details.value);
               for (const id of details.value) if (!evaluationReports[id]) void openEvaluationReport(id);
             }}>
@@ -1494,7 +1494,7 @@ export function App(): React.JSX.Element {
                   <Accordion.ItemTrigger px="3" py="1.5">{rowHeader(`${run.model} · ${new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}${run.adapter ? ' · amb adaptador' : ''}`, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
                   <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
                     {!report ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
-                      : <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderWidth="1px" borderColor="border" borderRadius="sm">
+                      : <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="plain" borderTopWidth="1px" borderColor="border">
                         {report.results.map((result, index) => <Accordion.Item key={`${result.task}-${result.run}`} value={String(index)} {...rowProps}>
                           <Accordion.ItemTrigger px="3" py="1.5"><Badge size="sm" flex="none" colorPalette={result.pass ? 'green' : 'red'}>{result.pass ? 'PASSA' : 'FALLA'}</Badge><Text flex="1" fontSize="xs" textAlign="left">{result.task} #{result.run} · {Math.round(result.seconds)} s · {result.toolCalls} eines</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
                           <Accordion.ItemContent><Accordion.ItemBody px="3" pt="0" pb="2">
