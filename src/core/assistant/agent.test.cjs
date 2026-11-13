@@ -1599,3 +1599,11 @@ test('an install request with a pasted npx command is done when the install succ
   assert.deepEqual(agent.lastTrajectory.steps.map((step) => [step.name, step.ok]), [['run_npx', true]]);
   assert.match(agent.lastTrajectory.steps[0].result, /installed/);
 });
+
+test('the window recognises the status that carries the plan (App.tsx matches the agent)', async () => {
+  const app = await fs.readFile(path.join(__dirname, '..', '..', 'app', 'App.tsx'), 'utf8');
+  const prefix = /const planActivityPrefix = '([^']+)'/.exec(app)?.[1];
+  assert.ok(prefix, 'App.tsx defines planActivityPrefix');
+  const runtime = await fs.readFile(path.join(__dirname, 'agent.ts'), 'utf8');
+  assert.ok(runtime.includes(`\`${prefix} \${plan}\``), `the agent sends «${prefix} …»`);
+});

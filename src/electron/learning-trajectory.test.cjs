@@ -30,6 +30,26 @@ test('a session keeps every request with the tool steps behind each answer', () 
   assert.equal(session.turns[0].system, 'SYSTEM');
 });
 
+test('the plan the window shows before an answer does not hide the steps of the answer', () => {
+  const withPlans = [
+    { role: 'user', content: 'Munta’m una interfície' },
+    { role: 'assistant', content: 'Pla abans de començar:\nCrearé package.json.' },
+    { role: 'assistant', content: 'He creat package.json.' },
+    { role: 'user', content: 'ara compila-ho' },
+    { role: 'assistant', content: 'El build passa.' },
+  ];
+  const session = buildSessionTrajectory(withPlans, lookup);
+  assert.equal(session.turns.length, 2);
+  assert.equal(session.turns[0].answer, 'He creat package.json.');
+  assert.equal(session.turns[0].steps[0].name, 'write_file');
+  assert.equal(session.turns[1].steps.length, 2);
+});
+
+test('an answer shown without its «Pla:» line finds the same steps', () => {
+  assert.equal(trajectoryKey('Pla: crear fitxers.\n\nHe creat package.json.'), trajectoryKey('He creat package.json.'));
+  assert.notEqual(trajectoryKey('He creat package.json.'), trajectoryKey('He creat index.html.'));
+});
+
 test('without any recorded steps there is no trajectory', () => {
   assert.equal(buildSessionTrajectory(turns, () => undefined), null);
   assert.equal(buildSessionTrajectory('not turns', lookup), null);

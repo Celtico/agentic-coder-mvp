@@ -7,7 +7,9 @@ const { createHash } = require('node:crypto');
 const MAX_TURNS = 40;
 const MAX_STEPS = 80;
 
-const trajectoryKey = (answer) => createHash('sha256').update(String(answer).trim()).digest('hex');
+// The window shows an answer without its leading «Pla: …» line when the plan is already on screen
+// (src/app/App.tsx); the key ignores that line so both texts find the same steps.
+const trajectoryKey = (answer) => createHash('sha256').update(String(answer).replace(/^Pla: [^\n]*\n\n(?=\S)/, '').trim()).digest('hex');
 
 const text = (value, limit) => (typeof value === 'string' ? value.slice(0, limit) : '');
 
@@ -28,23 +30,24 @@ function cleanSteps(steps) {
 function buildSessionTrajectory(turns, lookup) {
   if (!Array.isArray(turns)) return null;
   const result = [];
-  let request = null;
-  for (const turn of turns.slice(-MAX_TURNS * 2)) {
+  let current = null;
+  for (const turn of turns.slice(-MAX_TURNS * 3)) {
     if (!turn || typeof turn.content !== 'string') continue;
-    if (turn.role === 'user') { request = turn.content.slice(0, 12000); continue; }
-    if (turn.role !== 'assistant' || request === null) continue;
+    if (turn.role === 'user') { current = { request: turn.content.slice(0, 12000), steps: [], answer: null }; result.push(current); continue; }
+    if (turn.role !== 'assistant' || !current) continue;
+    // A request can show several assistant messages (the window shows the plan before the answer):
+    // the last one is the answer, and the steps are those of the message the agent recorded them for.
+    current.answer = turn.content.slice(0, 30000);
     const recorded = lookup(turn.content);
-    result.push({
-      request,
-      steps: cleanSteps(recorded?.steps),
-      answer: turn.content.slice(0, 30000),
-      ...(recorded && typeof recorded.system === 'string' && recorded.system ? { system: recorded.system.slice(0, 30000) } : {}),
-      ...(recorded && typeof recorded.model === 'string' ? { model: recorded.model.slice(0, 200) } : {}),
-    });
-    request = null;
+    if (recorded) {
+      current.steps = cleanSteps(recorded.steps);
+      if (typeof recorded.system === 'string' && recorded.system) current.system = recorded.system.slice(0, 30000);
+      if (typeof recorded.model === 'string') current.model = recorded.model.slice(0, 200);
+    }
   }
-  if (!result.some((turn) => turn.steps.length)) return null;
-  return { turns: result };
+  const answered = result.filter((turn) => turn.answer !== null).slice(-MAX_TURNS);
+  if (!answered.some((turn) => turn.steps.length)) return null;
+  return { turns: answered };
 }
 
 /**

@@ -1178,6 +1178,8 @@ ipcMain.handle('learning:train-start', async (_e, request) => {
 
 ipcMain.handle('agent:ask', async (_e, request) => {
   if (!selectedProject) throw new Error('Obre primer un projecte.');
+  // Training uses the memory the chat model would need; both at once run out of GPU memory.
+  if (trainingRun) throw new Error('Hi ha un entrenament en marxa. Espera que acabi o cancel·la’l al panell d’aprenentatge.');
   const payload = request && typeof request === 'object' ? request : { prompt: request };
   return askModel(String(payload.prompt || ''), selectedProject, payload.history);
 });
@@ -1195,6 +1197,7 @@ ipcMain.handle('models:select', async (_e, modelId) => {
   if (!model) throw new Error('Aquest model no és vàlid.');
   const available = (await getAvailableModels()).find((candidate) => candidate.id === model.id);
   if (!available?.available) throw new Error(available?.reason || 'Aquest model encara no està disponible en aquest Mac.');
+  if (trainingRun) throw new Error('Hi ha un entrenament en marxa; canvia de model quan acabi.');
   if (selectedModel !== model.id && modelWorker) {
     const child = modelWorker;
     modelWorker = null;

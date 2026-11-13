@@ -408,7 +408,8 @@ export function App(): React.JSX.Element {
     const offStatus = window.agentic.onStatus((s) => {
       const text = s.message || s.type;
       refreshProjectSoon();
-      const planActivityPrefix = 'Qwen està triant l’acció següent segons el pla:';
+      // Must match the agent's status text (src/core/assistant/agent.ts).
+      const planActivityPrefix = 'El model està triant l’acció següent segons el pla:';
       const planFromActivity = s.type === 'status' && s.message?.startsWith(planActivityPrefix)
         ? s.message.slice(planActivityPrefix.length).trim()
         : '';
@@ -423,7 +424,7 @@ export function App(): React.JSX.Element {
             persistMessages(pending.messages, pending.sessionId, pending.projectPath);
           }
           setStatus('Pla publicat al xat');
-          setLoadingLabel('Qwen ha escrit el pla; continua amb la tasca…');
+          setLoadingLabel('El model ha escrit el pla; continua amb la tasca…');
           return;
         }
       }
@@ -1073,7 +1074,7 @@ export function App(): React.JSX.Element {
             setStatus(`Seleccionat: ${model?.label || nextModel}. Envia una tasca per provar-lo.`);
           } catch (error) { setStatus(`No s’ha pogut canviar el model: ${errorText(error)}`); }
           finally { setModelChanging(false); }
-        }}>{modelOptions.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+        }}>{modelOptions.filter((model) => model.available || model.id === selectedModel).map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
   );
   // The composer is one line that grows with what is typed.
   useEffect(() => {
@@ -1108,7 +1109,7 @@ export function App(): React.JSX.Element {
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.200">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
         <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.400' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="surface.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
-          {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar a Qwen.</Text>}
+          {chatDropActive && <Text px="2" pb="2" color="agentic.200" fontSize="xs">Deixa anar aquí els documents de text o codi que vols passar al model.</Text>}
           <Flex align="flex-end" gap="2">
             <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
@@ -1119,7 +1120,7 @@ export function App(): React.JSX.Element {
         <Flex align="center" gap="2" mt="1.5" px="1" minW="0">
           <input ref={chatFilePickerRef} type="file" multiple hidden onChange={(event) => { if (event.target.files?.length) void addChatFiles(event.target.files); event.target.value = ''; }}/>
           <IconButton icon={Plus} label="Adjunta fitxers de text o codi" size="sm" onClick={() => chatFilePickerRef.current?.click()}/>
-          <Text flex="1" minW="0" fontSize="xs" color="fg.muted" textAlign="center" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Qwen és un model local i pot equivocar-se.</Text>
+          <Text flex="1" minW="0" fontSize="xs" color="fg.muted" textAlign="center" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">El model és local i pot equivocar-se.</Text>
           {modelSelect}
           <Button flex="none" size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>{permissionMode === 'auto' ? 'Automàtic' : 'Pregunta'}</Button>
         </Flex>
