@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem, screen } = require('electron');
+const windowState = require('./window-state.cjs');
 const path = require('node:path');
 const fsSync = require('node:fs');
 const fs = require('node:fs/promises');
@@ -631,8 +632,14 @@ function cancelModelRequest() {
 }
 
 function createWindow() {
+  // The window opens as it was left (size, place, maximized, full screen); not for a docs capture.
+  const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+  const remember = !process.env.AGENT_SCREENSHOT;
+  const saved = remember ? windowState.readWindowState(stateFile) : null;
+  const displays = [screen.getPrimaryDisplay(), ...screen.getAllDisplays().filter((display) => display.id !== screen.getPrimaryDisplay().id)].map((display) => display.workArea);
+  const bounds = windowState.windowBounds(saved, displays);
   win = new BrowserWindow({
-    width: 1440, height: 920, minWidth: 980, minHeight: 680,
+    ...bounds, minWidth: windowState.DEFAULTS.minWidth, minHeight: windowState.DEFAULTS.minHeight,
     title: 'Agentic Coder — Local',
     // On macOS the app draws its own title bar; the three window buttons stay where they are.
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 11 } } : {}),
@@ -655,6 +662,18 @@ function createWindow() {
   };
   win.webContents.on('will-navigate', (event, url) => { event.preventDefault(); openOutside(url); });
   win.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
+  if (saved?.maximized) win.maximize();
+  if (saved?.fullScreen) win.setFullScreen(true);
+  if (remember) {
+    const save = () => {
+      if (!win || win.isDestroyed()) return;
+      windowState.writeWindowState(stateFile, { bounds: win.getNormalBounds(), maximized: win.isMaximized(), fullScreen: win.isFullScreen() });
+    };
+    let timer = null;
+    const saveSoon = () => { clearTimeout(timer); timer = setTimeout(save, 400); };
+    for (const event of ['resize', 'move', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(event, saveSoon);
+    win.on('close', () => { clearTimeout(timer); save(); });
+  }
   win.loadFile(path.join(__dirname, '..', 'index.html'));
   if (process.env.AGENT_SCREENSHOT) win.webContents.once('did-finish-load', () => void captureForDocs());
 }

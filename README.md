@@ -18,6 +18,8 @@ Cada finestra és una funcionalitat; s’obren i es tanquen des de les icones de
 - **Aprenentatge local**: els casos verificats i l’entrenament d’un model propi.
 - **Terminal** a la carpeta del projecte.
 
+En tancar i tornar a obrir, l’app queda com la vas deixar: la mida i la posició de la finestra (també si era a pantalla completa o maximitzada), els panells oberts, les seccions obertes de l’Avaluació i l’Historial local (on era, la mida i si estava minimitzat o gran). Per a cada projecte, recorda també la pàgina del navegador i el fitxer de l’editor; si el fitxer ja no hi és, l’editor queda tancat.
+
 ## Què inclou
 - Aplicació d'escriptori Electron.
 - Selecció d'una carpeta de projecte i exploració de fitxers.

@@ -17,7 +17,8 @@ import {
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
-import { WindowTitleBar, type WindowStage } from './window-controls';
+import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
+import { loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -197,6 +198,8 @@ const MAX_CHAT_ATTACHMENT_COUNT = 8;
 const MAX_CHAT_ATTACHMENT_CHARS = 32_000;
 
 export function App(): React.JSX.Element {
+  // How the app was left when it was closed (src/app/view-state.ts), read once when it opens.
+  const [initialView] = useState<ViewState>(() => loadViewState(localStorage));
   const [project, setProject] = useState<ProjectInfo | null>(null);
   const projectFileCollection = useMemo(() => createFileTreeCollection(project?.files.map((file) => file.path) || []), [project?.files]);
   const projectDirectoryPaths = useMemo(() => new Set(project?.files.filter((file) => file.directory).map((file) => file.path) || []), [project?.files]);
@@ -222,21 +225,23 @@ export function App(): React.JSX.Element {
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
   // The browser and the file editor are independent: each opens beside the other instead of replacing it.
-  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(initialView.panels.browser);
   const [editorOpen, setEditorOpen] = useState(false);
   const [browserAddress, setBrowserAddress] = useState('');
   const [browserUrl, setBrowserUrl] = useState('about:blank');
+  // The page the browser actually reached (after redirects and links), to open it again next time.
+  const [browserVisited, setBrowserVisited] = useState('');
   const [browserContext, setBrowserContext] = useState('');
   const [terminalOutput, setTerminalOutput] = useState('');
   const [terminalStatus, setTerminalStatus] = useState('');
   // The terminal lives in its own dock at the bottom, so it stays open next to the browser or the editor.
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(initialView.panels.terminal);
   // Git and local learning share the bottom dock with the terminal, side by side: none of them takes
   // the place of the browser or of each other.
-  const [gitOpen, setGitOpen] = useState(false);
-  const [learningOpen, setLearningOpen] = useState(false);
+  const [gitOpen, setGitOpen] = useState(initialView.panels.git);
+  const [learningOpen, setLearningOpen] = useState(initialView.panels.learning);
   // The evaluation panel runs the agent benchmark with the selected model and shows what it did.
-  const [evaluationOpen, setEvaluationOpen] = useState(false);
+  const [evaluationOpen, setEvaluationOpen] = useState(initialView.panels.evaluation);
   const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
   const [evaluationRunning, setEvaluationRunning] = useState(false);
   const [evaluationLog, setEvaluationLog] = useState<{ step: string; message: string }[]>([]);
@@ -314,14 +319,14 @@ export function App(): React.JSX.Element {
   const [editorCursor, setEditorCursor] = useState({ line: 1, column: 1 });
   const [editorBusy, setEditorBusy] = useState(false);
   // What the page in the browser panel writes to its console, newest last.
-  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(initialView.panels.console);
   const [consoleEntries, setConsoleEntries] = useState<{ level: 'error' | 'warn' | 'info'; text: string; source: string }[]>([]);
   const consoleErrorCount = consoleEntries.filter((entry) => entry.level === 'error').length;
   const [permissionMode, setPermissionMode] = useState<'ask' | 'auto'>('ask');
   useEffect(() => { void window.agentic.getPermissionMode().then((mode) => setPermissionMode(mode === 'auto' ? 'auto' : 'ask')).catch(() => {}); }, []);
   const [editorStatus, setEditorStatus] = useState('');
   const [fileHistoryPath, setFileHistoryPath] = useState<string | null>(null);
-  const [fileHistoryStage, setFileHistoryStage] = useState<WindowStage>('default');
+  const [fileHistoryStage, setFileHistoryStage] = useState<WindowStage>(initialView.history.stage);
   const [fileHistoryScopePath, setFileHistoryScopePath] = useState('');
   const [fileHistoryVersionPath, setFileHistoryVersionPath] = useState('');
   const [fileHistoryCurrentPath, setFileHistoryCurrentPath] = useState('');
@@ -344,7 +349,7 @@ export function App(): React.JSX.Element {
   const [testsBusy, setTestsBusy] = useState(false);
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
-  const [navigationOpen, setNavigationOpen] = useState(true);
+  const [navigationOpen, setNavigationOpen] = useState(initialView.panels.navigation);
   const [navigationSectionsSplitSize, setNavigationSectionsSplitSize] = useState(getNavigationSectionsSplitSize);
   const [recentConversationsExpanded, setRecentConversationsExpanded] = useState(true);
   const [navigationWidth, setNavigationWidth] = useState(() => {
@@ -975,6 +980,43 @@ export function App(): React.JSX.Element {
   }
 
   // Saving is the user's decision. Each save keeps the previous version in the local history.
+  // The app opens as it was left (src/app/view-state.ts): which panels were open…
+  useEffect(() => {
+    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, console: consoleOpen, terminal: terminalOpen }; });
+  }, [navigationOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, consoleOpen, terminalOpen]);
+  // …and, per project, the page in the browser, the file in the editor (if it still exists) and the
+  // local history. They are put back once per project, before anything is saved for it.
+  const restoringViewRef = useRef<string | null>(null);
+  const [restoredView, setRestoredView] = useState<string | null>(null);
+  useEffect(() => {
+    const projectPath = project?.path;
+    if (!projectPath || restoringViewRef.current === projectPath) return;
+    restoringViewRef.current = projectPath;
+    const saved = loadViewState(localStorage).projects[projectPath] || {};
+    void (async () => {
+      if (saved.browserUrl) { setBrowserAddress(saved.browserUrl); setBrowserUrl(saved.browserUrl); }
+      if (saved.editorPath) {
+        try {
+          const content = await window.agentic.readFile(saved.editorPath);
+          if (restoringViewRef.current !== projectPath) return;
+          setEditingPath(saved.editorPath); setEditorOriginal(content); setEditorContent(content); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
+        } catch { /* the file is gone: the editor stays closed */ }
+      }
+      if (saved.historyPath && restoringViewRef.current === projectPath) {
+        let current = '';
+        try { current = await window.agentic.readFile(saved.historyPath); } catch { /* a deleted file still has its history */ }
+        if (restoringViewRef.current === projectPath) await openFileHistory(saved.historyPath, current);
+      }
+      if (restoringViewRef.current === projectPath) setRestoredView(projectPath);
+    })();
+  }, [project?.path]);
+  useEffect(() => {
+    const projectPath = project?.path;
+    if (!projectPath || restoredView !== projectPath) return;
+    const page = browserVisited || browserUrl;
+    updateViewState(localStorage, (state) => setProjectView(state, projectPath, { browserUrl: page, editorPath: editorOpen && editingPath ? editingPath : undefined, historyPath: fileHistoryPath || undefined }));
+  }, [project?.path, restoredView, browserVisited, browserUrl, editorOpen, editingPath, fileHistoryPath]);
+
   const editorStateRef = useRef({ path: null as string | null, content: '', original: '' });
   editorStateRef.current = { path: editingPath, content: editorContent, original: editorOriginal };
   async function saveEdit() {
@@ -1366,7 +1408,7 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     const view = webviewNode;
     if (!view) return;
-    const updateAddress = (event: Event) => { const url = (event as Event & { url?: string }).url; if (url) setBrowserAddress(url); };
+    const updateAddress = (event: Event) => { const url = (event as Event & { url?: string }).url; if (url) { setBrowserAddress(url); setBrowserVisited(url); } };
     // A new page starts with a clean console; every line it writes afterwards is kept (the last 300).
     const clearConsole = () => setConsoleEntries([]);
     const addConsoleLine = (event: Event) => {
@@ -1453,7 +1495,7 @@ export function App(): React.JSX.Element {
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       </Stack>
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="enclosed" bg="bg">
+      <Accordion.Root multiple collapsible defaultValue={initialView.evaluationSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.evaluationSections = value; })} size="sm" variant="enclosed" bg="bg">
         <Accordion.Item value="tasks">
           <Accordion.ItemTrigger>{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody pt="0">
@@ -1835,10 +1877,15 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <FloatingPanel.Root open={!!fileHistoryPath} onOpenChange={({ open }) => { if (!open) { setFileHistoryPath(null); setFileHistoryStage('default'); } }} onStageChange={({ stage }) => setFileHistoryStage(stage as WindowStage)} persistRect defaultPosition={{ x: 24, y: 64 }} defaultSize={{ width: 1120, height: 720 }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
+    <FloatingPanel.Root open={!!fileHistoryPath} onOpenChange={({ open }) => { if (!open) setFileHistoryPath(null); }}
+      onStageChange={({ stage }) => { setFileHistoryStage(stage as WindowStage); updateViewState(localStorage, (state) => { state.history.stage = stage as WindowStage; }); }}
+      onPositionChangeEnd={({ position }) => updateViewState(localStorage, (state) => { state.history.position = position; })}
+      onSizeChangeEnd={({ size }) => updateViewState(localStorage, (state) => { state.history.size = size; })}
+      persistRect defaultPosition={initialView.history.position ?? { x: 24, y: 64 }} defaultSize={initialView.history.size ?? { width: 1120, height: 720 }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
         <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
+        <RestoreWindowStage stage={fileHistoryStage}/>
         <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<>Historial local: {fileHistoryScopePath || project?.path || fileHistoryPath}</>}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
         <Grid h="full" minH="0" minW="0" templateColumns="260px minmax(0, 1fr)">

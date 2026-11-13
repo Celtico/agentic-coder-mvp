@@ -1,6 +1,6 @@
-import { FloatingPanel, HStack, IconButton } from "@chakra-ui/react"
+import { FloatingPanel, HStack, IconButton, useFloatingPanelContext } from "@chakra-ui/react"
 import { LuMinus as Minus, LuPlus as Plus, LuX as X } from "react-icons/lu"
-import type { ReactNode } from "react"
+import { useEffect, type ReactNode } from "react"
 
 export type WindowStage = "default" | "minimized" | "maximized"
 
@@ -59,4 +59,19 @@ export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage
       </FloatingPanel.DragTrigger>
     </FloatingPanel.Header>
   )
+}
+
+/**
+ * Puts a floating window back in the stage it was left in (minimized or big) when it opens. Goes
+ * inside its FloatingPanel.Root; the panel has no prop for a starting stage.
+ */
+export function RestoreWindowStage({ stage }: { stage: WindowStage }) {
+  const panel = useFloatingPanelContext()
+  useEffect(() => {
+    if (stage === "maximized") panel.maximize()
+    else if (stage === "minimized") panel.minimize()
+    // Only when the window opens: afterwards the user moves it between stages.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
 }
