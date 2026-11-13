@@ -101,7 +101,7 @@ function rememberTrajectory(answer, trajectory) {
 const activeModelToolCalls = new Set();
 let activeModelRequestId = null;
 let selectedProject = null;
-let selectedModel = 'qwen-7b-mlx';
+let selectedModel = mlxModels.DEFAULT_MODEL_ID;
 /** 'ask': the agent asks before installing packages. 'auto': it never asks. The user's choice, kept between sessions. */
 let permissionMode = 'ask';
 let activeProjectProcess = null;
@@ -191,7 +191,7 @@ const projectModelsDirectory = () => process.env.AGENT_MODELS_DIR
 const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || path.join(projectModelsDirectory(), '.mlx-venv', 'bin', 'python');
 // Every MLX model this app knows (src/electron/mlx-models.cjs); one is offered only when its weights are here.
 const allModels = () => mlxModels.listModels(projectModelsDirectory());
-const currentModel = async () => { const models = await allModels(); return models.find((model) => model.id === selectedModel) || models[0]; };
+const currentModel = async () => { const models = await allModels(); return models.find((model) => model.id === selectedModel) || mlxModels.defaultModel(models); };
 async function getAvailableModels() {
   const mlxPythonReady = await fs.access(mlxPythonPath()).then(() => true, () => false);
   const result = [];
@@ -739,8 +739,8 @@ app.whenReady().then(async () => {
   try {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
-    // The Qwen 1.5B is no longer offered: settings saved with it move to the 7B.
-    const savedModel = saved.selectedModel === 'qwen-1.5b' ? 'qwen-7b-mlx' : saved.selectedModel;
+    // The Qwen 1.5B is no longer offered: settings saved with it move to the base model.
+    const savedModel = saved.selectedModel === 'qwen-1.5b' ? mlxModels.DEFAULT_MODEL_ID : saved.selectedModel;
     if ((await allModels()).some((model) => model.id === savedModel)) selectedModel = savedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
   } catch {}

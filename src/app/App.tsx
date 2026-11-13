@@ -220,7 +220,7 @@ export function App(): React.JSX.Element {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [status, setStatus] = useState('Preparat · model encara no carregat');
   const [modelOptions, setModelOptions] = useState<LocalModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState('qwen-7b-mlx');
+  const [selectedModel, setSelectedModel] = useState('mimo-9b-mlx');
   const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');

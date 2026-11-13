@@ -14,6 +14,13 @@ const builtInModels = [
   { id: 'mimo-9b-mlx', label: 'MiMo V2.6 9B · MLX', modelId: 'mlx-community/MiMo-V2.6-Distill-Qwen-9B-OptiQ-4bit', runtime: 'mlx', folder: 'mimo-v2.6-distill-qwen-9b-4bit', aliases: ['mimo', 'mimo-9b'] },
 ];
 
+// The base model of the app: MiMo V2.6 9B (13-11-2026 benchmark: 9/10 open tasks, close to Gemma 4 12B's
+// 10/10 in about half its time per task). The others stay selectable.
+const DEFAULT_MODEL_ID = 'mimo-9b-mlx';
+
+/** The model to use when none is chosen (or the chosen one is gone): the base one, or else the first listed. */
+const defaultModel = (models) => models.find((model) => model.id === DEFAULT_MODEL_ID) || models[0];
+
 async function hasWeights(directory) {
   try {
     await fs.access(path.join(directory, 'config.json'));
@@ -59,4 +66,4 @@ async function findModel(modelsRoot, idOrAlias) {
   return (await listModels(modelsRoot)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
 }
 
-module.exports = { builtInModels, listModels, findModel, modelDirectory };
+module.exports = { builtInModels, listModels, findModel, modelDirectory, DEFAULT_MODEL_ID, defaultModel };

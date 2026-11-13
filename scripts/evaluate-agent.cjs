@@ -1,6 +1,6 @@
 // Repeatable benchmark of the coding agent with the real local model.
 //
-//   npm run evaluate:agent                      # every task once with Qwen 7B (MLX)
+//   npm run evaluate:agent                      # every task once with the base model, MiMo 9B (MLX)
 //   npm run evaluate:agent -- --model gemma     # another MLX model: id or alias from src/electron/mlx-models.cjs
 //   npm run evaluate:agent -- --task add-function --repeat 3
 //   npm run evaluate:agent -- --list
@@ -16,7 +16,7 @@ const modelsRoot = process.env.AGENT_MODELS_DIR || path.join(repoRoot, 'models')
 const mlxModels = require('../src/electron/mlx-models.cjs');
 
 function parseArgs(argv) {
-  const options = { model: '7b', tasks: [], repeat: 1, keep: false, list: false, timeoutMinutes: 10 };
+  const options = { model: mlxModels.DEFAULT_MODEL_ID, tasks: [], repeat: 1, keep: false, list: false, timeoutMinutes: 10 };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const next = () => { const value = argv[++index]; if (value === undefined) throw new Error(`Falta el valor de ${arg}`); return value; };

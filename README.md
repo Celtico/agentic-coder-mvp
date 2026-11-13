@@ -2,7 +2,7 @@
 
 ![Agentic Coder: un agent de programació que viu al teu Mac](docs/cover.png)
 
-Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple, en un procés local aïllat de la interfície: Qwen2.5-Coder 7B per defecte, i Gemma 4 12B o MiMo V2.6 9B si se'n descarreguen els pesos, seleccionables a la barra de dalt. Només hi ha un model a la GPU alhora. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
+Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple, en un procés local aïllat de la interfície. El model base és **MiMo V2.6 9B**: al [benchmark](#benchmark) fa 9 de 10 tasques obertes, a prop de Gemma 4 12B (10/10), en gairebé la meitat de temps per tasca. Gemma 4 12B i Qwen2.5-Coder 7B continuen seleccionables a la barra de dalt si se'n descarreguen els pesos. Només hi ha un model a la GPU alhora. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
 ![L’app sencera: converses i fitxers, editor, navegador, avaluació, xat amb l’agent, i a baix Git, aprenentatge i terminal](docs/captura.jpg)
 
@@ -45,7 +45,7 @@ La decisió del motor, els models provats i l'aprenentatge estan documentats a [
 - macOS amb Apple Silicon.
 - Node.js 20 LTS o posterior (recomanat).
 - Python 3.12 amb MLX en un entorn propi a `models/.mlx-venv` (`python3 -m venv models/.mlx-venv && models/.mlx-venv/bin/pip install mlx-lm`).
-- Connexió a internet per instal·lar dependències i descarregar els pesos una vegada. El Qwen 7B va a `models/.hf` (memòria cau de Hugging Face); els altres models, a `models/mlx/<carpeta>`:
+- Connexió a internet per instal·lar dependències i descarregar els pesos una vegada. MiMo (el model base) i Gemma van a `models/mlx/<carpeta>`; el Qwen 7B, a `models/.hf` (memòria cau de Hugging Face). Sense els pesos de MiMo, l’app fa servir el primer model que trobi:
 
 ```bash
 models/.mlx-venv/bin/hf download lmstudio-community/gemma-4-12B-it-MLX-4bit --local-dir models/mlx/gemma-4-12b-it-4bit
@@ -66,7 +66,7 @@ La primera petició al model tarda una mica perquè el carrega a la memòria (un
 
 Per executar l’avaluació sintètica de recuperació semàntica sense llegir dades personals, fes servir `npm run evaluate:memory`. Compara `Recall@3` i `MRR@3` amb la cerca per paraules; és una prova petita, no una validació suficient per entrenar ni substituir cap model.
 
-Per mesurar l’agent sencer amb el model real, fes servir `npm run evaluate:agent` (Qwen 7B per defecte; `-- --model gemma` o `-- --model mimo` per als altres), o el panell **Avaluació** de l’app, que fa el mateix. És un conjunt fix de tasques, cadascuna en una carpeta temporal nova:
+Per mesurar l’agent sencer amb el model real, fes servir `npm run evaluate:agent` (MiMo 9B per defecte; `-- --model gemma` o `-- --model 7b` per als altres), o el panell **Avaluació** de l’app, que fa el mateix. És un conjunt fix de tasques, cadascuna en una carpeta temporal nova:
 
 - **Tasques obertes de codi:** corregir una prova que falla sense tocar la prova, afegir una funció que una prova ja espera, crear una pàgina, fer un comptador de clics que funcioni, i respondre una pregunta sense tocar res.
 - **Apps des d’una carpeta buida**, amb la petició tal com la diria una persona («Munta’m una interfície amb Chakra UI» i dues variants obertes). Poden instal·lar paquets amb xarxa. Passen si `npm run build` passa, la pàgina compilada carrega sense errors de consola i mostra contingut, i, si demanen Chakra UI, si és la v3 sense API que la v3 va treure.
@@ -209,12 +209,12 @@ Els models generatius són `mlx-community/Qwen2.5-Coder-7B-Instruct-4bit` (Apach
 
 | Fase | Estat actual |
 | --- | --- |
-| Motor local | MLX carrega Qwen2.5-Coder-7B (4 bits) des de `models/.hf` en un procés local. Històric: Transformers.js havia carregat Qwen2.5-Coder-1.5B, ja retirat (13-11-2026: 3/6 al benchmark, igual que el 7B, però fallava en tasques obertes). La prova amb la xarxa físicament desactivada i l’acceleració Metal encara estan pendents. |
+| Motor local | MLX carrega el model triat (per defecte MiMo V2.6 9B, 4 bits, des de `models/mlx/`) en un procés local. Històric: Transformers.js havia carregat Qwen2.5-Coder-1.5B, ja retirat (13-11-2026: 3/6 al benchmark, igual que el 7B, però fallava en tasques obertes). La prova amb la xarxa físicament desactivada i l’acceleració Metal encara estan pendents. |
 | Orquestrador | Bucle local d’eines limitat, validació d’arguments, restricció a la carpeta seleccionada, creació segura de subcarpetes i còpia recuperable de cada fitxer modificat o eliminat; només la instal·lació de paquets demana confirmació. Detecta també peticions catalanes com «fes una aplicació nova» com a tasques d’implementació; una explicació sense cap fitxer escrit no es presenta com a feina acabada. Abans de començar, les instruccions demanen al model revisar les eines disponibles i triar-ne una. En una conversa nova, Qwen 7B va crear un fitxer `index.html` real; en una tasca de portfoli va crear `src/index.html` i `src/styles.css`, però no va completar l’entrada funcional a l’arrel. Per tant, pot executar eines en tasques simples, però encara falla en alguns projectes oberts. La generació es pot aturar tancant el procés aïllat del model, que es torna a carregar en la petició següent; les accions confirmades en curs no s’interrompen. No hi ha una eina de shell lliure per al model. |
 | Navegador i edició | Les peticions explícites d’arrencar una app local i d’inspeccionar una URL localhost criden les eines directament. La inspecció pot comprovar elements accessibles, clicar, omplir camps i verificar text amb un màxim de 12 accions; no s’accepten selectors arbitraris ni JavaScript del model. La inspecció la fa el navegador que ja porta Electron, sense instal·lar res al projecte; amb la versió anterior basada en Playwright, Agentic Coder va iniciar Notes al webview i va obtenir HTTP 200, títol `Notes` i cap error de consola, pàgina o xarxa. En una tasca real amb Qwen local, una instrucció llarga no va produir cap canvi; una instrucció directa i acotada sí que va corregir `src/math.cjs` i `npm test` va passar (1/1). El cicle d’interacció del navegador amb l’orquestrador i la fiabilitat general del model encara s’han de validar junts. |
 | Interfície | React, TypeScript, Chakra UI, Monaco per editar codi, xterm.js per a la terminal, xat amb historial local, panells separables, navegador integrat i panell Git de només lectura. `git-interface` aporta les branques locals i els remots; les operacions de canvi continuen protegides pels controls locals. La distribució instal·lable encara no està feta. |
 | Memòria i aprenentatge | Converses guardades a SQLite local, associades al projecte quan se selecciona i restaurades amb la carpeta corresponent; migració des de `localStorage`. Els casos verificats es desen amb tota la seqüència d’eines i se’n recuperen fins a tres del mateix projecte amb un model d’embeddings multilingüe local. L’entrenament LoRA → avaluació → fusió en una versió pròpia està fet i provat amb un executor simulat; encara no s’ha entrenat cap versió amb casos reals. |
 | Distribució | `npm run dist:mac` genera un `.dmg` sense signar per a Apple Silicon; els models es llegeixen de la carpeta de dades de l’app. Falten signatura, notarització i actualitzacions automàtiques. |
-| Models | Qwen 7B, Gemma 4 12B i MiMo 9B carreguen en un Mac de 16 GB (Gemma, fins a ~9,6 GB). Comparativa amb el benchmark: vegeu [Benchmark](#benchmark). |
+| Models | MiMo 9B (el base), Gemma 4 12B i Qwen 7B carreguen en un Mac de 16 GB (Gemma, fins a ~9,6 GB). Comparativa amb el benchmark: vegeu [Benchmark](#benchmark). |
 
 El registre detallat de la decisió del motor i de les limitacions és a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
