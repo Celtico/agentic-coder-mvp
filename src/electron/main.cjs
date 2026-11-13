@@ -174,7 +174,11 @@ const modelDefinitions = [
   { id: 'qwen-1.5b', label: 'Qwen2.5-Coder 1.5B · Transformers.js', modelId: 'onnx-community/Qwen2.5-Coder-1.5B-Instruct', runtime: 'transformers' },
   { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX (Apple)', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx' },
 ];
-const projectModelsDirectory = () => path.resolve(__dirname, '..', '..', 'models');
+// Run from the repository, the models live in its models/ folder. An installed app cannot carry
+// several gigabytes of weights inside its bundle, so it reads them from its data folder
+// (~/Library/Application Support/Agentic Coder/models), or from AGENT_MODELS_DIR.
+const projectModelsDirectory = () => process.env.AGENT_MODELS_DIR
+  || (app.isPackaged ? path.join(app.getPath('userData'), 'models') : path.resolve(__dirname, '..', '..', 'models'));
 const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || path.join(projectModelsDirectory(), '.mlx-venv', 'bin', 'python');
 const mlxModelDirectory = async () => {
   const modelRoot = path.join(projectModelsDirectory(), '.hf', 'hub', 'models--mlx-community--Qwen2.5-Coder-7B-Instruct-4bit', 'snapshots');
@@ -488,10 +492,14 @@ async function startModelWorker() {
     execArgv: [],
     env: {
       ...process.env,
-      AGENT_MODEL_CACHE: path.resolve(__dirname, '..', '..', 'models'),
+      AGENT_MODEL_CACHE: projectModelsDirectory(),
       AGENT_MODEL_RUNTIME: modelDefinitions.find((model) => model.id === selectedModel)?.runtime || 'transformers',
       AGENT_MODEL: modelDefinitions.find((model) => model.id === selectedModel)?.modelId || modelDefinitions[0].modelId,
-      AGENT_MODEL_PATH: path.resolve(__dirname, '..', '..', 'models', 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+      AGENT_MODEL_PATH: path.join(projectModelsDirectory(), 'onnx-community', 'Qwen2.5-Coder-1.5B-Instruct'),
+      // An installed app must not write inside its own bundle: the turn log goes to the data folder.
+      ...(app.isPackaged && !process.env.AGENT_TURN_LOG ? { AGENT_TURN_LOG: path.join(app.getPath('userData'), 'logs', 'agent-turns.jsonl') } : {}),
+      // Without a Node.js of its own, the worker runs on Electron's Node.
+      ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       AGENT_MLX_PYTHON: mlxPythonPath(),
       AGENT_MLX_MODEL_PATH: await mlxModelDirectory() || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
@@ -541,6 +549,8 @@ function findNodeExecutable() {
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {
     if (directory) candidates.push(path.join(directory, name));
   }
+  // Opened from Finder, an app gets a short PATH without Homebrew or the usual installers.
+  if (process.platform === 'darwin') candidates.push('/opt/homebrew/bin/node', '/usr/local/bin/node');
   for (const candidate of candidates) {
     if (!candidate || path.resolve(candidate) === path.resolve(process.execPath)) continue;
     try {
@@ -548,6 +558,7 @@ function findNodeExecutable() {
       return candidate;
     } catch {}
   }
+  if (app.isPackaged) return process.execPath;
   throw new Error('No he trobat Node.js per executar el treballador local. Configura AGENT_NODE_EXECUTABLE o obre l’app des d’un entorn amb Node.js al PATH.');
 }
 
@@ -641,7 +652,13 @@ app.whenReady().then(async () => {
     if (modelDefinitions.some((model) => model.id === saved.selectedModel)) selectedModel = saved.selectedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
   } catch {}
-  if (!selectedProject) { selectedProject = path.resolve(__dirname, '..', '..'); await saveSettings(); }
+  if (!selectedProject) {
+    // From the repository the app opens itself; installed, it starts in an empty folder of its own,
+    // never in the home folder, because the agent writes in the selected folder without asking.
+    selectedProject = app.isPackaged ? path.join(app.getPath('userData'), 'projecte-de-prova') : path.resolve(__dirname, '..', '..');
+    await fs.mkdir(selectedProject, { recursive: true });
+    await saveSettings();
+  }
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

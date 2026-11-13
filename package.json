@@ -6,6 +6,7 @@
   "main": "src/electron/main.cjs",
   "scripts": {
     "start": "npm run typecheck && npm run build:agent && npm run build:ui && electron .",
+    "dist:mac": "npm run check && electron-builder --mac dmg --arm64",
     "check": "node --check src/electron/main.cjs && node --check src/electron/preload.cjs && node --check src/electron/git-tools.cjs && node --check src/core/assistant/agent-worker.cjs && npm run typecheck && npm run build:agent && node --check src/core/assistant/agent-runtime.cjs && npm run build:ui",
     "test": "npm run build:agent && node --test",
     "evaluate:memory": "npm run build:agent && node scripts/evaluate-memory.cjs",
@@ -34,6 +35,44 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "electron": "^44.9.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "cat.agentic-coder.mvp",
+    "productName": "Agentic Coder",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
+    "files": [
+      "package.json",
+      "assets/**",
+      "src/index.html",
+      "src/app.bundle.js",
+      "src/app.bundle.css",
+      "src/electron/*.cjs",
+      "!src/electron/*.test.cjs",
+      "src/core/assistant/agent-runtime.cjs",
+      "src/core/assistant/agent-worker.cjs",
+      "src/core/assistant/mlx-worker.py"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Agentic Coder"
+    }
   }
 }

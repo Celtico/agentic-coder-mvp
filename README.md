@@ -43,6 +43,28 @@ Per executar l’avaluació sintètica de recuperació semàntica sense llegir d
 
 Per mesurar l’agent sencer amb el model real, fes servir `npm run evaluate:agent` (o `npm run evaluate:agent -- --model 7b` per al Qwen 7B amb MLX). Executa un conjunt fix de tasques petites de programació (corregir una prova que falla, afegir una funció que una prova ja espera, crear una pàgina, respondre una pregunta sense tocar res), cadascuna en una carpeta temporal nova i sense xarxa. El resultat es decideix amb comprovacions objectives sobre la carpeta: `npm test` passa, els fitxers de prova no s’han modificat, el fitxer demanat hi és. No hi ha cap model fent de jutge. L’informe JSON i els torns del model es desen a `logs/benchmarks/`. Opcions: `--task <id>` (o diversos separats per comes), `--repeat <n>`, `--keep` per conservar les carpetes i `--list` per veure les tasques. Les tasques són a [`scripts/agent-benchmark/tasks.cjs`](scripts/agent-benchmark/tasks.cjs); compara sempre amb el mateix conjunt i el mateix nombre de repeticions abans i després d’un canvi d’instruccions o de model.
 
+### App instal·lable per a macOS (`.dmg`)
+
+```bash
+npm run dist:mac
+```
+
+Genera `dist/Agentic Coder-0.1.0-arm64.dmg` (Apple Silicon) amb electron-builder. Cal executar-ho al Mac. El paquet no està signat ni notaritzat: la primera vegada macOS dirà que no pot verificar el desenvolupador; obre’l amb clic dret › Obre, o a Configuració del Sistema › Privadesa i seguretat › Obre igualment.
+
+Els pesos dels models no van dins del `.dmg` (en fan uns quants GB). L’app instal·lada els busca a `~/Library/Application Support/Agentic Coder/models`, amb la mateixa estructura que la carpeta `models/` del repositori. La manera més senzilla és enllaçar-hi la carpeta que ja tens:
+
+```bash
+mkdir -p ~/Library/Application\ Support/Agentic\ Coder
+ln -s ~/Desktop/agentic-coder-mvp/models ~/Library/Application\ Support/Agentic\ Coder/models
+```
+
+També es pot indicar una altra carpeta amb la variable `AGENT_MODELS_DIR`. Altres diferències de l’app instal·lada:
+
+- Les dades (converses, historial de fitxers, casos verificats, registre de torns) es desen a `~/Library/Application Support/Agentic Coder/`, no a les de la versió que s’executa des del repositori: les converses d’una no apareixen a l’altra.
+- El primer cop obre una carpeta buida pròpia (`projecte-de-prova` dins d’aquella carpeta de dades), mai la carpeta personal.
+- El model s’executa en un procés Node.js a part. Si no troba Node al `PATH` ni a `/opt/homebrew/bin` o `/usr/local/bin`, fa servir el Node que porta Electron.
+- No inclou actualitzacions automàtiques.
+
 ### Què surt de la màquina
 
 - La descàrrega inicial dels models des de Hugging Face.
@@ -111,6 +133,6 @@ El model generatiu per defecte és `onnx-community/Qwen2.5-Coder-1.5B-Instruct`,
 | Navegador i edició | Les peticions explícites d’arrencar una app local i d’inspeccionar una URL localhost criden les eines directament. La inspecció pot comprovar elements accessibles, clicar, omplir camps i verificar text amb un màxim de 12 accions; no s’accepten selectors arbitraris ni JavaScript del model. La inspecció la fa el navegador que ja porta Electron, sense instal·lar res al projecte; amb la versió anterior basada en Playwright, Agentic Coder va iniciar Notes al webview i va obtenir HTTP 200, títol `Notes` i cap error de consola, pàgina o xarxa. En una tasca real amb Qwen local, una instrucció llarga no va produir cap canvi; una instrucció directa i acotada sí que va corregir `src/math.cjs` i `npm test` va passar (1/1). El cicle d’interacció del navegador amb l’orquestrador i la fiabilitat general del model encara s’han de validar junts. |
 | Interfície | React, TypeScript, Chakra UI, Monaco per editar codi, xterm.js per a la terminal, xat amb historial local, panells separables, navegador integrat i panell Git de només lectura. `git-interface` aporta les branques locals i els remots; les operacions de canvi continuen protegides pels controls locals. La distribució instal·lable encara no està feta. |
 | Memòria i aprenentatge | Converses guardades a SQLite local, associades al projecte quan se selecciona i restaurades amb la carpeta corresponent; migració des de `localStorage`. Els casos verificats es desen localment i se’n recuperen fins a tres del mateix projecte amb un model d’embeddings multilingüe local; les candidatures de dades es filtren i separen localment, però l’entrenament automàtic continua pendent. |
-| Distribució | L’app encara s’executa des del repositori; falten empaquetament, signatura i instal·lador de macOS. |
+| Distribució | `npm run dist:mac` genera un `.dmg` sense signar per a Apple Silicon; els models es llegeixen de la carpeta de dades de l’app. Falten signatura, notarització i actualitzacions automàtiques. |
 
 El registre detallat de la decisió del motor i de les limitacions és a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
