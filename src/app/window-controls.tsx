@@ -1,4 +1,4 @@
-import { FloatingPanel, HStack, IconButton, useFloatingPanelContext, type IconButtonProps } from "@chakra-ui/react"
+import { FloatingPanel, IconButton, useFloatingPanelContext, type IconButtonProps } from "@chakra-ui/react"
 import { LuMinus as Minus, LuPlus as Plus, LuX as X } from "react-icons/lu"
 import { useEffect, type ReactNode } from "react"
 
@@ -36,17 +36,19 @@ function Light({ color, label, children, ...trigger }: Omit<IconButtonProps, "co
 }
 
 /**
- * The header of a floating window, like a macOS one: the whole bar drags the window (double click
- * maximizes or restores it), the traffic lights are on the left — red closes, yellow minimizes,
- * green makes it big — and the title is centred. `stage` is the panel's current stage (from its
+ * The header of a floating window: the traffic lights on the left, like a macOS one — red closes, yellow
+ * minimizes, green makes it big — and after them the same title as every pane's header (icon, title,
+ * subtitle: a PaneTitle), left-aligned, 40 px high like the panes' headers. The whole bar drags the
+ * window (double click maximizes or restores it). `stage` is the panel's current stage (from its
  * Root's onStageChange): yellow and green turn into "restore" when the window is already in theirs.
  */
 export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage: WindowStage; name: string }) {
   const minimized = stage === "minimized"
   const maximized = stage === "maximized"
   return (
-    <FloatingPanel.Header p="0" gap="0">
-      <FloatingPanel.DragTrigger flex="1" minW="0" h="windowTitleBar" display="grid" gridTemplateColumns="auto minmax(0, 1fr) auto" alignItems="center" gap="3" px="windowLightInset" py="0">
+    <FloatingPanel.Header p="0" gap="0" minH="0">
+      {/* The pane header's box: 40 px, centred vertically, its padding and its line underneath. */}
+      <FloatingPanel.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border">
         <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic">
           <FloatingPanel.CloseTrigger asChild>
             <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
@@ -58,9 +60,7 @@ export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage
             <Light color="window.maximize" label={maximized ? `Restaura la mida de ${name}` : `Fes gran ${name}`}><Plus size={8} strokeWidth={3}/></Light>
           </FloatingPanel.StageTrigger>
         </FloatingPanel.Control>
-        <FloatingPanel.Title truncate textAlign="center" fontSize="xs" fontWeight="semibold">{title}</FloatingPanel.Title>
-        {/* As wide as the lights, so the title stays in the middle of the bar. */}
-        <HStack aria-hidden="true" w="windowLights" />
+        <FloatingPanel.Title display="flex" flex="1" minW="0" textAlign="start">{title}</FloatingPanel.Title>
       </FloatingPanel.DragTrigger>
     </FloatingPanel.Header>
   )

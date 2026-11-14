@@ -31,7 +31,7 @@ function render(stage) {
 const buttons = (html) => [...html.matchAll(/<button[^>]*>/g)].map((match) => match[0]);
 const label = (button) => /aria-label="([^"]*)"/.exec(button)?.[1];
 
-test('the three traffic lights are on the left, before the centred title, and none is hidden', () => {
+test('the three traffic lights are on the left, then the title, left-aligned, and none is hidden', () => {
   const html = render('default');
   const lights = buttons(html);
   assert.deepEqual(lights.map(label), ['Tanca l’historial', 'Minimitza l’historial', 'Fes gran l’historial']);
@@ -40,6 +40,14 @@ test('the three traffic lights are on the left, before the centred title, and no
   // The whole bar is the drag handle: the lights are inside it (zag ignores a drag that starts on a button).
   const drag = html.indexOf('data-part="drag-trigger"');
   assert.ok(drag > -1 && drag < html.indexOf('Tanca l’historial'));
+  // Left-aligned, 40 px like the panes' headers, with nothing to keep it centred.
+  assert.doesNotMatch(html, /text-align:\s*center|text-align_center/);
+  const source = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
+  assert.match(source, /<FloatingPanel\.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border">/);
+  // The same box as the panes' header (src/theme/pane-recipes.ts).
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /root: \{ colorPalette: "agentic", display: "flex", flex: "none", h: "10", alignItems: "center", gap: "2", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" \}/);
+  assert.match(source, /<FloatingPanel\.Title display="flex" flex="1" minW="0" textAlign="start">/);
 });
 
 test('each light is the trigger itself: it gets the trigger’s click and attributes', () => {
