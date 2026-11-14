@@ -64,3 +64,21 @@ test('the theme built for an accent gives «agentic» that palette, and «brand�
   assert.equal(blue.token('colors.brand.500'), '#10a37f');
   assert.ok(blue.token('colors.agentic.solid'), 'the semantic token the components use exists');
 });
+
+test('every semantic colour the recipes and the app use exists in the theme (an undefined one is transparent)', () => {
+  // On 14-11-2026 «bg» and «border» were single values, which hid Chakra's whole groups: bg.panel was
+  // undefined and the dialogs were see-through; fg.error and fg.warning had no colour either.
+  for (const accent of ['agentic', 'blue']) {
+    const system = theme.buildSystem(accent);
+    for (const token of ['bg', 'bg.panel', 'bg.subtle', 'bg.muted', 'fg', 'fg.muted', 'fg.error', 'fg.warning', 'border', 'border.subtle', 'canvas', 'surface', 'surface.subtle',
+      'brand.solid', 'brand.fg', 'brand.subtle', 'agentic.solid', 'agentic.fg', 'agentic.subtle', 'agentic.contrast']) {
+      assert.ok(system.token(`colors.${token}`), `${token} (${accent}) is not defined`);
+    }
+  }
+  // And every colour named in the panes' and dialogs' recipes.
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  const named = [...recipes.matchAll(/(?:bg|color|borderColor): "([a-z]+(?:\.[a-z]+)?)"/g)].map((match) => match[1]).filter((name) => name !== 'transparent');
+  assert.ok(named.length > 5);
+  const system = theme.buildSystem('agentic');
+  for (const token of new Set(named)) assert.ok(system.token(`colors.${token}`), `${token} used in a recipe is not defined`);
+});

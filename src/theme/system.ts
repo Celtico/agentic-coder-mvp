@@ -73,12 +73,22 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         // The window is a canvas; every pane is a rounded panel resting on it (dark by default; light
         // when chosen in Preferències).
         canvas: { value: { _light: "#f2f2f2", _dark: "#171717" } },
-        bg: { value: { _light: "#ffffff", _dark: "#212121" } },
-        fg: { value: { _light: "#1f1f1f", _dark: "#ececec" } },
-        "fg.muted": { value: { _light: "#5e5e5e", _dark: "#a1a1a1" } },
+        // bg, fg and border are groups: DEFAULT is the app's own value, and Chakra's own members
+        // (bg.muted, fg.error, border.subtle…) are kept. Written as single values they hid the whole group,
+        // and bg.panel (dialogs), fg.error or fg.warning had no colour at all.
+        bg: {
+          DEFAULT: { value: { _light: "#ffffff", _dark: "#212121" } },
+          // Dialogs and floating windows: a step lighter than the panes, so they stand out from the window.
+          panel: { value: { _light: "#ffffff", _dark: "#2a2a2a" } },
+          subtle: { value: { _light: "#f7f7f7", _dark: "#262626" } },
+        },
+        fg: {
+          DEFAULT: { value: { _light: "#1f1f1f", _dark: "#ececec" } },
+          muted: { value: { _light: "#5e5e5e", _dark: "#a1a1a1" } },
+        },
         surface: { value: { _light: "#ececec", _dark: "#303030" } },
         "surface.subtle": { value: { _light: "#f2f2f2", _dark: "#171717" } },
-        border: { value: { _light: "#dcdcdc", _dark: "#393939" } },
+        border: { DEFAULT: { value: { _light: "#dcdcdc", _dark: "#393939" } } },
         accent: { value: "{colors.agentic.500}" },
         // The traffic lights of a floating window, like macOS (src/app/window-controls.tsx).
         "window.close": { value: "#ff5f57" },
