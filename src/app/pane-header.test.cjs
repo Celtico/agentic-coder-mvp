@@ -234,8 +234,11 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   for (const name of ['conversationsColumn', 'filesColumn']) {
     const column = app.slice(app.indexOf(`const ${name} = (`), app.indexOf('</PaneCard>', app.indexOf(`const ${name} = (`)));
-    assert.match(column, /<Box flex="1" minH="0" overflowY="auto"/, name);
+    assert.match(column, /<Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable"/, name);
   }
+  // The whole list of the project's conversations, not the first 12: a long list scrolls.
+  const conversations = app.slice(app.indexOf('const conversationsColumn = ('), app.indexOf('const filesColumn = ('));
+  assert.doesNotMatch(conversations, /\.slice\(0, 12\)/);
   const aside = app.slice(app.indexOf('<Flex as="aside"'), app.indexOf('</Flex>\n        </Splitter.Panel>', app.indexOf('<Flex as="aside"')));
   assert.match(aside, /<Splitter\.Root key=\{navigationKey\}/);
   assert.match(aside, /<SplitterHandle id=\{`nav-\$\{sideColumns\[index - 1\]\}:nav-\$\{column\}`/);

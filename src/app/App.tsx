@@ -2060,9 +2060,10 @@ export function App(): React.JSX.Element {
             <PaneCard label="Converses" header={<>
               <PaneHeader icon={Conversations} title="Converses" actions={<><IconButton icon={Trash} label="Paperera de converses" onClick={() => void openChatTrash()}/><IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/></>}/>
               </>}>
-              <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
+              {/* Every conversation of the project (it used to stop at 12, so the list never scrolled). */}
+              <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" px="2" pt="1.5" pb="2">
                 <Stack gap="0.5">
-                    {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
+                    {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).map((session) => <Menu.Root key={session.id}>
                       <Menu.ContextTrigger asChild><Box position="relative" data-group>
                         <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
                         <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); setChatToDelete(session); }}/>
@@ -2089,7 +2090,7 @@ export function App(): React.JSX.Element {
               </Menu.Root>
               </>}/>
               </>}>
-              <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
+              <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" px="2" pt="1.5" pb="2">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
                       event.preventDefault();
