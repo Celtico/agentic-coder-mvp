@@ -140,4 +140,4 @@ async function writeTrainingCandidate(prepared, candidatesDirectory) {
   }
 }
 
-module.exports = { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate };
+module.exports = { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate, SECRET_PATTERNS };

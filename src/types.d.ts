@@ -23,6 +23,8 @@ export type GitCommitDetails = GitCommit & { files: { status: string; path: stri
 export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
 export type ProjectFileHistoryVersion = { id: string; path: string; bytes: number; savedAt: string; label: string; sha256: string; content?: string; mode?: number };
 export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
+export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string };
+export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string };
 
 export interface AgenticBridge {
@@ -41,6 +43,10 @@ export interface AgenticBridge {
   restoreFileHistory(relativePath: string, versionId: string): Promise<{ restored: boolean; denied?: boolean; path: string }>;
   learningDatasetPreview(): Promise<TrainingDatasetPreview>;
   prepareLearningDataset(): Promise<{ prepared: boolean; cancelled?: boolean; directory?: string; manifest?: Record<string, unknown>; counts?: TrainingDatasetPreview['counts'] }>;
+  listLearningCases(): Promise<{ cases: LearningCase[]; unreadable: number }>;
+  learningCaseDetail(id: string): Promise<LearningCaseDetail>;
+  updateLearningCase(id: string, changes: { task: string; evidence: string }): Promise<LearningCase>;
+  deleteLearningCase(id: string): Promise<{ id: string; deleted: number }>;
   projectForChat(sessionId: string): Promise<ProjectInfo | null>;
   readFile(relativePath: string): Promise<string>;
   /** Whether the file is in the project, without throwing when it is not. */

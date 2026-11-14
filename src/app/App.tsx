@@ -4,14 +4,14 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
-  LuExternalLink as ExternalLink, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
+  LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -327,6 +327,13 @@ export function App(): React.JSX.Element {
   }
   const [learningBusy, setLearningBusy] = useState(false);
   const [learningStatus, setLearningStatus] = useState('');
+  // The saved verified cases, as the learning panel lists them, and the case being edited, deleted or read.
+  const [learningCases, setLearningCases] = useState<{ cases: LearningCase[]; unreadable: number } | null>(null);
+  const [caseEdit, setCaseEdit] = useState<{ id: string; task: string; evidence: string } | null>(null);
+  const [caseToDelete, setCaseToDelete] = useState<LearningCase | null>(null);
+  const [caseDetail, setCaseDetail] = useState<LearningCaseDetail | null>(null);
+  const [caseBusy, setCaseBusy] = useState<string | null>(null);
+  const [caseError, setCaseError] = useState('');
   const [editingPath, setEditingPath] = useState<string | null>(null);
   // The files open in the editor, one tab each (src/app/editor-tabs.ts). What was typed in a tab that
   // is not in front waits in tabBuffers until it is shown again, saved or closed.
@@ -877,9 +884,42 @@ export function App(): React.JSX.Element {
   async function loadLearningPanel() {
     setLearningStatus('');
     setLearningBusy(true);
-    try { setDatasetPreview(await window.agentic.learningDatasetPreview()); }
+    try { await refreshLearningCounts(); }
     catch (error) { setLearningStatus(errorText(error)); }
     finally { setLearningBusy(false); }
+  }
+  /** The figures of the panel and the list of saved cases, read again after any change to the file. */
+  async function refreshLearningCounts() {
+    // Until the app is restarted after an update, the main process may not offer the list yet.
+    const [preview, cases] = await Promise.all([window.agentic.learningDatasetPreview(), typeof window.agentic.listLearningCases === 'function' ? window.agentic.listLearningCases().catch(() => null) : null]);
+    setDatasetPreview(preview);
+    setLearningCases(cases);
+  }
+  async function openCaseDetail(id: string) {
+    setCaseBusy(id); setCaseError('');
+    try { setCaseDetail(await window.agentic.learningCaseDetail(id)); }
+    catch (error) { setCaseError(errorText(error)); }
+    finally { setCaseBusy(null); }
+  }
+  async function saveCaseEdit() {
+    if (!caseEdit) return;
+    setCaseBusy(caseEdit.id); setCaseError('');
+    try {
+      await window.agentic.updateLearningCase(caseEdit.id, { task: caseEdit.task, evidence: caseEdit.evidence });
+      setCaseEdit(null);
+      await refreshLearningCounts();
+    } catch (error) { setCaseError(errorText(error)); }
+    finally { setCaseBusy(null); }
+  }
+  async function confirmCaseDelete() {
+    if (!caseToDelete) return;
+    setCaseBusy(caseToDelete.id); setCaseError('');
+    try {
+      await window.agentic.deleteLearningCase(caseToDelete.id);
+      setCaseToDelete(null);
+      await refreshLearningCounts();
+    } catch (error) { setCaseError(errorText(error)); }
+    finally { setCaseBusy(null); }
   }
 
   async function prepareLearningDataset() {
@@ -889,7 +929,7 @@ export function App(): React.JSX.Element {
       const result = await window.agentic.prepareLearningDataset();
       if (result.prepared && result.directory) {
         setLearningStatus(`Versió candidata preparada: ${result.directory}. No s’ha entrenat ni canviat cap model.`);
-        setDatasetPreview(await window.agentic.learningDatasetPreview());
+        await refreshLearningCounts();
       }
     } catch (error) { setLearningStatus(errorText(error)); }
     finally { setLearningBusy(false); }
@@ -1484,6 +1524,31 @@ export function App(): React.JSX.Element {
             {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
             {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
           </Box>
+          {learningCases && <Box>
+            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos desats ({learningCases.cases.length})</Text>
+            {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
+            <Stack gap="1.5">
+              {learningCases.cases.map((item) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface" minW="0">
+                <Stack flex="1" minW="0" gap="1">
+                  <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere" title={item.task}>{item.task}</Text>
+                  <Text fontSize="xs" color="fg.muted" lineClamp={2} overflowWrap="anywhere">Comprovació: {item.evidence || '—'}</Text>
+                  <HStack gap="1.5" flexWrap="wrap">
+                    <Text fontSize="2xs" color="fg.muted">{item.at && !Number.isNaN(Date.parse(item.at)) ? new Date(item.at).toLocaleString() : 'Sense data'}{item.model ? ` · ${item.model}` : ''}</Text>
+                    <Badge size="sm" variant="subtle">{item.turns} {item.turns === 1 ? 'petició' : 'peticions'} · {item.steps} {item.steps === 1 ? 'pas' : 'passos'}</Badge>
+                    {item.withoutToolSteps && <Badge size="sm" variant="subtle" colorPalette="yellow" title="No té cap pas d’eina: només hi ha la petició i la resposta.">Sense passos d’eina</Badge>}
+                    {item.editedAt && <Badge size="sm" variant="outline">Editat</Badge>}
+                  </HStack>
+                </Stack>
+                <HStack flex="none" gap="0">
+                  <IconButton icon={Eye} label="Mostra el detall" disabled={caseBusy !== null} onClick={() => void openCaseDetail(item.id)}/>
+                  <IconButton icon={Pencil} label="Edita la petició i la comprovació" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseEdit({ id: item.id, task: item.task, evidence: item.evidence }); }}/>
+                  <IconButton icon={Trash} label="Esborra el cas" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseToDelete(item); }}/>
+                </HStack>
+              </HStack>)}
+              {!learningCases.cases.length && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas desat.</Text>}
+              {learningCases.unreadable > 0 && <Text fontSize="xs" color="fg.muted">{learningCases.unreadable} línies del registre no són un cas llegible i es deixen tal com són.</Text>}
+            </Stack>
+          </Box>}
         </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
@@ -1958,6 +2023,79 @@ export function App(): React.JSX.Element {
               <Button variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</Button>
               <Button colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</Button>
             </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    <Dialog.Root open={caseEdit !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseEdit(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+            <Dialog.Header><Dialog.Title>Edita el cas desat</Dialog.Title></Dialog.Header>
+            <Dialog.Body>
+              <Text mb="2" fontSize="sm" color="fg.muted">Petició general</Text>
+              <Textarea autoFocus rows={4} maxLength={4000} value={caseEdit?.task ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, task: event.target.value })} aria-label="Petició general"/>
+              <Text mt="4" mb="2" fontSize="sm" color="fg.muted">Comprovació</Text>
+              <Input maxLength={4000} value={caseEdit?.evidence ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, evidence: event.target.value })} aria-label="Comprovació realitzada"/>
+              {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Button variant="outline" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</Button>
+              <Button colorPalette="agentic" disabled={!caseEdit?.task.trim() || !caseEdit?.evidence.trim() || caseBusy !== null} onClick={() => void saveCaseEdit()}>{caseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    <Dialog.Root role="alertdialog" open={caseToDelete !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseToDelete(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+            <Dialog.Header><Dialog.Title>Esborra el cas desat</Dialog.Title></Dialog.Header>
+            <Dialog.Body>
+              <Text fontSize="sm" lineClamp={3} overflowWrap="anywhere">«{caseToDelete?.task}»</Text>
+              <Text mt="2" fontSize="sm" color="fg.muted">Deixarà de comptar per entrenar. No es perd: es mou a verified-experiences.deleted.jsonl, a la mateixa carpeta, i s’hi pot recuperar.</Text>
+              {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Button variant="outline" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</Button>
+              <Button colorPalette="red" disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    <Dialog.Root size="lg" scrollBehavior="inside" open={caseDetail !== null} onOpenChange={({ open }) => { if (!open) setCaseDetail(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+            <Dialog.Header><Dialog.Title>Detall del cas</Dialog.Title></Dialog.Header>
+            <Dialog.Body>
+              {caseDetail && <Stack gap="4">
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" overflowWrap="anywhere">{caseDetail.task}</Text>
+                  <Text mt="1" fontSize="xs" color="fg.muted">Comprovació: {caseDetail.evidence} · {caseDetail.at && !Number.isNaN(Date.parse(caseDetail.at)) ? new Date(caseDetail.at).toLocaleString() : 'Sense data'}{caseDetail.model ? ` · ${caseDetail.model}` : ''}</Text>
+                </Box>
+                {caseDetail.requests.map((turn, index) => <Box key={index} borderLeftWidth="2px" borderColor="border" pl="3">
+                  <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em">Petició {index + 1}</Text>
+                  <Text mt="1" fontSize="sm" whiteSpace="pre-wrap" overflowWrap="anywhere" lineClamp={8}>{turn.request || '—'}</Text>
+                  {turn.steps.length > 0 && <Stack mt="2" gap="1">{turn.steps.map((step, stepIndex) => <Box key={stepIndex} px="2" py="1" borderRadius="md" bg="surface.subtle" fontFamily="mono" fontSize="2xs" overflowWrap="anywhere">
+                    <HStack gap="1.5"><Badge size="sm" variant="subtle" colorPalette={step.ok ? 'green' : 'red'}>{step.ok ? 'ok' : 'error'}</Badge><Text fontWeight="semibold">{step.name}</Text></HStack>
+                    {Object.entries(step.arguments).map(([key, value]) => <Text key={key} color="fg.muted">{key}: {value}</Text>)}
+                    {step.result && <Text mt="0.5" color="fg.muted" lineClamp={3}>→ {step.result}</Text>}
+                  </Box>)}</Stack>}
+                  {index < caseDetail.requests.length - 1 && turn.answer && <Text mt="2" fontSize="xs" color="fg.muted" whiteSpace="pre-wrap" overflowWrap="anywhere" lineClamp={4}>{turn.answer}</Text>}
+                </Box>)}
+                <Box>
+                  <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em">Resposta final</Text>
+                  <Text mt="1" fontSize="sm" whiteSpace="pre-wrap" overflowWrap="anywhere">{caseDetail.requests[caseDetail.requests.length - 1]?.answer || caseDetail.answer}</Text>
+                </Box>
+              </Stack>}
+            </Dialog.Body>
+            <Dialog.Footer><Button variant="outline" onClick={() => setCaseDetail(null)}>Tanca</Button></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>

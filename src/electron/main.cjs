@@ -16,6 +16,7 @@ const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cj
 const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
+const learningCases = require('./learning-cases.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
@@ -1175,19 +1176,29 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   if (secretPattern.test(selectedText)) throw new Error('Sembla que el text conté una credencial. Treu-la abans de desar aquest cas.');
 
   const id = createHash('sha256').update(JSON.stringify({ root, prompt, answer, evidence })).digest('hex');
-  const filePath = path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl');
+  const filePath = verifiedExperiencesPath();
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  let existing = '';
-  try { existing = await fs.readFile(filePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (existing.split(/\r?\n/).some((line) => { try { return JSON.parse(line).id === id; } catch { return false; } })) return { id, saved: false };
+  // One change at a time with the edits and deletions of the learning panel (src/electron/learning-cases.cjs).
+  return learningCases.withCasesLock(filePath, async () => {
+    let existing = '';
+    try { existing = await fs.readFile(filePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (existing.split(/\r?\n/).some((line) => { try { return JSON.parse(line).id === id; } catch { return false; } })) return { id, saved: false };
 
-  // The whole chat up to this answer, with the tool steps of every answer the app still remembers.
-  const session = buildSessionTrajectory(Array.isArray(value.sessionTurns) ? value.sessionTurns : [{ role: 'user', content: prompt }, { role: 'assistant', content: answer }], (text) => recentTrajectories.get(trajectoryKey(text)));
-  const record = { id, at: new Date().toISOString(), projectPath: root, model: (await currentModel()).modelId, prompt, answer, evidence, task, ...(session ? { trajectory: session } : {}), verification: 'user-confirmed' };
-  await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
-  await fs.chmod(filePath, 0o600);
-  return { id, saved: true };
+    // The whole chat up to this answer, with the tool steps of every answer the app still remembers.
+    const session = buildSessionTrajectory(Array.isArray(value.sessionTurns) ? value.sessionTurns : [{ role: 'user', content: prompt }, { role: 'assistant', content: answer }], (text) => recentTrajectories.get(trajectoryKey(text)));
+    const record = { id, at: new Date().toISOString(), projectPath: root, model: (await currentModel()).modelId, prompt, answer, evidence, task, ...(session ? { trajectory: session } : {}), verification: 'user-confirmed' };
+    await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
+    await fs.chmod(filePath, 0o600);
+    return { id, saved: true };
+  });
 });
+
+function verifiedExperiencesPath() { return path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'); }
+// The saved cases as the learning panel lists and manages them; a deleted case goes to the .deleted file.
+ipcMain.handle('learning:cases-list', () => learningCases.listCases(verifiedExperiencesPath()));
+ipcMain.handle('learning:case-detail', (_e, id) => learningCases.readCase(verifiedExperiencesPath(), learningCases.validCaseId(id)));
+ipcMain.handle('learning:case-update', (_e, id, changes) => learningCases.updateCase(verifiedExperiencesPath(), learningCases.validCaseId(id), changes));
+ipcMain.handle('learning:case-delete', (_e, id) => learningCases.deleteCase(verifiedExperiencesPath(), path.join(app.getPath('userData'), 'learning', 'verified-experiences.deleted.jsonl'), learningCases.validCaseId(id)));
 
 async function readPreparedExperienceDataset() {
   const filePath = path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl');
