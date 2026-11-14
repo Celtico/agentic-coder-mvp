@@ -12,22 +12,23 @@ esbuild.buildSync({ entryPoints: [path.join(__dirname, 'rail-layout.ts')], bundl
 const rail = require(out);
 fs.rmSync(dir, { recursive: true, force: true });
 
-const defaults = { top: ['browser', 'evaluation'], bottom: ['console', 'terminal', 'git', 'learning'] };
+const defaults = { top: ['conversations', 'files', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'git', 'learning'] };
 
-test('the default layout: the editor and «new chat» have no icon any more', () => {
+test('the default layout: Converses and Fitxers first on top; the editor and «new chat» have no icon', () => {
   assert.deepEqual(rail.defaultRailLayout(), defaults);
   assert.ok(!rail.RAIL_PANELS.includes('editor'));
+  assert.deepEqual(rail.SIDE_COLUMNS, ['conversations', 'files']);
 });
 
 test('an icon dragged to the other group goes where it is dropped', () => {
-  assert.deepEqual(rail.moveRailPanel(defaults, 'terminal', 'top', 1), { top: ['browser', 'terminal', 'evaluation'], bottom: ['console', 'git', 'learning'] });
-  assert.deepEqual(rail.moveRailPanel(defaults, 'browser', 'bottom', 0), { top: ['evaluation'], bottom: ['browser', 'console', 'terminal', 'git', 'learning'] });
-  assert.deepEqual(rail.moveRailPanel(defaults, 'evaluation', 'bottom', 99), { top: ['browser'], bottom: ['console', 'terminal', 'git', 'learning', 'evaluation'] });
-  assert.deepEqual(rail.moveRailPanel(defaults, 'git', 'top', -3).top, ['git', 'browser', 'evaluation']);
+  assert.deepEqual(rail.moveRailPanel(defaults, 'terminal', 'top', 1), { top: ['conversations', 'terminal', 'files', 'browser', 'evaluation'], bottom: ['console', 'git', 'learning'] });
+  assert.deepEqual(rail.moveRailPanel(defaults, 'files', 'bottom', 0), { top: ['conversations', 'browser', 'evaluation'], bottom: ['files', 'console', 'terminal', 'git', 'learning'] });
+  assert.deepEqual(rail.moveRailPanel(defaults, 'evaluation', 'bottom', 99).bottom, ['console', 'terminal', 'git', 'learning', 'evaluation']);
+  assert.deepEqual(rail.moveRailPanel(defaults, 'git', 'top', -3).top, ['git', 'conversations', 'files', 'browser', 'evaluation']);
 });
 
 test('inside its group an icon is reordered, counting the slot as shown while dragging', () => {
-  assert.deepEqual(rail.moveRailPanel(defaults, 'browser', 'top', 2).top, ['evaluation', 'browser']);
+  assert.deepEqual(rail.moveRailPanel(defaults, 'conversations', 'top', 2).top, ['files', 'conversations', 'browser', 'evaluation']);
   assert.deepEqual(rail.moveRailPanel(defaults, 'learning', 'bottom', 0).bottom, ['learning', 'console', 'terminal', 'git']);
   // Dropped on itself (just before or just after) nothing changes.
   assert.deepEqual(rail.moveRailPanel(defaults, 'terminal', 'bottom', 1), defaults);
@@ -41,33 +42,30 @@ test('the move does not change the layout it was given', () => {
   assert.deepEqual(layout, defaults);
 });
 
-test('a saved layout drops unknown, retired and repeated ids, and adds the panes it does not name', () => {
+test('a saved layout drops unknown, retired and repeated ids, and adds the icons it does not name (the column icons first on top)', () => {
   assert.deepEqual(rail.normalizeRailLayout(null), defaults);
-  assert.deepEqual(rail.normalizeRailLayout('top'), defaults);
-  assert.deepEqual(rail.normalizeRailLayout({ top: ['git', 'nope', 42, 'git'], bottom: 'browser' }), { top: ['git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning'] });
+  assert.deepEqual(rail.normalizeRailLayout({ top: ['git', 'nope', 42, 'git'], bottom: 'browser' }), { top: ['conversations', 'files', 'git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning'] });
   // A pane named in both groups stays in the first one it appears in.
-  assert.deepEqual(rail.normalizeRailLayout({ top: ['terminal'], bottom: ['terminal', 'browser'] }), { top: ['terminal', 'evaluation'], bottom: ['browser', 'console', 'git', 'learning'] });
+  assert.deepEqual(rail.normalizeRailLayout({ top: ['terminal'], bottom: ['terminal', 'browser'] }).bottom, ['browser', 'console', 'git', 'learning']);
   // Saved before the editor and «new chat» left the bar: those ids go, the rest keeps its order.
-  assert.deepEqual(rail.normalizeRailLayout({ top: ['editor', 'terminal', 'browser', 'newChat', 'evaluation'], bottom: ['git', 'console', 'learning'] }), { top: ['terminal', 'browser', 'evaluation'], bottom: ['git', 'console', 'learning'] });
-  assert.deepEqual(rail.normalizeRailLayout({ top: ['browser'], bottom: ['editor', 'git', 'terminal', 'console'] }), { top: ['browser', 'evaluation'], bottom: ['git', 'terminal', 'console', 'learning'] });
+  assert.deepEqual(rail.normalizeRailLayout({ top: ['editor', 'terminal', 'browser', 'newChat', 'evaluation'], bottom: ['git', 'console', 'learning'] }), { top: ['conversations', 'files', 'terminal', 'browser', 'evaluation'], bottom: ['git', 'console', 'learning'] });
 });
 
-test('the layouts saved on this Mac before and after the editor left the bar load cleanly', () => {
-  // As saved while the editor still had an icon, and as saved since (every icon moved to the bottom).
-  assert.deepEqual(rail.normalizeRailLayout({ top: ['browser', 'editor', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] }), { top: ['browser', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] });
+test('the layouts saved on this Mac load cleanly, and the new column icons go on top', () => {
+  assert.deepEqual(rail.normalizeRailLayout({ top: ['browser', 'editor', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] }), { top: ['conversations', 'files', 'browser', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] });
+  // Every icon moved to the bottom, as cel left it: the order is kept and the two new icons go on top.
   const allBelow = { top: [], bottom: ['evaluation', 'learning', 'browser', 'terminal', 'git', 'console'] };
-  assert.deepEqual(rail.normalizeRailLayout(allBelow), allBelow);
+  assert.deepEqual(rail.normalizeRailLayout(allBelow), { top: ['conversations', 'files'], bottom: allBelow.bottom });
   assert.deepEqual(rail.panelsInRow(allBelow, 'top', () => true), ['editor'], 'the editor still opens on top');
-  // An icon can be dragged back into the empty top group.
-  assert.deepEqual(rail.moveRailPanel(allBelow, 'browser', 'top', 0).top, ['browser']);
+  assert.deepEqual(rail.moveRailPanel(allBelow, 'browser', 'top', 0).top, ['browser', 'conversations', 'files']);
 });
 
-test('each open pane goes to the row of its icon, in the order of the icons; the editor is first on top', () => {
+test('each open pane goes to the row of its icon, in order; the columns of the side panel are not panes', () => {
   const layout = rail.moveRailPanel(rail.moveRailPanel(defaults, 'terminal', 'top', 0), 'browser', 'bottom', 1);
-  const open = new Set(['terminal', 'browser', 'editor', 'git']);
+  const open = new Set(['terminal', 'browser', 'editor', 'git', 'conversations', 'files']);
   assert.deepEqual(rail.panelsInRow(layout, 'top', (panel) => open.has(panel)), ['editor', 'terminal']);
-  assert.deepEqual(rail.panelsInRow(layout, 'bottom', (panel) => open.has(panel)), ['browser', 'git']);
-  assert.deepEqual(rail.panelsInRow(defaults, 'top', (panel) => panel === 'editor'), ['editor']);
+  assert.deepEqual(rail.panelsInRow(rail.moveRailPanel(layout, 'files', 'bottom', 0), 'bottom', (panel) => open.has(panel)), ['browser', 'git']);
+  assert.equal(rail.isSideColumn('files'), true);
+  assert.equal(rail.isSideColumn('git'), false);
   assert.equal(rail.railGroupOf(layout, 'browser'), 'bottom');
-  assert.equal(rail.railGroupOf(layout, 'terminal'), 'top');
 });

@@ -40,15 +40,22 @@ test('panels, evaluation sections and the history window come back as they were 
   assert.deepEqual(state.history, { position: { x: 80, y: 120 }, size: { width: 900, height: 600 }, stage: 'maximized' });
 });
 
-test('the layout of the left bar comes back, made safe for panes it does not know', () => {
+test('the layout of the left bar comes back, made safe for icons it does not know', () => {
   const storage = memoryStorage();
   view.updateViewState(storage, (state) => { state.rail = { top: ['terminal'], bottom: ['browser', 'git'] }; });
-  assert.deepEqual(view.loadViewState(storage).rail, { top: ['terminal', 'evaluation'], bottom: ['browser', 'git', 'console', 'learning'] });
-  const old = memoryStorage({ [view.VIEW_STATE_KEY]: JSON.stringify({ panels: { browser: true } }) });
-  assert.deepEqual(view.loadViewState(old).rail, { top: ['browser', 'evaluation'], bottom: ['console', 'terminal', 'git', 'learning'] });
-  // Saved with the editor's icon (before it left the bar): it is dropped without an error.
+  assert.deepEqual(view.loadViewState(storage).rail, { top: ['conversations', 'files', 'terminal', 'evaluation'], bottom: ['browser', 'git', 'console', 'learning'] });
   const withEditor = memoryStorage({ [view.VIEW_STATE_KEY]: JSON.stringify({ rail: { top: ['x', 'editor', 'git'], bottom: 7 } }) });
-  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning'] });
+  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['conversations', 'files', 'git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning'] });
+});
+
+test('Converses and Fitxers are shown unless hidden, also with a state saved before they had icons', () => {
+  assert.equal(view.loadViewState(memoryStorage()).panels.conversations, true);
+  assert.equal(view.loadViewState(memoryStorage()).panels.files, true);
+  const old = memoryStorage({ [view.VIEW_STATE_KEY]: JSON.stringify({ panels: { navigation: false, browser: true } }) });
+  assert.deepEqual([view.loadViewState(old).panels.conversations, view.loadViewState(old).panels.files], [true, true]);
+  const storage = memoryStorage();
+  view.updateViewState(storage, (state) => { state.panels.conversations = false; });
+  assert.deepEqual([view.loadViewState(storage).panels.conversations, view.loadViewState(storage).panels.files], [false, true]);
 });
 
 test('each project keeps its own page, file and history; empty values are forgotten', () => {

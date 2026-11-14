@@ -10,7 +10,7 @@ import {
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -154,6 +154,7 @@ const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
 /** The side column can be dragged between these widths; narrower than the minimum, it closes. */
 // Two columns (Converses | Fitxers) of at least about 150 px each.
 const NAVIGATION_MIN_WIDTH = 320;
+const NAVIGATION_COLUMN_MIN_WIDTH = 160;
 const NAVIGATION_MAX_WIDTH = 760;
 /** The right-hand panel closes when dragged to less than this share of the width. */
 const WORKSPACE_CLOSE_BELOW = 10;
@@ -439,11 +440,16 @@ export function App(): React.JSX.Element {
   const [testsBusy, setTestsBusy] = useState(false);
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
-  // The side panel is always shown (Converses | Fitxers); it is not folded any more.
-  const navigationOpen = true;
+  // The side panel's two columns, Converses and Fitxers, each shown or hidden from its icon in the bar;
+  // with both hidden the panel takes no width.
+  const [conversationsOpen, setConversationsOpen] = useState(initialView.panels.conversations);
+  const [filesOpen, setFilesOpen] = useState(initialView.panels.files);
+  const navigationColumns = (conversationsOpen ? 1 : 0) + (filesOpen ? 1 : 0);
+  const navigationOpen = navigationColumns > 0;
+  const navigationMinWidth = NAVIGATION_COLUMN_MIN_WIDTH * Math.max(1, navigationColumns);
   const [navigationWidth, setNavigationWidth] = useState(() => {
     const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
-    return Number.isFinite(stored) && stored >= NAVIGATION_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 460;
+    return Number.isFinite(stored) && stored >= NAVIGATION_COLUMN_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 460;
   });
   const [verifiedExperienceKeys, setVerifiedExperienceKeys] = useState<Set<string>>(() => new Set());
   const feedRef = useRef<HTMLDivElement | null>(null);
@@ -1241,8 +1247,8 @@ export function App(): React.JSX.Element {
   // Saving is the user's decision. Each save keeps the previous version in the local history.
   // The app opens as it was left (src/app/view-state.ts): which panels were open…
   useEffect(() => {
-    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, console: consoleOpen, terminal: terminalOpen }; });
-  }, [navigationOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, consoleOpen, terminalOpen]);
+    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, conversations: conversationsOpen, files: filesOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, console: consoleOpen, terminal: terminalOpen }; });
+  }, [navigationOpen, conversationsOpen, filesOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, consoleOpen, terminalOpen]);
   // …and, per project, the page in the browser, the file in the editor (if it still exists) and the
   // local history. They are put back once per project, before anything is saved for it.
   // Panes that come back open load what they show, as if their icon had been clicked.
@@ -1956,6 +1962,8 @@ export function App(): React.JSX.Element {
   const railClose: Record<Pane, () => void> = { editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
   // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
   const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
+    conversations: { icon: Conversations, label: conversationsOpen ? 'Amaga les converses' : 'Mostra les converses', palette: conversationsOpen ? 'agentic' : 'gray', onClick: () => setConversationsOpen((open) => !open) },
+    files: { icon: FileText, label: filesOpen ? 'Amaga els fitxers' : 'Mostra els fitxers', palette: filesOpen ? 'agentic' : 'gray', onClick: () => setFilesOpen((open) => !open) },
     browser: { icon: Globe2, label: browserOpen ? 'Tanca el navegador' : 'Obre el navegador', palette: browserOpen ? 'agentic' : 'gray', onClick: () => setBrowserOpen((current) => !current) },
     evaluation: { icon: ChartBar, label: evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models', palette: evaluationOpen ? 'agentic' : 'gray', onClick: () => void openEvaluationPanel() },
     console: { icon: Bug, label: consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola', palette: consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray', onClick: () => setConsoleOpen((open) => !open) },
@@ -2077,19 +2085,19 @@ export function App(): React.JSX.Element {
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
-        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: `${NAVIGATION_MIN_WIDTH}px`, maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
+        {navigationOpen ? <Splitter.Root key={`navigation-${navigationColumns}`} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: `${navigationMinWidth}px`, maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(380, window.innerWidth - 58);
           const dragged = Math.round((details.size[0] / 100) * availableWidth);
           // It is never closed: dragged narrower than its two columns need, it stays at that width.
-          const width = Math.min(NAVIGATION_MAX_WIDTH, Math.max(NAVIGATION_MIN_WIDTH, dragged));
+          const width = Math.min(NAVIGATION_MAX_WIDTH, Math.max(navigationMinWidth, dragged));
           setNavigationWidth(width);
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
           {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds). */}
-          <Grid flex="1" minH="0" minW="0" gap="1.5" templateColumns="minmax(0, 1fr) minmax(0, 1fr)">
-            <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
+          <Grid flex="1" minH="0" minW="0" gap="1.5" templateColumns={`repeat(${navigationColumns}, minmax(0, 1fr))`}>
+            {conversationsOpen && <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
               {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
               <Box flex="1" minH="0" overflowY="auto" pb="2">
                 <Stack gap="0.5">
@@ -2104,8 +2112,8 @@ export function App(): React.JSX.Element {
                     </Menu.Root>)}
                   </Stack>
               </Box>
-            </Flex>
-            <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
+            </Flex>}
+            {filesOpen && <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
               {/* The project the files belong to, at the top of its column: click to choose another folder. */}
               <Box flex="none" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
                 <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
@@ -2153,7 +2161,7 @@ export function App(): React.JSX.Element {
                     </Menu.Root>}
                     </Box>
               </Box>
-            </Flex>
+            </Flex>}
           </Grid>
         </Flex>
         </Splitter.Panel>

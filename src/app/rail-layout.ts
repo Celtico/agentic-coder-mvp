@@ -5,14 +5,19 @@
 // The editor has no icon (it opens from a file in Fitxers) and is always the first pane of the top row.
 // Ids that are no longer icons (the editor, «new chat») are dropped from a saved layout.
 
-export type RailPanel = "browser" | "evaluation" | "console" | "terminal" | "git" | "learning"
-/** A pane of the work area: one with an icon in the bar, or the editor. */
-export type Pane = RailPanel | "editor"
+// Converses and Fitxers are the two columns of the side panel: their icons show or hide them, and move
+// like the others, but they are not panes of the work area's rows.
+export type SideColumn = "conversations" | "files"
+export type RailPanel = SideColumn | "browser" | "evaluation" | "console" | "terminal" | "git" | "learning"
+export const SIDE_COLUMNS: SideColumn[] = ["conversations", "files"]
+export const isSideColumn = (panel: string): panel is SideColumn => (SIDE_COLUMNS as string[]).includes(panel)
+/** A pane of the work area: one with an icon in the bar (not a side column), or the editor. */
+export type Pane = Exclude<RailPanel, SideColumn> | "editor"
 export type RailGroup = "top" | "bottom"
 export type RailLayout = Record<RailGroup, RailPanel[]>
 
-export const RAIL_PANELS: RailPanel[] = ["browser", "evaluation", "console", "terminal", "git", "learning"]
-const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { browser: "top", evaluation: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom" }
+export const RAIL_PANELS: RailPanel[] = ["conversations", "files", "browser", "evaluation", "console", "terminal", "git", "learning"]
+const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { conversations: "top", files: "top", browser: "top", evaluation: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom" }
 
 export const defaultRailLayout = (): RailLayout => ({
   top: RAIL_PANELS.filter((panel) => DEFAULT_GROUP[panel] === "top"),
@@ -33,6 +38,10 @@ export function normalizeRailLayout(value: unknown): RailLayout {
     const list = Array.isArray(saved[group]) ? saved[group] as unknown[] : []
     for (const item of list) if (isPanel(item) && !seen.has(item)) { seen.add(item); layout[group].push(item) }
   }
+  // The side columns' icons, when a saved layout does not have them yet, go first on top, under the mark.
+  const missingColumns = SIDE_COLUMNS.filter((panel) => !seen.has(panel))
+  layout.top.unshift(...missingColumns)
+  for (const panel of missingColumns) seen.add(panel)
   for (const panel of RAIL_PANELS) if (!seen.has(panel)) layout[DEFAULT_GROUP[panel]].push(panel)
   return layout
 }
@@ -58,8 +67,8 @@ export function moveRailPanel(layout: RailLayout, panel: RailPanel, group: RailG
 
 /** The open panes of one row, in the order of their icons; the editor first in the top row. */
 export function panelsInRow(layout: RailLayout, group: RailGroup, isOpen: (panel: Pane) => boolean): Pane[] {
-  const panes: Pane[] = normalizeRailLayout(layout)[group]
-  return (group === "top" ? ["editor" as Pane, ...panes] : panes).filter(isOpen)
+  const panes = normalizeRailLayout(layout)[group].filter((panel): panel is Exclude<RailPanel, SideColumn> => !isSideColumn(panel))
+  return (group === "top" ? ["editor" as Pane, ...panes] : (panes as Pane[])).filter(isOpen)
 }
 
 export const sameRailLayout = (a: RailLayout, b: RailLayout) => a.top.join() === b.top.join() && a.bottom.join() === b.bottom.join()

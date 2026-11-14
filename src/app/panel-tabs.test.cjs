@@ -40,8 +40,15 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /navigationHeader\('Converses', <IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\)/);
   assert.match(app, /navigationHeader\('Fitxers', <Menu\.Root>/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
-  // Two fixed columns, nothing folds.
-  assert.match(app, /templateColumns="minmax\(0, 1fr\) minmax\(0, 1fr\)"/);
+  // One grid column per visible column of the side panel; each is shown or hidden from its icon.
+  assert.match(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}, minmax\(0, 1fr\)\)`\}/);
+  assert.match(app, /\{conversationsOpen && <Flex direction="column"[^>]*aria-label="Converses">/);
+  assert.match(app, /\{filesOpen && <Flex direction="column"[^>]*aria-label="Fitxers">/);
+  assert.match(app, /conversations: \{ icon: Conversations, label: [^\n]*palette: conversationsOpen \? 'agentic'/);
+  assert.match(app, /files: \{ icon: FileText, label: [^\n]*palette: filesOpen \? 'agentic'/);
+  // With both hidden, the side panel takes no width.
+  assert.match(app, /const navigationOpen = navigationColumns > 0;/);
+  assert.match(app, /\{navigationOpen \? <Splitter\.Root key=\{`navigation-\$\{navigationColumns\}`\}/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
   // The project (folder, name, path; click to choose another) is at the top of the Fitxers column, and
   // Converses starts with its own header.
