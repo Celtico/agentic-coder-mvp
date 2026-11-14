@@ -2149,7 +2149,8 @@ export function App(): React.JSX.Element {
               onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
               onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
               {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
-              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant={button.palette === 'agentic' ? 'subtle' : 'ghost'} colorPalette={button.palette} onClick={button.onClick}/>
+              {/* Open: solid in the accent colour (the «agentic» palette is the accent). Closed: ghost. */}
+              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant={button.palette === 'agentic' ? 'solid' : 'ghost'} colorPalette={button.palette} color={button.palette === 'gray' ? 'fg.muted' : undefined} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
               {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>

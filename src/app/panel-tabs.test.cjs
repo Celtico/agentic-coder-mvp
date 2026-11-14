@@ -20,7 +20,8 @@ test('each pane but the editor has a toggle in the left bar that shows when it i
   for (const [name, icon, open] of [['browser', 'Globe2', 'browserOpen'], ['evaluation', 'ChartBar', 'evaluationOpen'], ['console', 'Bug', 'consoleOpen'], ['terminal', 'TerminalIcon', 'terminalOpen'], ['git', 'GitBranch', 'gitOpen'], ['learning', 'Brain', 'learningOpen']]) {
     assert.match(app, new RegExp(`${name}: \\{ icon: ${icon}, label: [^\\n]*palette: ${open} \\? 'agentic'`), icon);
   }
-  assert.match(app, /icon=\{button\.icon\} label=\{button\.label\} w="38px" h="38px" variant=\{button\.palette === 'agentic' \? 'subtle' : 'ghost'\}/);
+  // Open: variant solid in the accent; closed: ghost and muted. The same size for all.
+  assert.match(app, /icon=\{button\.icon\} label=\{button\.label\} w="38px" h="38px" variant=\{button\.palette === 'agentic' \? 'solid' : 'ghost'\} colorPalette=\{button\.palette\} color=\{button\.palette === 'gray' \? 'fg\.muted' : undefined\} aria-pressed=\{button\.palette === 'agentic'\}/);
   // The console is opened only from the bar now, not from the browser's toolbar as well.
   assert.equal((app.match(/icon=\{Bug\}|icon: Bug\b/g) || []).length, 1);
 });
