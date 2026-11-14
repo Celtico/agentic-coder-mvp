@@ -2273,7 +2273,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop bg="black/70"/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          <Dialog.Content>
             <Dialog.Header><Dialog.Title>{createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}</Dialog.Title></Dialog.Header>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">{createEntryKind === 'rename' ? `Escriu el nom nou de «${renameEntryPath}».` : 'Escriu un nom o una ruta relativa dins del projecte.'}</Text>
@@ -2291,7 +2291,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop bg="black/70"/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          <Dialog.Content>
             <Dialog.Header><Dialog.Title>Desa com a cas verificat</Dialog.Title></Dialog.Header>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Indica què has comprovat perquè aquest exemple sigui fiable.</Text>
@@ -2311,7 +2311,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          <Dialog.Content>
             <Dialog.Header><Dialog.Title>Edita el cas desat</Dialog.Title></Dialog.Header>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Petició general</Text>
@@ -2332,7 +2332,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          <Dialog.Content>
             <Dialog.Header><Dialog.Title>Esborra el cas desat</Dialog.Title></Dialog.Header>
             <Dialog.Body>
               <Text fontSize="sm" lineClamp={3} overflowWrap="anywhere">«{caseToDelete?.task}»</Text>
@@ -2351,7 +2351,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          <Dialog.Content>
             <Dialog.Header><Dialog.Title>Detall del cas</Dialog.Title></Dialog.Header>
             <Dialog.Body>
               {caseDetail && <Stack gap="4">
@@ -2384,8 +2384,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          {/* The Preferències dialog sits on Chakra's panel background (bg.panel), as cel asked. */}
-          <Dialog.Content bg="bg.panel" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl" data-preferences>
+          <Dialog.Content data-preferences>
             <Dialog.Header><Dialog.Title><HStack gap="2"><Settings size={16}/><span>Preferències</span></HStack></Dialog.Title></Dialog.Header>
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}

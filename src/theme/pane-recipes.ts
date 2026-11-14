@@ -69,3 +69,16 @@ export const paneCardRecipe = defineSlotRecipe({
   },
   defaultVariants: { ...chakraCard.defaultVariants, variant: "subtle", size: "pane" },
 } as Parameters<typeof defineSlotRecipe>[0])
+
+// Every dialog of the app (Preferències, the saved cases, confirmations…) on Chakra's panel background,
+// with the app's line around it: Chakra's dialog recipe, extended.
+const chakraDialog = defaultConfig.theme?.slotRecipes?.dialog as unknown as CardRecipe
+
+export const dialogRecipe = defineSlotRecipe({
+  ...chakraDialog,
+  slots: [...chakraDialog.slots],
+  base: {
+    ...chakraDialog.base,
+    content: { ...chakraDialog.base.content, bg: "bg.panel", color: "fg", borderWidth: "1px", borderColor: "border", borderRadius: "lg", boxShadow: "2xl" },
+  },
+} as Parameters<typeof defineSlotRecipe>[0])

@@ -10,13 +10,14 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-pane-header-'));
 const entry = path.join(dir, 'entry.tsx');
 fs.writeFileSync(entry, `
 import { renderToStaticMarkup } from "react-dom/server"
-import { ChakraProvider } from "@chakra-ui/react"
+import { ChakraProvider, Dialog } from "@chakra-ui/react"
 import { LuGitBranch, LuPlus } from "react-icons/lu"
 import { buildSystem } from ${JSON.stringify(path.join(__dirname, '..', 'theme', 'system.ts'))}
 import { Pane, PaneHeader, PaneToolbar, PaneToneContext, PaneStyleContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
 export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const renderPane = (variant: any, fromContext = false) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneStyleContext.Provider value={fromContext ? variant : "subtle"}><Pane variant={fromContext ? undefined : variant} label="Git" header={<PaneHeader icon={LuGitBranch} title="Git"/>}>contingut</Pane></PaneStyleContext.Provider></ChakraProvider>)
+export const renderDialog = () => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open><Dialog.Positioner><Dialog.Content>Preferències</Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
 export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
 `);
@@ -47,7 +48,7 @@ test('a header with a subtitle (truncated, with its full text on hover), a badge
 test('the look is the theme’s slot recipes, with the three tones; the component has no colour of its own', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   const system = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe \}/);
+  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe \}/);
   assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
   assert.match(recipes, /slots: \["root", "field", "action"\]/);
   assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "brand\.solid" \}, title: \{ color: "fg" \} \}/);
@@ -128,7 +129,14 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /case 'git': return frame\(GitBranch, 'Git', gitPane, \{[^\n]*actions: <IconButton icon=\{RefreshCw\} label="Actualitza l’historial de Git"/);
 });
 
-test('the Preferències dialog has Chakra’s panel background', () => {
+test('every dialog has Chakra’s panel background, from the theme’s dialog recipe', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /content: \{ \.\.\.chakraDialog\.base\.content, bg: "bg\.panel", color: "fg", borderWidth: "1px", borderColor: "border"/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /<Dialog\.Content bg="bg\.panel" color="fg"[^>]*data-preferences>/);
+  const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
+  assert.equal(contents.length, 6);
+  for (const tag of contents) assert.doesNotMatch(tag, /bg=|borderColor=|boxShadow=/, 'no dialog sets its own background');
+  const html = built.renderDialog().replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+  assert.match(html, /chakra-dialog__content/);
 });
