@@ -78,7 +78,12 @@
       "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools",
       "identity": null,
-      "hardenedRuntime": false
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "CFBundleDevelopmentRegion": "ca",
+        "CFBundleLocalizations": ["ca", "es", "en"],
+        "NSMicrophoneUsageDescription": "Agentic Coder fa servir el micròfon per al dictat del xat, que es transcriu en aquest Mac."
+      }
     },
     "dmg": {
       "title": "Agentic Coder"

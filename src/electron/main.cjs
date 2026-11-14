@@ -21,12 +21,22 @@ const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const dictation = require('./dictation.cjs');
+const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
+const menuLabels = require('./menu-labels.cjs');
 const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
 
 let win;
+
+// The app's name (menu, Dock, dialogs). Run from the repository Electron would otherwise show «Electron»;
+// the data folder stays where it has always been (it would follow the new name otherwise).
+{
+  const userData = app.getPath('userData');
+  app.setName('Agentic Coder');
+  app.setPath('userData', userData);
+}
 /**
  * Reads a public page with the browser the app already carries: it opens the address in a hidden,
  * sandboxed window, lets its scripts run and takes the text a person would see. Pages that build
@@ -731,26 +741,41 @@ async function captureForDocs() {
   app.quit();
 }
 
-// Preferències… (⌘,) in the app menu on macOS, or the first menu elsewhere: the window opens its dialog.
-function addPreferencesToMenu() {
-  const menu = Menu.getApplicationMenu();
-  const target = menu?.items.find((item) => item.role === 'appmenu') || menu?.items[0];
-  if (!menu || !target?.submenu) return;
-  const item = new MenuItem({ label: 'Preferències…', accelerator: 'CmdOrCtrl+,', click: () => { if (win && !win.isDestroyed()) win.webContents.send('app:open-preferences'); } });
-  const about = target.submenu.items.findIndex((entry) => entry.role === 'about');
-  target.submenu.insert(about >= 0 ? about + 1 : 0, new MenuItem({ type: 'separator' }));
-  target.submenu.insert(about >= 0 ? about + 2 : 1, item);
-  Menu.setApplicationMenu(menu);
+// The app's own menu, in Catalan (src/electron/app-menu.cjs; its text in src/electron/menu-labels.cjs).
+// What it does in the window goes there as an action; the panes it marks are those the window reports open.
+const REPOSITORY_URL = 'https://github.com/Celtico/agentic-coder-mvp';
+let menuPanes = {};
+const sendMenuAction = (action, extra = {}) => { if (win && !win.isDestroyed()) win.webContents.send('app:menu', { action, ...extra }); };
+function installAppMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
+    labels: menuLabels,
+    panes: menuPanes,
+    actions: {
+      preferences: () => sendMenuAction('preferences'),
+      openFolder: () => sendMenuAction('open-folder'),
+      newChat: () => sendMenuAction('new-chat'),
+      save: () => sendMenuAction('save'),
+      togglePane: (pane) => sendMenuAction('toggle-pane', { pane }),
+      capture: () => void saveWindowCapture(),
+      repository: () => void shell.openExternal(REPOSITORY_URL),
+      readme: () => {
+        const readme = path.resolve(__dirname, '..', '..', 'README.md');
+        if (fsSync.existsSync(readme)) void shell.openPath(readme); else void shell.openExternal(`${REPOSITORY_URL}#readme`);
+      },
+      turnLog: () => {
+        const file = turnLogPath({ isPackaged: app.isPackaged, userData: app.getPath('userData'), appRoot: path.resolve(__dirname, '../..') });
+        if (file && fsSync.existsSync(file)) void shell.openPath(file);
+        else if (file) { fsSync.mkdirSync(path.dirname(file), { recursive: true }); void shell.openPath(path.dirname(file)); }
+      },
+    },
+  })));
 }
-
-function addCaptureToMenu() {
-  const menu = Menu.getApplicationMenu();
-  const view = menu?.items.find((item) => item.role === 'viewmenu' || /^(View|Visualització|Visualización)$/.test(item.label));
-  if (!menu || !view?.submenu) return;
-  view.submenu.append(new MenuItem({ type: 'separator' }));
-  view.submenu.append(new MenuItem({ label: 'Desa una captura de la finestra…', accelerator: 'CmdOrCtrl+Shift+S', click: () => void saveWindowCapture() }));
-  Menu.setApplicationMenu(menu);
-}
+ipcMain.on('menu:panes', (_event, panes) => {
+  const next = Object.fromEntries(MENU_PANES.map((pane) => [pane, Boolean(panes && typeof panes === 'object' && panes[pane] === true)]));
+  if (MENU_PANES.every((pane) => next[pane] === Boolean(menuPanes[pane]))) return;
+  menuPanes = next;
+  installAppMenu();
+});
 
 // The capture for the README runs as a second copy of the app: it gets a data folder of its own (a temporary
 // copy of the evaluations, which the Avaluació column shows), so it never shares the open app's folder.
@@ -792,8 +817,7 @@ app.whenReady().then(async () => {
     console.error(`Node.js per al model i els projectes: ${node} (v${nodeMajor(node) || '?'})`);
   } catch { /* no Node: the worker reports it */ }
   if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
-  addCaptureToMenu();
-  addPreferencesToMenu();
+  installAppMenu();
   // The microphone is for the window's dictation only, sound only; other requests keep Electron's answer.
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     if (permission !== 'media') { callback(true); return; }

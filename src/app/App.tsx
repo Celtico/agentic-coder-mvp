@@ -312,7 +312,6 @@ export function App(): React.JSX.Element {
   const colorMode = resolveColorMode(appearance.colorMode, systemDark);
   useEffect(() => { applyColorMode(colorMode); }, [colorMode]);
   useEffect(() => { setAccent(appearance.accent); updateViewState(localStorage, (state) => { state.appearance = appearance; }); }, [appearance, setAccent]);
-  useEffect(() => window.agentic.onOpenPreferences?.(() => void openPreferences()) ?? undefined, []);
   async function openPreferences() {
     setPreferencesOpen(true); setPreferencesError('');
     try { setAgentPreferencesState(await window.agentic.agentPreferences()); setDictationInfo(await window.agentic.dictationInfo()); } catch (error) { setPreferencesError(errorText(error)); }
@@ -2013,6 +2012,21 @@ export function App(): React.JSX.Element {
       {railDragging && railDrop?.group === group && railLayout[group].length === 0 && <Box h="2px" w="30px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
     </Flex>
   );
+  // The app's menu (src/electron/app-menu.cjs): its actions, with what this render knows, and the panes
+  // it marks open.
+  const menuActionRef = useRef<(value: { action: string; pane?: string }) => void>(() => {});
+  menuActionRef.current = ({ action, pane }) => {
+    if (action === 'preferences') void openPreferences();
+    else if (action === 'open-folder') void selectProject();
+    else if (action === 'new-chat') newChat();
+    else if (action === 'save') { if (editorOpen && editingPath) void saveEdit(); }
+    else if (action === 'toggle-pane') {
+      if (pane === 'editor') void toggleEditor();
+      else if (pane && pane in railButtons) railButtons[pane as RailPanel].onClick();
+    }
+  };
+  useEffect(() => window.agentic.onMenu?.((value) => menuActionRef.current(value)) ?? undefined, []);
+  useEffect(() => { window.agentic.reportPanes?.({ editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen }); }, [editorOpen, browserOpen, evaluationOpen, consoleOpen, terminalOpen, gitOpen, learningOpen]);
   const rowItems = (row: RailGroup) => panelsInRow(railLayout, row, (panel) => paneOpen[panel]).map((panel) => ({ id: `${row === 'top' ? 'side' : 'dock'}-${panel}`, node: paneNode(panel, row) }));
   const dockItems = rowItems('bottom');
   const sideItems = rowItems('top');

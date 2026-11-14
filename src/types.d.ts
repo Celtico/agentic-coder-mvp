@@ -60,7 +60,8 @@ export interface AgenticBridge {
   getPermissionMode(): Promise<'ask' | 'auto'>;
   agentPreferences(): Promise<{ values: AgentPreferences; defaults: AgentPreferences; limits: Record<'answerTokens' | 'maxIterations' | 'historyMessages', { min: number; max: number; default: number }> }>;
   setAgentPreferences(change: Partial<AgentPreferences>): Promise<AgentPreferences>;
-  onOpenPreferences(callback: () => void): () => void;
+  onMenu(callback: (value: { action: 'preferences' | 'open-folder' | 'new-chat' | 'save' | 'toggle-pane'; pane?: string }) => void): () => void;
+  reportPanes(panes: Record<string, boolean>): void;
   dictationInfo(): Promise<{ preferences: DictationPreferences; languages: DictationPreferences['language'][]; models: { id: string; label: string; repo: string; bytes: number; installed: boolean }[] }>;
   setDictationPreferences(change: Partial<DictationPreferences>): Promise<DictationPreferences>;
   askMicrophone(): Promise<boolean>;

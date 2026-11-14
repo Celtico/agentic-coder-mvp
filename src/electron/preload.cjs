@@ -25,11 +25,13 @@ contextBridge.exposeInMainWorld('agentic', {
   askMicrophone: () => ipcRenderer.invoke('dictation:microphone'),
   transcribe: (audio) => ipcRenderer.invoke('dictation:transcribe', audio),
   setAgentPreferences: (change) => ipcRenderer.invoke('preferences:set-agent', change),
-  onOpenPreferences: (callback) => {
-    const listener = () => callback();
-    ipcRenderer.on('app:open-preferences', listener);
-    return () => ipcRenderer.removeListener('app:open-preferences', listener);
+  // The app's menu (src/electron/app-menu.cjs): its actions in the window, and the panes it marks open.
+  onMenu: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('app:menu', listener);
+    return () => ipcRenderer.removeListener('app:menu', listener);
   },
+  reportPanes: (panes) => ipcRenderer.send('menu:panes', panes),
   setPermissionMode: (mode) => ipcRenderer.invoke('permissions:set', mode),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
