@@ -10,7 +10,7 @@ import {
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
@@ -20,6 +20,7 @@ import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { closeTab, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
+import { moveRailPanel, panelsInRow, sameRailLayout, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -268,12 +269,22 @@ export function App(): React.JSX.Element {
   const [evaluationReports, setEvaluationReports] = useState<Record<string, BenchmarkReport>>({});
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
   const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
+  // Which icons of the left bar are in its top or bottom group, in order (src/app/rail-layout.ts): the
+  // pane of each icon opens in the row of its group. An icon dragged to the other group takes its pane.
+  const [railLayout, setRailLayout] = useState<RailLayout>(() => initialView.rail);
+  const [railDragging, setRailDragging] = useState<RailPanel | null>(null);
+  const [railDrop, setRailDrop] = useState<{ group: RailGroup; index: number } | null>(null);
+  useEffect(() => { updateViewState(localStorage, (state) => { state.rail = railLayout; }); }, [railLayout]);
+  const moveRailIcon = useCallback((panel: RailPanel, group: RailGroup, index: number) => {
+    setRailLayout((current) => { const next = moveRailPanel(current, panel, group, index); return sameRailLayout(current, next) ? current : next; });
+  }, []);
   const [terminalResizing, setTerminalResizing] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(() => {
     const stored = Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
     return Number.isFinite(stored) && stored >= TERMINAL_MIN_HEIGHT ? stored : 260;
   });
-  const terminalContainerRef = useRef<HTMLDivElement | null>(null);
+  // The terminal's element: it is built again when its pane moves to the other row or the row is rearranged.
+  const [terminalContainer, setTerminalContainer] = useState<HTMLDivElement | null>(null);
   const terminalInstanceRef = useRef<Terminal | null>(null);
   const terminalCommandBufferRef = useRef('');
   const executeTerminalCommandRef = useRef<(command: string) => void>(() => {});
@@ -1232,11 +1243,11 @@ export function App(): React.JSX.Element {
   executeTerminalCommandRef.current = (command: string) => { void executeCommand(command); };
 
   useEffect(() => {
-    if (!terminalOpen || !terminalContainerRef.current) return;
+    if (!terminalOpen || !terminalContainer) return;
     const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor('bg'), foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
-    terminal.open(terminalContainerRef.current);
+    terminal.open(terminalContainer);
     terminalInstanceRef.current = terminal;
     fit.fit();
     if (terminalOutput) terminal.write(`${terminalOutput}\r\n`);
@@ -1266,7 +1277,7 @@ export function App(): React.JSX.Element {
       }
     });
     const resize = new ResizeObserver(() => fit.fit());
-    resize.observe(terminalContainerRef.current);
+    resize.observe(terminalContainer);
     terminal.focus();
     return () => {
       input.dispose();
@@ -1275,7 +1286,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, gitOpen, learningOpen, consoleOpen]);
+  }, [terminalOpen, terminalContainer]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1394,7 +1405,7 @@ export function App(): React.JSX.Element {
           {terminalStatus && <Text fontSize="xs" color="fg.muted">{terminalStatus}</Text>}
         </HStack>
       </Flex>
-      <Box ref={terminalContainerRef} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
+      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
     </Flex>
   );
 
@@ -1740,12 +1751,91 @@ export function App(): React.JSX.Element {
       </Accordion.Root>
     </Stack>
   );
-  const dockItems = [
-    gitOpen ? { id: 'dock-git', node: dockPane('Git', gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>) } : null,
-    learningOpen ? { id: 'dock-learning', node: dockPane('Aprenentatge local', learningPane) } : null,
-    consoleOpen ? { id: 'dock-console', node: dockPane('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined) } : null,
-    terminalOpen ? { id: 'dock-terminal', node: terminalDock } : null,
-  ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
+  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
+    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
+      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
+        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
+      </Flex>
+      <Box flex="1" minH="0" overflow="hidden">{content}</Box>
+    </Flex>
+  );
+  // Every pane, framed for the row its icon puts it in (src/app/rail-layout.ts): beside the chat for the
+  // top group, in the bottom dock for the bottom one. Ids keep the row so each arrangement keeps its sizes.
+  const paneOpen: Record<RailPanel, boolean> = { editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
+  const paneNode = (panel: RailPanel, row: RailGroup): React.JSX.Element => {
+    const frame = row === 'top' ? sidePane : dockPane;
+    switch (panel) {
+      case 'editor': return frame('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>);
+      case 'browser': return frame('Navegador web', browserPane);
+      // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
+      case 'evaluation': return <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
+        <Card.Header flexDirection="row" alignItems="center" justifyContent="space-between" gap="3" py="1.5" px="3">
+          <HStack gap="2" minW="0"><Card.Title fontSize="xs">Avaluació</Card.Title>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
+        </Card.Header>
+        <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
+      </Card.Root>;
+      case 'git': return frame('Git', gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>);
+      case 'learning': return frame('Aprenentatge local', learningPane);
+      case 'console': return frame('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined);
+      case 'terminal': return terminalDock;
+    }
+  };
+  const railClose: Record<RailPanel, () => void> = { editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
+  // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
+  const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
+    editor: { icon: FileCode, label: editorOpen ? 'Tanca l’editor' : 'Obre l’editor', palette: editorOpen ? 'agentic' : 'gray', onClick: () => void toggleEditor() },
+    browser: { icon: Globe2, label: browserOpen ? 'Tanca el navegador' : 'Obre el navegador', palette: browserOpen ? 'agentic' : 'gray', onClick: () => setBrowserOpen((current) => !current) },
+    evaluation: { icon: ChartBar, label: evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models', palette: evaluationOpen ? 'agentic' : 'gray', onClick: () => void openEvaluationPanel() },
+    console: { icon: Bug, label: consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola', palette: consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray', onClick: () => setConsoleOpen((open) => !open) },
+    terminal: { icon: TerminalIcon, label: terminalOpen ? 'Tanca el terminal' : 'Obre el terminal', palette: terminalOpen ? 'agentic' : 'gray', onClick: () => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); } },
+    git: { icon: GitBranch, label: gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git', palette: gitOpen ? 'agentic' : 'gray', onClick: () => void openGitPanel() },
+    learning: { icon: Brain, label: learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local', palette: learningOpen ? 'agentic' : 'gray', onClick: () => void openLearningPanel() },
+  };
+  // Dragging an icon: the slot it would go to is the first icon of the group whose middle is below the
+  // pointer (or the end of the group). A line in the agentic colour shows it.
+  const railDragOver = (group: RailGroup) => (event: React.DragEvent<HTMLDivElement>) => {
+    if (!railDragging) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[data-rail-item]'));
+    const found = items.findIndex((item) => { const rect = item.getBoundingClientRect(); return event.clientY < rect.top + rect.height / 2; });
+    const index = found < 0 ? items.length : found;
+    setRailDrop((current) => current?.group === group && current.index === index ? current : { group, index });
+  };
+  const railDropHere = (group: RailGroup) => (event: React.DragEvent<HTMLDivElement>) => {
+    if (!railDragging) return;
+    event.preventDefault();
+    moveRailIcon(railDragging, group, railDrop?.group === group ? railDrop.index : railLayout[group].length);
+    setRailDragging(null); setRailDrop(null);
+  };
+  const railGroup = (group: RailGroup) => (
+    <Flex direction="column" align="center" gap="1" w="full" flex={group === 'top' ? '1' : 'none'} minH={railDragging ? '38px' : undefined} role="group" aria-label={group === 'top' ? 'Panells de la fila superior' : 'Panells de la fila inferior'}
+      onDragOver={railDragOver(group)} onDrop={railDropHere(group)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setRailDrop((current) => current?.group === group ? null : current); }}>
+      {railLayout[group].map((panel, index) => {
+        const button = railButtons[panel];
+        const last = index === railLayout[group].length - 1;
+        const other: RailGroup = group === 'top' ? 'bottom' : 'top';
+        return <Menu.Root key={panel}>
+          <Menu.ContextTrigger asChild>
+            <Box position="relative" data-rail-item draggable opacity={railDragging === panel ? 0.4 : 1}
+              onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
+              onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
+              {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant={button.palette === 'agentic' ? 'subtle' : 'ghost'} colorPalette={button.palette} onClick={button.onClick}/>
+              {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+            </Box>
+          </Menu.ContextTrigger>
+          <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+            <Menu.Item value="move-other" onClick={() => moveRailIcon(panel, other, railLayout[other].length)}><IconLabel icon={other === 'top' ? ArrowUpToLine : ArrowDownToLine}>{other === 'top' ? 'Mou a dalt' : 'Mou a baix'}</IconLabel></Menu.Item>
+          </Menu.Content></Menu.Positioner></Portal>
+        </Menu.Root>;
+      })}
+      {railDragging && railDrop?.group === group && railLayout[group].length === 0 && <Box h="2px" w="30px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+    </Flex>
+  );
+  const rowItems = (row: RailGroup) => panelsInRow(railLayout, row, (panel) => paneOpen[panel]).map((panel) => ({ id: `${row === 'top' ? 'side' : 'dock'}-${panel}`, node: paneNode(panel, row) }));
+  const dockItems = rowItems('bottom');
+  const sideItems = rowItems('top');
   const dockKey = dockItems.map((item) => item.id).join('+');
   const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
   const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
@@ -1763,26 +1853,6 @@ export function App(): React.JSX.Element {
       )}
     </Flex>
   );
-  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
-    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
-        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
-      </Flex>
-      <Box flex="1" minH="0" overflow="hidden">{content}</Box>
-    </Flex>
-  );
-  const sideItems = [
-    editorOpen ? { id: 'side-editor', node: sidePane('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>) } : null,
-    browserOpen ? { id: 'side-browser', node: sidePane('Navegador web', browserPane) } : null,
-    // The evaluation opens beside the chat, like the browser, with the whole height.
-    // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
-    evaluationOpen ? { id: 'side-evaluation', node: <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
-      <Card.Header flexDirection="row" alignItems="center" justifyContent="space-between" gap="3" py="1.5" px="3">
-        <HStack gap="2" minW="0"><Card.Title fontSize="xs">Avaluació</Card.Title>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
-      </Card.Header>
-      <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
-    </Card.Root> } : null,
-  ].filter((item): item is { id: string; node: React.JSX.Element } => item !== null);
   const sideKey = sideItems.map((item) => item.id).join('+');
   const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
   const sideEven = useMemo(() => sidePanels.map(() => 100 / Math.max(1, sidePanels.length)), [sidePanels]);
@@ -1800,8 +1870,8 @@ export function App(): React.JSX.Element {
       // Stored as [chat, workspace], whatever side each one is drawn on.
       const details = { size: [shown.size[1], shown.size[0]] };
       if (details.size[1] < WORKSPACE_CLOSE_BELOW) {
-        setBrowserOpen(false);
-        setEditorOpen(false);
+        // Every pane of the top row closes, whichever they are (src/app/rail-layout.ts).
+        for (const panel of panelsInRow(railLayout, 'top', (item) => paneOpen[item])) railClose[panel]();
         setSplitSize(lastExpandedSplitSizeRef.current);
         localStorage.setItem(SPLIT_KEY, JSON.stringify(lastExpandedSplitSizeRef.current));
         return;
@@ -1829,15 +1899,9 @@ export function App(): React.JSX.Element {
           {!ownTitleBar && <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>}
           <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
           <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
-          <IconButton icon={FileCode} label={editorOpen ? 'Tanca l’editor' : 'Obre l’editor'} w="38px" h="38px" variant={editorOpen ? 'subtle' : 'ghost'} colorPalette={editorOpen ? 'agentic' : 'gray'} onClick={() => void toggleEditor()}/>
-          <IconButton icon={Globe2} label={browserOpen ? 'Tanca el navegador' : 'Obre el navegador'} w="38px" h="38px" variant={browserOpen ? 'subtle' : 'ghost'} colorPalette={browserOpen ? 'agentic' : 'gray'} onClick={() => setBrowserOpen((current) => !current)}/>
-          <IconButton icon={ChartBar} label={evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models'} w="38px" h="38px" variant={evaluationOpen ? 'subtle' : 'ghost'} colorPalette={evaluationOpen ? 'agentic' : 'gray'} onClick={() => void openEvaluationPanel()}/>
-          {/* What opens in the bottom dock sits at the bottom of the bar, next to it. */}
-          <Box flex="1" minH="2"/>
-          <IconButton icon={Bug} label={consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola'} w="38px" h="38px" variant={consoleOpen ? 'subtle' : 'ghost'} colorPalette={consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray'} onClick={() => setConsoleOpen((open) => !open)}/>
-          <IconButton icon={TerminalIcon} label={terminalOpen ? 'Tanca el terminal' : 'Obre el terminal'} w="38px" h="38px" variant={terminalOpen ? 'subtle' : 'ghost'} colorPalette={terminalOpen ? 'agentic' : 'gray'} onClick={() => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); }}/>
-          <IconButton icon={GitBranch} label={gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git'} w="38px" h="38px" variant={gitOpen ? 'subtle' : 'ghost'} colorPalette={gitOpen ? 'agentic' : 'gray'} onClick={() => void openGitPanel()}/>
-          <IconButton icon={Brain} label={learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local'} w="38px" h="38px" variant={learningOpen ? 'subtle' : 'ghost'} colorPalette={learningOpen ? 'agentic' : 'gray'} onClick={() => void openLearningPanel()}/>
+          {/* The panes: each group opens its panes in its own row; an icon can be dragged to the other group. */}
+          {railGroup('top')}
+          {railGroup('bottom')}
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
