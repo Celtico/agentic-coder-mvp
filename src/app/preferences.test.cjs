@@ -92,5 +92,5 @@ test('with the blue accent the panes’ palette is blue (a tinted header: blue.s
   assert.equal(theme.buildSystem('agentic').token('colors.agentic.500'), '#10a37f');
   // The rail's mark alone stays in the fixed brand green.
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /<Mark size=\{28\} busy=\{loading \|\| modelChanging\} color="brand\.solid"\/>/);
+  assert.match(app, /<Mark size=\{28\} gradient\/>/);
 });
