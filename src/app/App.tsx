@@ -26,7 +26,7 @@ import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
 import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
-import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
+import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, sideColumnsShown, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -443,7 +443,8 @@ export function App(): React.JSX.Element {
   // with both hidden the panel takes no width.
   const [conversationsOpen, setConversationsOpen] = useState(initialView.panels.conversations);
   const [filesOpen, setFilesOpen] = useState(initialView.panels.files);
-  const navigationColumns = (conversationsOpen ? 1 : 0) + (filesOpen ? 1 : 0);
+  const sideColumns = sideColumnsShown(railLayout, (column) => column === 'conversations' ? conversationsOpen : filesOpen);
+  const navigationColumns = sideColumns.length;
   const navigationOpen = navigationColumns > 0;
   const navigationMinWidth = NAVIGATION_COLUMN_MIN_WIDTH * Math.max(1, navigationColumns);
   const [navigationWidth, setNavigationWidth] = useState(() => {
@@ -1939,10 +1940,83 @@ export function App(): React.JSX.Element {
   );
   // Every pane, framed for the row its icon puts it in (src/app/rail-layout.ts): beside the chat for the
   // top group, in the bottom dock for the bottom one. Ids keep the row so each arrangement keeps its sizes.
-  const paneOpen: Record<Pane, boolean> = { editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
+  // Converses and Fitxers: columns of the side panel while their icons are in the top group, panes of the
+  // bottom row when they are in the bottom one (src/app/rail-layout.ts), the same content either way.
+  const conversationsColumn = (
+            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
+              {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
+              <Box flex="1" minH="0" overflowY="auto" pb="2">
+                <Stack gap="0.5">
+                    {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
+                      <Menu.ContextTrigger asChild><Box position="relative" data-group>
+                        <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
+                        <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" opacity="0" _groupHover={{ opacity: 1 }} _groupFocusWithin={{ opacity: 1 }} color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); void deleteChatSession(session.id); }}/>
+                      </Box></Menu.ContextTrigger>
+                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                        <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
+                      </Menu.Content></Menu.Positioner></Portal>
+                    </Menu.Root>)}
+                  </Stack>
+              </Box>
+            </Flex>
+  );
+  const filesColumn = (
+            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
+              {/* The project the files belong to, at the top of its column: click to choose another folder. */}
+              <Box flex="none" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+                <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
+                <Box flex="1" minW="0" textAlign="left">
+                  <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
+                  <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
+                </Box>
+              </Button></Box>
+              {navigationHeader('Fitxers', <Menu.Root>
+                <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
+                <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                  <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
+                  <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                </Menu.Content></Menu.Positioner></Portal>
+              </Menu.Root>)}
+              <Box flex="1" minH="0" overflowY="auto" pb="2">
+                    {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
+                    <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
+                      event.preventDefault();
+                      const droppedDirectory = event.dataTransfer.files.item(0);
+                      if (droppedDirectory) void importProjectDirectory(droppedDirectory);
+                    }}>
+                    {project && <TreeView.Root key={project.path} collection={projectFileCollection} selectionMode="single" size="sm" variant="subtle" colorPalette="gray" defaultExpandedValue={projectFileNodes?.filter((node) => node.children?.length).map((node) => node.value) || []} onKeyDown={(event) => {
+                      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedTreePath && !(event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]'))) {
+                        event.preventDefault();
+                        const selected = project.files.find((file) => file.path === selectedTreePath);
+                        if (selected) void deleteProjectEntry(selected.path, selected.directory);
+                      }
+                    }} onSelectionChange={({ selectedValue }) => {
+                      const selectedPath = selectedValue.at(-1);
+                      setSelectedTreePath(selectedPath || null);
+                      if (selectedPath && project.files.some((file) => !file.directory && file.path === selectedPath)) void openEditor(selectedPath);
+                    }}>
+                      <TreeView.Tree>{projectFileNodes?.map((node, index) => <ProjectTreeNodeView key={node.value} node={node} indexPath={[index]} directoryPaths={projectDirectoryPaths} onOpen={openEditor} onCreate={(path, directory) => openCreateProjectEntry(directory, path)} onDelete={deleteProjectEntry} onRename={openRenameProjectEntry}/>)}</TreeView.Tree>
+                    </TreeView.Root>}
+                    {/* The empty space under the tree: right-click for the folder's own actions. */}
+                    {project && <Menu.Root>
+                      <Menu.ContextTrigger asChild><Box minH="140px" px="2" pt="2">{project.files.length === 0 && <Text fontSize="xs" color="fg.muted">La carpeta és buida. Botó dret aquí per crear un document o una carpeta.</Text>}</Box></Menu.ContextTrigger>
+                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
+                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                        <Menu.Separator borderColor="border"/>
+                        <Menu.Item value="clear" color="fg.error" disabled={loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
+                      </Menu.Content></Menu.Positioner></Portal>
+                    </Menu.Root>}
+                    </Box>
+              </Box>
+            </Flex>
+  );
+  const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
   const paneNode = (panel: Pane, row: RailGroup): React.JSX.Element => {
     const frame = row === 'top' ? sidePane : dockPane;
     switch (panel) {
+      case 'conversations': return conversationsColumn;
+      case 'files': return filesColumn;
       case 'editor': return frame('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>);
       case 'browser': return frame('Navegador web', browserPane);
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
@@ -1958,7 +2032,7 @@ export function App(): React.JSX.Element {
       case 'terminal': return terminalDock;
     }
   };
-  const railClose: Record<Pane, () => void> = { editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
+  const railClose: Record<Pane, () => void> = { conversations: () => setConversationsOpen(false), files: () => setFilesOpen(false), editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
   // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
   const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
     conversations: { icon: Conversations, label: conversationsOpen ? 'Amaga les converses' : 'Mostra les converses', palette: conversationsOpen ? 'agentic' : 'gray', onClick: () => setConversationsOpen((open) => !open) },
@@ -2111,71 +2185,7 @@ export function App(): React.JSX.Element {
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
           {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds). */}
           <Grid flex="1" minH="0" minW="0" gap="1.5" templateColumns={`repeat(${navigationColumns}, minmax(0, 1fr))`}>
-            {conversationsOpen && <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
-              {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
-              <Box flex="1" minH="0" overflowY="auto" pb="2">
-                <Stack gap="0.5">
-                    {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
-                      <Menu.ContextTrigger asChild><Box position="relative" data-group>
-                        <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
-                        <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" opacity="0" _groupHover={{ opacity: 1 }} _groupFocusWithin={{ opacity: 1 }} color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); void deleteChatSession(session.id); }}/>
-                      </Box></Menu.ContextTrigger>
-                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
-                      </Menu.Content></Menu.Positioner></Portal>
-                    </Menu.Root>)}
-                  </Stack>
-              </Box>
-            </Flex>}
-            {filesOpen && <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
-              {/* The project the files belong to, at the top of its column: click to choose another folder. */}
-              <Box flex="none" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
-                <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
-                <Box flex="1" minW="0" textAlign="left">
-                  <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
-                  <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
-                </Box>
-              </Button></Box>
-              {navigationHeader('Fitxers', <Menu.Root>
-                <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
-                <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                  <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
-                  <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
-                </Menu.Content></Menu.Positioner></Portal>
-              </Menu.Root>)}
-              <Box flex="1" minH="0" overflowY="auto" pb="2">
-                    {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
-                    <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
-                      event.preventDefault();
-                      const droppedDirectory = event.dataTransfer.files.item(0);
-                      if (droppedDirectory) void importProjectDirectory(droppedDirectory);
-                    }}>
-                    {project && <TreeView.Root key={project.path} collection={projectFileCollection} selectionMode="single" size="sm" variant="subtle" colorPalette="gray" defaultExpandedValue={projectFileNodes?.filter((node) => node.children?.length).map((node) => node.value) || []} onKeyDown={(event) => {
-                      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedTreePath && !(event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]'))) {
-                        event.preventDefault();
-                        const selected = project.files.find((file) => file.path === selectedTreePath);
-                        if (selected) void deleteProjectEntry(selected.path, selected.directory);
-                      }
-                    }} onSelectionChange={({ selectedValue }) => {
-                      const selectedPath = selectedValue.at(-1);
-                      setSelectedTreePath(selectedPath || null);
-                      if (selectedPath && project.files.some((file) => !file.directory && file.path === selectedPath)) void openEditor(selectedPath);
-                    }}>
-                      <TreeView.Tree>{projectFileNodes?.map((node, index) => <ProjectTreeNodeView key={node.value} node={node} indexPath={[index]} directoryPaths={projectDirectoryPaths} onOpen={openEditor} onCreate={(path, directory) => openCreateProjectEntry(directory, path)} onDelete={deleteProjectEntry} onRename={openRenameProjectEntry}/>)}</TreeView.Tree>
-                    </TreeView.Root>}
-                    {/* The empty space under the tree: right-click for the folder's own actions. */}
-                    {project && <Menu.Root>
-                      <Menu.ContextTrigger asChild><Box minH="140px" px="2" pt="2">{project.files.length === 0 && <Text fontSize="xs" color="fg.muted">La carpeta és buida. Botó dret aquí per crear un document o una carpeta.</Text>}</Box></Menu.ContextTrigger>
-                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
-                        <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
-                        <Menu.Separator borderColor="border"/>
-                        <Menu.Item value="clear" color="fg.error" disabled={loading} onClick={() => void clearProject()}><IconLabel icon={Trash}>Buida la carpeta…</IconLabel></Menu.Item>
-                      </Menu.Content></Menu.Positioner></Portal>
-                    </Menu.Root>}
-                    </Box>
-              </Box>
-            </Flex>}
+            {sideColumns.map((column) => <React.Fragment key={column}>{column === 'conversations' ? conversationsColumn : filesColumn}</React.Fragment>)}
           </Grid>
         </Flex>
         </Splitter.Panel>

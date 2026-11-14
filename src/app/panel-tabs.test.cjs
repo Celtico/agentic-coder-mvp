@@ -42,8 +42,12 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // One grid column per visible column of the side panel; each is shown or hidden from its icon.
   assert.match(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}, minmax\(0, 1fr\)\)`\}/);
-  assert.match(app, /\{conversationsOpen && <Flex direction="column"[^>]*aria-label="Converses">/);
-  assert.match(app, /\{filesOpen && <Flex direction="column"[^>]*aria-label="Fitxers">/);
+  // The same column is a side column or a pane of the bottom row, as its icon's group says.
+  assert.match(app, /const sideColumns = sideColumnsShown\(railLayout, /);
+  assert.match(app, /\{sideColumns\.map\(\(column\) => <React\.Fragment key=\{column\}>\{column === 'conversations' \? conversationsColumn : filesColumn\}/);
+  assert.match(app, /case 'conversations': return conversationsColumn;\n\s*case 'files': return filesColumn;/);
+  assert.match(app, /const conversationsColumn = \(\n\s*<Flex flex="1" h="full" direction="column"[^>]*aria-label="Converses">/);
+  assert.match(app, /const filesColumn = \(\n\s*<Flex flex="1" h="full" direction="column"[^>]*aria-label="Fitxers">/);
   assert.match(app, /conversations: \{ icon: Conversations, label: [^\n]*palette: conversationsOpen \? 'agentic'/);
   assert.match(app, /files: \{ icon: FileText, label: [^\n]*palette: filesOpen \? 'agentic'/);
   // With both hidden, the side panel takes no width.
@@ -52,7 +56,7 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
   // The project (folder, name, path; click to choose another) is at the top of the Fitxers column, and
   // Converses starts with its own header.
-  const files = app.indexOf('aria-label="Fitxers">');
+  const files = app.indexOf('aria-label="Fitxers">');  // the project block stays inside Fitxers wherever it is
   const conversations = app.indexOf('aria-label="Converses">');
   const projectButton = app.indexOf('onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte`');
   assert.ok(conversations > 0 && files > conversations && projectButton > files && projectButton < app.indexOf("navigationHeader('Fitxers'"), 'the project block opens the Fitxers column');

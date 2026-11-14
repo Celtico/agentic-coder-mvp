@@ -5,14 +5,14 @@
 // The editor has no icon (it opens from a file in Fitxers) and is always the first pane of the top row.
 // Ids that are no longer icons (the editor, «new chat») are dropped from a saved layout.
 
-// Converses and Fitxers are the two columns of the side panel: their icons show or hide them, and move
-// like the others, but they are not panes of the work area's rows.
+// Converses and Fitxers are panes too: with their icons in the top group they are the columns of the
+// side panel (beside the chat), in the bottom group they are panes of the bottom row, like the others.
 export type SideColumn = "conversations" | "files"
 export type RailPanel = SideColumn | "browser" | "evaluation" | "console" | "terminal" | "git" | "learning"
 export const SIDE_COLUMNS: SideColumn[] = ["conversations", "files"]
 export const isSideColumn = (panel: string): panel is SideColumn => (SIDE_COLUMNS as string[]).includes(panel)
-/** A pane of the work area: one with an icon in the bar (not a side column), or the editor. */
-export type Pane = Exclude<RailPanel, SideColumn> | "editor"
+/** A pane: one with an icon in the bar, or the editor (which has none and is always first on top). */
+export type Pane = RailPanel | "editor"
 export type RailGroup = "top" | "bottom"
 export type RailLayout = Record<RailGroup, RailPanel[]>
 
@@ -65,10 +65,19 @@ export function moveRailPanel(layout: RailLayout, panel: RailPanel, group: RailG
   return next
 }
 
-/** The open panes of one row, in the order of their icons; the editor first in the top row. */
+/**
+ * The open panes of one row, in the order of their icons. The top row starts with the editor and leaves
+ * out Converses and Fitxers (on top they are the side panel's columns, see sideColumnsShown); the bottom
+ * row has them like any other pane.
+ */
 export function panelsInRow(layout: RailLayout, group: RailGroup, isOpen: (panel: Pane) => boolean): Pane[] {
-  const panes = normalizeRailLayout(layout)[group].filter((panel): panel is Exclude<RailPanel, SideColumn> => !isSideColumn(panel))
-  return (group === "top" ? ["editor" as Pane, ...panes] : (panes as Pane[])).filter(isOpen)
+  const panes: Pane[] = normalizeRailLayout(layout)[group]
+  return (group === "top" ? ["editor" as Pane, ...panes.filter((panel) => !isSideColumn(panel))] : panes).filter(isOpen)
+}
+
+/** The side panel's columns: Converses and Fitxers while their icons are on top and they are shown, in that order. */
+export function sideColumnsShown(layout: RailLayout, isOpen: (panel: SideColumn) => boolean): SideColumn[] {
+  return normalizeRailLayout(layout).top.filter((panel): panel is SideColumn => isSideColumn(panel) && isOpen(panel))
 }
 
 export const sameRailLayout = (a: RailLayout, b: RailLayout) => a.top.join() === b.top.join() && a.bottom.join() === b.bottom.join()

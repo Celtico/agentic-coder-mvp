@@ -60,12 +60,33 @@ test('the layouts saved on this Mac load cleanly, and the new column icons go on
   assert.deepEqual(rail.moveRailPanel(allBelow, 'browser', 'top', 0).top, ['browser', 'conversations', 'files']);
 });
 
-test('each open pane goes to the row of its icon, in order; the columns of the side panel are not panes', () => {
+test('each open pane goes to the row of its icon, in order; the editor is first on top', () => {
   const layout = rail.moveRailPanel(rail.moveRailPanel(defaults, 'terminal', 'top', 0), 'browser', 'bottom', 1);
   const open = new Set(['terminal', 'browser', 'editor', 'git', 'conversations', 'files']);
   assert.deepEqual(rail.panelsInRow(layout, 'top', (panel) => open.has(panel)), ['editor', 'terminal']);
-  assert.deepEqual(rail.panelsInRow(rail.moveRailPanel(layout, 'files', 'bottom', 0), 'bottom', (panel) => open.has(panel)), ['browser', 'git']);
+  assert.deepEqual(rail.panelsInRow(layout, 'bottom', (panel) => open.has(panel)), ['browser', 'git']);
   assert.equal(rail.isSideColumn('files'), true);
   assert.equal(rail.isSideColumn('git'), false);
   assert.equal(rail.railGroupOf(layout, 'browser'), 'bottom');
+});
+
+test('Converses and Fitxers follow their icons: side columns on top, panes of the bottom row below', () => {
+  const both = () => true;
+  // On top: the side panel's columns, in the order of the icons; not panes of the top row.
+  assert.deepEqual(rail.sideColumnsShown(defaults, both), ['conversations', 'files']);
+  assert.deepEqual(rail.sideColumnsShown(rail.moveRailPanel(defaults, 'files', 'top', 0), both), ['files', 'conversations']);
+  assert.deepEqual(rail.panelsInRow(defaults, 'top', both), ['editor', 'browser', 'evaluation']);
+  // Fitxers dragged to the bottom group: it leaves the side panel and is a pane of the bottom row, in place.
+  const filesBelow = rail.moveRailPanel(defaults, 'files', 'bottom', 2);
+  assert.deepEqual(rail.sideColumnsShown(filesBelow, both), ['conversations']);
+  assert.deepEqual(rail.panelsInRow(filesBelow, 'bottom', both), ['console', 'terminal', 'files', 'git', 'learning']);
+  // Hidden ones are in neither place.
+  assert.deepEqual(rail.sideColumnsShown(defaults, (column) => column === 'files'), ['files']);
+  assert.deepEqual(rail.panelsInRow(filesBelow, 'bottom', (panel) => panel !== 'files'), ['console', 'terminal', 'git', 'learning']);
+  // As cel left it: every icon at the bottom, Converses among them: the side panel is empty.
+  const asLeft = { top: ['files'], bottom: ['conversations', 'evaluation', 'learning', 'browser', 'console', 'git', 'terminal'] };
+  assert.deepEqual(rail.sideColumnsShown(asLeft, both), ['files']);
+  assert.deepEqual(rail.panelsInRow(asLeft, 'bottom', both), asLeft.bottom);
+  // Back on top, it is a column again.
+  assert.deepEqual(rail.sideColumnsShown(rail.moveRailPanel(asLeft, 'conversations', 'top', 0), both), ['conversations', 'files']);
 });
