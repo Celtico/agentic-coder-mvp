@@ -12,8 +12,7 @@ import {
 import {
   LuArrowLeft as ArrowLeft, LuSettings as Settings, LuMinus as Minus, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
-  LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
-  LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
+    LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
@@ -26,7 +25,7 @@ import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
 import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
-import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
+import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -39,7 +38,6 @@ const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 const TERMINAL_HEIGHT_KEY = 'agentic-terminal-height-v1';
 /** Dragged shorter than this, the terminal dock closes. */
 const TERMINAL_MIN_HEIGHT = 90;
-const NAVIGATION_SECTIONS_SPLIT_KEY = 'agentic-navigation-sections-split-v1';
 
 function makeSession(messages: ChatMessage[] = [], title = 'Conversa nova', projectPath?: string): ChatSession {
   const prompt = messages.find((message) => message.role === 'user')?.text.trim();
@@ -152,7 +150,8 @@ const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
 );
 
 /** The side column can be dragged between these widths; narrower than the minimum, it closes. */
-const NAVIGATION_MIN_WIDTH = 150;
+// Two columns (Converses | Fitxers) of at least about 150 px each.
+const NAVIGATION_MIN_WIDTH = 320;
 const NAVIGATION_MAX_WIDTH = 760;
 /** The right-hand panel closes when dragged to less than this share of the width. */
 const WORKSPACE_CLOSE_BELOW = 10;
@@ -173,10 +172,6 @@ function getSplitSize(): number[] {
 }
 
 
-function getNavigationSectionsSplitSize(): number[] {
-  try { const value = JSON.parse(localStorage.getItem(NAVIGATION_SECTIONS_SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [36, 64]; }
-  catch { return [36, 64]; }
-}
 
 function ProjectTreeNodeActions({ node, isDirectory, onCreate, onDelete, onRename, children }: { node: ProjectTreeNode; isDirectory: boolean; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void; children: React.ReactNode }) {
   const separator = Math.max(node.value.lastIndexOf('/'), node.value.lastIndexOf('\\'));
@@ -432,12 +427,11 @@ export function App(): React.JSX.Element {
   const [testsBusy, setTestsBusy] = useState(false);
   const [splitSize, setSplitSize] = useState(getSplitSize);
   const lastExpandedSplitSizeRef = useRef(splitSize);
-  const [navigationOpen, setNavigationOpen] = useState(initialView.panels.navigation);
-  const [navigationSectionsSplitSize, setNavigationSectionsSplitSize] = useState(getNavigationSectionsSplitSize);
-  const [recentConversationsExpanded, setRecentConversationsExpanded] = useState(true);
+  // The side panel is always shown (Converses | Fitxers); it is not folded any more.
+  const navigationOpen = true;
   const [navigationWidth, setNavigationWidth] = useState(() => {
     const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
-    return Number.isFinite(stored) && stored >= NAVIGATION_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 252;
+    return Number.isFinite(stored) && stored >= NAVIGATION_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 460;
   });
   const [verifiedExperienceKeys, setVerifiedExperienceKeys] = useState<Set<string>>(() => new Set());
   const feedRef = useRef<HTMLDivElement | null>(null);
@@ -1870,6 +1864,13 @@ export function App(): React.JSX.Element {
       </Accordion.Root>
     </Stack>
   );
+  /** The header of a column of the side panel: its name, and on the right its + . */
+  const navigationHeader = (title: string, action: React.ReactNode) => (
+    <Flex align="center" gap="1" h="36px" flex="none" minW="0" px="2" pr="0">
+      <Text flex="1" minW="0" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">{title}</Text>
+      {action}
+    </Flex>
+  );
   const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
       <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
@@ -1880,8 +1881,8 @@ export function App(): React.JSX.Element {
   );
   // Every pane, framed for the row its icon puts it in (src/app/rail-layout.ts): beside the chat for the
   // top group, in the bottom dock for the bottom one. Ids keep the row so each arrangement keeps its sizes.
-  const paneOpen: Record<RailPanel, boolean> = { editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
-  const paneNode = (panel: RailPanel, row: RailGroup): React.JSX.Element => {
+  const paneOpen: Record<Pane, boolean> = { editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
+  const paneNode = (panel: Pane, row: RailGroup): React.JSX.Element => {
     const frame = row === 'top' ? sidePane : dockPane;
     switch (panel) {
       case 'editor': return frame('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>);
@@ -1899,10 +1900,9 @@ export function App(): React.JSX.Element {
       case 'terminal': return terminalDock;
     }
   };
-  const railClose: Record<RailPanel, () => void> = { editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
+  const railClose: Record<Pane, () => void> = { editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
   // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
   const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
-    editor: { icon: FileCode, label: editorOpen ? 'Tanca l’editor' : 'Obre l’editor', palette: editorOpen ? 'agentic' : 'gray', onClick: () => void toggleEditor() },
     browser: { icon: Globe2, label: browserOpen ? 'Tanca el navegador' : 'Obre el navegador', palette: browserOpen ? 'agentic' : 'gray', onClick: () => setBrowserOpen((current) => !current) },
     evaluation: { icon: ChartBar, label: evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models', palette: evaluationOpen ? 'agentic' : 'gray', onClick: () => void openEvaluationPanel() },
     console: { icon: Bug, label: consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola', palette: consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray', onClick: () => setConsoleOpen((open) => !open) },
@@ -2015,63 +2015,38 @@ export function App(): React.JSX.Element {
     </Flex>}
     <Grid ref={appAreaRef} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
-          {!ownTitleBar && <Flex h="32px" w="full" flex="none" align="center" justify="center" title={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Mark size={20} busy={loading || modelChanging}/></Flex>}
-          <IconButton icon={navigationOpen ? PanelLeftClose : PanelLeftOpen} label={navigationOpen ? 'Amaga converses i fitxers' : 'Mostra converses i fitxers'} w="38px" h="38px" variant={navigationOpen ? 'subtle' : 'ghost'} colorPalette={navigationOpen ? 'agentic' : 'gray'} onClick={() => setNavigationOpen((open) => !open)}/>
-          <IconButton icon={MessageSquarePlus} label="Nova conversa" w="38px" h="38px" onClick={() => void newChat()}/>
+          {/* The app's mark at the top of the bar: it turns while the model works. */}
+          <Tip label={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Flex h="38px" w="38px" flex="none" align="center" justify="center" role="img" aria-label="Agentic Coder"><Mark size={20} busy={loading || modelChanging}/></Flex></Tip>
           {/* The panes: each group opens its panes in its own row; an icon can be dragged to the other group. */}
           {railGroup('top')}
           {railGroup('bottom')}
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
-        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: '60px', maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
+        {navigationOpen ? <Splitter.Root key="navigation-open" h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: `${NAVIGATION_MIN_WIDTH}px`, maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
           const availableWidth = Math.max(380, window.innerWidth - 58);
           const dragged = Math.round((details.size[0] / 100) * availableWidth);
-          // Dragged almost shut: close the column and keep its last useful width for next time.
-          if (dragged < NAVIGATION_MIN_WIDTH) { setNavigationOpen(false); return; }
-          const width = Math.min(NAVIGATION_MAX_WIDTH, dragged);
+          // It is never closed: dragged narrower than its two columns need, it stays at that width.
+          const width = Math.min(NAVIGATION_MAX_WIDTH, Math.max(NAVIGATION_MIN_WIDTH, dragged));
           setNavigationWidth(width);
           localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
           {/* The project comes first: conversations and files below both belong to it. */}
-          <Box flex="none" bg="bg" borderTopRadius="panel" px="2" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+          <Box flex="none" bg="bg" borderRadius="panel" px="2" py="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
             <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
             <Box flex="1" minW="0" textAlign="left">
               <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
               <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
             </Box>
           </Button></Box>
-          <Splitter.Root
-            h="full"
-            flex="1"
-            minH="0"
-            minW="0"
-            display="flex"
-            overflow="hidden"
-            orientation="vertical"
-            panels={[{ id: 'recent-conversations', minSize: '36px', collapsible: true, collapsedSize: '36px' }, { id: 'project-files', minSize: '36px', collapsible: true, collapsedSize: '36px' }]}
-            defaultSize={navigationSectionsSplitSize}
-            onResize={(details) => setNavigationSectionsSplitSize(details.size)}
-            onResizeEnd={(details) => {
-              setNavigationSectionsSplitSize(details.size);
-              localStorage.setItem(NAVIGATION_SECTIONS_SPLIT_KEY, JSON.stringify(details.size));
-            }}
-          >
-            <Splitter.Context>{(splitterContext) => <>
-            <Splitter.Panel id="recent-conversations" minH="0" minW="0" overflow="hidden" bg="bg" borderBottomRadius="panel" px="2">
-              <Accordion.Root collapsible value={recentConversationsExpanded ? ['recent'] : []} onValueChange={(details) => {
-                const expanded = details.value.includes('recent');
-                setRecentConversationsExpanded(expanded);
-                if (expanded) splitterContext.expandPanel('recent-conversations');
-                else splitterContext.collapsePanel('recent-conversations');
-              }} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
-                <Accordion.Item value="recent" border="0" h="full" minH="0" display="flex" flexDirection="column">
-                  <Flex align="center" gap="1" h="36px" flex="none" position="relative">
-                    <Accordion.ItemTrigger flex="1" h="36px" minH="36px" px="2" py="0"><Text flex="1" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Converses</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
-                  </Flex>
-                  <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" p="0" overflowY="auto"><Stack gap="0.5">
+          {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds). */}
+          <Grid flex="1" minH="0" minW="0" mt="1.5" gap="1.5" templateColumns="minmax(0, 1fr) minmax(0, 1fr)">
+            <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
+              {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
+              <Box flex="1" minH="0" overflowY="auto" pb="2">
+                <Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
                       <Menu.ContextTrigger asChild><Box position="relative" data-group>
                         <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
@@ -2081,21 +2056,18 @@ export function App(): React.JSX.Element {
                         <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>)}
-                  </Stack></Accordion.ItemBody></Accordion.ItemContent>
-                </Accordion.Item>
-              </Accordion.Root>
-            </Splitter.Panel>
-            <Splitter.ResizeTrigger id="recent-conversations:project-files" aria-label="Arrossega per ajustar l’alçada de les seccions" title="Arrossega per ajustar l’alçada de les seccions" h="6px" minH="6px" m="0" flex="none" cursor="row-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
-              <Splitter.ResizeTriggerSeparator bg="transparent"/>
-              <Splitter.ResizeTriggerIndicator w="32px" h="2px" bg="transparent" borderWidth="0" boxShadow="none" _groupHover={{ bg: 'border' }}/>
-            </Splitter.ResizeTrigger>
-            <Splitter.Panel id="project-files" minH="0" minW="0" overflow="hidden" bg="bg" borderRadius="panel" px="2">
-              <Accordion.Root collapsible defaultValue={['files']} size="sm" variant="plain" h="full" minH="0" overflow="hidden">
-                <Accordion.Item value="files" border="0" h="full" minH="0" display="flex" flexDirection="column">
-                  <HStack align="center" gap="0" h="36px" flex="none" minW="0" w="full" position="relative">
-                    <Accordion.ItemTrigger flex="1" w="full" maxW="full" minW="0" justifyContent="flex-start" gap="2" h="36px" minH="36px" px="2" py="0"><Text flex="1" minW="0" whiteSpace="nowrap" textAlign="left" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">Fitxers</Text><Accordion.ItemIndicator ml="auto"/></Accordion.ItemTrigger>
-                  </HStack>
-                  <Accordion.ItemContent flex="1" minH="0" overflow="hidden"><Accordion.ItemBody h="full" minH="0" px="0" py="2" overflowY="auto">
+                  </Stack>
+              </Box>
+            </Flex>
+            <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
+              {navigationHeader('Fitxers', <Menu.Root>
+                <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
+                <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                  <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
+                  <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
+                </Menu.Content></Menu.Positioner></Portal>
+              </Menu.Root>)}
+              <Box flex="1" minH="0" overflowY="auto" pb="2">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
                       event.preventDefault();
@@ -2126,12 +2098,9 @@ export function App(): React.JSX.Element {
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>}
                     </Box>
-                  </Accordion.ItemBody></Accordion.ItemContent>
-                </Accordion.Item>
-              </Accordion.Root>
-            </Splitter.Panel>
-            </>}</Splitter.Context>
-          </Splitter.Root>
+              </Box>
+            </Flex>
+          </Grid>
         </Flex>
         </Splitter.Panel>
         <SplitterHandle id={'navigation:main' as SplitterHandleId}/>

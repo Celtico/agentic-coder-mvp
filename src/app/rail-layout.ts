@@ -2,14 +2,17 @@
 // panes of the top group open in the top row of the work area (beside the chat), those of the bottom
 // group in the bottom row (the dock). An icon dragged to the other group takes its pane to the other
 // row, and the order of the icons is the order of the panes in their row.
-// The toggle of the conversations and files column and «new chat» are not panes and stay at the top.
+// The editor has no icon (it opens from a file in Fitxers) and is always the first pane of the top row.
+// Ids that are no longer icons (the editor, «new chat») are dropped from a saved layout.
 
-export type RailPanel = "editor" | "browser" | "evaluation" | "console" | "terminal" | "git" | "learning"
+export type RailPanel = "browser" | "evaluation" | "console" | "terminal" | "git" | "learning"
+/** A pane of the work area: one with an icon in the bar, or the editor. */
+export type Pane = RailPanel | "editor"
 export type RailGroup = "top" | "bottom"
 export type RailLayout = Record<RailGroup, RailPanel[]>
 
-export const RAIL_PANELS: RailPanel[] = ["editor", "browser", "evaluation", "console", "terminal", "git", "learning"]
-const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { editor: "top", browser: "top", evaluation: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom" }
+export const RAIL_PANELS: RailPanel[] = ["browser", "evaluation", "console", "terminal", "git", "learning"]
+const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { browser: "top", evaluation: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom" }
 
 export const defaultRailLayout = (): RailLayout => ({
   top: RAIL_PANELS.filter((panel) => DEFAULT_GROUP[panel] === "top"),
@@ -53,9 +56,10 @@ export function moveRailPanel(layout: RailLayout, panel: RailPanel, group: RailG
   return next
 }
 
-/** The open panes of one row, in the order of their icons. */
-export function panelsInRow(layout: RailLayout, group: RailGroup, isOpen: (panel: RailPanel) => boolean): RailPanel[] {
-  return normalizeRailLayout(layout)[group].filter(isOpen)
+/** The open panes of one row, in the order of their icons; the editor first in the top row. */
+export function panelsInRow(layout: RailLayout, group: RailGroup, isOpen: (panel: Pane) => boolean): Pane[] {
+  const panes: Pane[] = normalizeRailLayout(layout)[group]
+  return (group === "top" ? ["editor" as Pane, ...panes] : panes).filter(isOpen)
 }
 
 export const sameRailLayout = (a: RailLayout, b: RailLayout) => a.top.join() === b.top.join() && a.bottom.join() === b.bottom.join()

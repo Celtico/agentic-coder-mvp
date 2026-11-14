@@ -15,12 +15,25 @@ test('no pane has a close button in its header', () => {
   assert.doesNotMatch(app, /close\?: \{ label/);
 });
 
-test('each pane has a toggle in the left bar that shows when it is open', () => {
+test('each pane but the editor has a toggle in the left bar that shows when it is open', () => {
   // The icons are a table (railButtons) so they can move between the top and bottom groups.
-  for (const [name, icon, open] of [['editor', 'FileCode', 'editorOpen'], ['browser', 'Globe2', 'browserOpen'], ['evaluation', 'ChartBar', 'evaluationOpen'], ['console', 'Bug', 'consoleOpen'], ['terminal', 'TerminalIcon', 'terminalOpen'], ['git', 'GitBranch', 'gitOpen'], ['learning', 'Brain', 'learningOpen']]) {
+  for (const [name, icon, open] of [['browser', 'Globe2', 'browserOpen'], ['evaluation', 'ChartBar', 'evaluationOpen'], ['console', 'Bug', 'consoleOpen'], ['terminal', 'TerminalIcon', 'terminalOpen'], ['git', 'GitBranch', 'gitOpen'], ['learning', 'Brain', 'learningOpen']]) {
     assert.match(app, new RegExp(`${name}: \\{ icon: ${icon}, label: [^\\n]*palette: ${open} \\? 'agentic'`), icon);
   }
   assert.match(app, /icon=\{button\.icon\} label=\{button\.label\} w="38px" h="38px" variant=\{button\.palette === 'agentic' \? 'subtle' : 'ghost'\}/);
   // The console is opened only from the bar now, not from the browser's toolbar as well.
   assert.equal((app.match(/icon=\{Bug\}|icon: Bug\b/g) || []).length, 1);
+});
+
+test('the bar: the app’s mark on top, no fold toggle, no «new chat» or editor icon; each column has its +', () => {
+  assert.doesNotMatch(app, /editor: \{ icon: FileCode/);
+  assert.doesNotMatch(app, /PanelLeftClose|PanelLeftOpen|setNavigationOpen|Amaga converses i fitxers/);
+  assert.doesNotMatch(app, /icon=\{MessageSquarePlus\}/);
+  assert.match(app, /role="img" aria-label="Agentic Coder"><Mark size=\{20\}/);
+  assert.match(app, /navigationHeader\('Converses', <IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\)/);
+  assert.match(app, /navigationHeader\('Fitxers', <Menu\.Root>/);
+  assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
+  // Two fixed columns, nothing folds.
+  assert.match(app, /templateColumns="minmax\(0, 1fr\) minmax\(0, 1fr\)"/);
+  assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
 });
