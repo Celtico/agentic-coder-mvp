@@ -29,9 +29,9 @@ export const paneToolbarRecipe = defineSlotRecipe({
   className: "pane-toolbar",
   slots: ["root", "field", "action"],
   base: {
-    root: { colorPalette: "agentic", display: "flex", flex: "none", h: "9", alignItems: "center", gap: "1.5", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" },
+    root: { colorPalette: "agentic", display: "flex", flex: "none", h: "9", alignItems: "center", gap: "2", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" },
     field: { flex: "1", minW: "0", fontSize: "xs", color: "fg.muted", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-    action: { flex: "none", display: "flex", alignItems: "center", gap: "0.5" },
+    action: { flex: "none", display: "flex", alignItems: "center", gap: "2" },
   },
   variants: {
     tone: {

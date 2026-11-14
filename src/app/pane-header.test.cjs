@@ -213,3 +213,19 @@ test('the dialogs’ ✕ is one of the header’s actions, in its flow: not Chak
   assert.match(app, /actions=\{<Dialog\.CloseTrigger asChild><IconButton icon=\{X\} label="Tanca"\/><\/Dialog\.CloseTrigger>\}/);
   assert.match(app, /const IconButton = \(\{ icon: Icon, label, \.\.\.props \}: IconButtonProps\) => <Tip label=\{label\}><Button aria-label=\{label\} variant="ghost" size="xs"/);
 });
+
+test('the secondary bar: ghost actions, plain/subtle fields, the same small height and an even gap', () => {
+  const recipe = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipe, /root: \{[^}]*gap: "2"/);
+  assert.match(recipe, /action: \{[^}]*gap: "2"/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  const bars = [...app.matchAll(/<PaneToolbar[\s\S]*?(?:<\/PaneToolbar>|\/>)/g)].map((match) => match[0]);
+  assert.equal(bars.length, 4);
+  for (const bar of bars) {
+    for (const button of bar.match(/<Button\b[^>]*>/g) || []) { assert.match(button, /variant="ghost"/, button); assert.match(button, /size="xs"/, button); }
+    for (const select of bar.match(/<NativeSelect\.Root\b[^>]*>/g) || []) assert.match(select, /variant="plain"/, select);
+    for (const input of bar.match(/<Input\b[^>]*>/g) || []) assert.match(input, /variant="subtle"/, input);
+    assert.doesNotMatch(bar, /variant="(?:solid|outline)"/);
+  }
+  assert.match(app, /variant="ghost" colorPalette="agentic" disabled=\{loading \|\| chosenCount === 0\}/, 'the benchmark button: ghost, in the accent');
+});

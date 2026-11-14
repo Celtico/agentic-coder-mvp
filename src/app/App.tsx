@@ -1615,7 +1615,7 @@ export function App(): React.JSX.Element {
       <PaneToolbar>
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
-        <Input flex="1" minW="0" bg="surface.subtle" color="fg" borderRadius="md" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="xs"/>
+        <Input flex="1" minW="0" variant="subtle" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="xs"/>
         <IconButton icon={ExternalLink} label="Ves a l’adreça" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
@@ -1867,8 +1867,8 @@ export function App(): React.JSX.Element {
   const consolePane = (
     <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
       <PaneToolbar field={browserUrl === 'about:blank' ? 'Cap pàgina oberta' : browserAddress} fieldTitle={browserAddress}>
-        <Button variant="ghost" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
-        <Button variant="ghost" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
+        <Button variant="ghost" size="xs" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
+        <Button variant="ghost" size="xs" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
       </PaneToolbar>
       <Box flex="1" minH="0" overflowY="auto" px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
         {consoleEntries.length === 0
@@ -1894,10 +1894,10 @@ export function App(): React.JSX.Element {
   // The evaluation's second row: how many rounds, and the button that runs or stops the benchmark.
   const evaluationToolbar = (
     <PaneToolbar>
-        <NativeSelect.Root size="xs" width="auto" flex="none" minW="28" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+        <NativeSelect.Root size="xs" variant="plain" width="auto" flex="none" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
-          ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
-          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
+          ? <Button size="xs" flex="none" variant="ghost" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
+          : <Button size="xs" flex="none" variant="ghost" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
     </PaneToolbar>
   );
   const evaluationPane = (
@@ -2145,8 +2145,9 @@ export function App(): React.JSX.Element {
               onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
               onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
               {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
-              {/* Open: solid in the accent colour (the «agentic» palette is the accent). Closed: ghost. */}
-              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant={button.palette === 'agentic' ? 'solid' : 'ghost'} colorPalette={button.palette} color={button.palette === 'gray' ? 'fg.muted' : undefined} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
+              {/* Always ghost. Open: the icon in the accent colour (the «agentic» palette is the accent) on a faint
+                  subtle background. Closed: muted. */}
+              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'agentic.fg' : 'fg.muted'} bg={button.palette === 'agentic' ? 'agentic.subtle' : undefined} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
               {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>

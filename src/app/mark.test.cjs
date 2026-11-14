@@ -28,10 +28,13 @@ test('the rail’s logo is drawn with a linear gradient from brand.300 to brand.
   assert.equal(ids.length, 2);
   assert.notEqual(ids[0], ids[1]);
   for (const id of ids) assert.equal((html.match(new RegExp(`url\\(#${id}\\)`, 'g')) || []).length, 2, 'stroke and fill');
-  // The stops are the brand tokens (the brand stays green whatever the accent is).
-  assert.match(html, /<stop offset="0%" stop-color="var\(--chakra-colors-brand-300\)"/);
-  assert.match(html, /<stop offset="100%" stop-color="var\(--chakra-colors-brand-600\)"/);
-  assert.doesNotMatch(html, /#[0-9a-f]{6}"/i, 'no colour written by hand');
+  // The stops are the brand's real colours, never a var() (an SVG attribute does not resolve it and draws black),
+  // and the brand stays green whatever the accent is.
+  const stops = [...html.matchAll(/<stop offset="[^"]+" stop-color="([^"]*)"/g)].map((match) => match[1]);
+  assert.equal(stops.length, 4);
+  for (const stop of stops) assert.match(stop, /^#[0-9a-f]{6}$/i, stop);
+  assert.deepEqual(stops.slice(0, 2), ['#65c9ad', '#078565']);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, 'mark.tsx'), 'utf8'), /#[0-9a-f]{6}/i, 'no colour written by hand');
 });
 
 test('the rail’s logo never turns, even while the model works; the plain mark still does', () => {

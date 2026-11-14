@@ -9,10 +9,12 @@ import { Box, chakra, useChakraContext } from "@chakra-ui/react"
 export const Mark = ({ size = 16, busy = false, color = "agentic.fg", gradient = false }: { size?: number; busy?: boolean; color?: string; gradient?: boolean }) => {
   // One id per drawing, so two marks on the screen never share a gradient.
   const id = `mark-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
-  // The brand's own tokens, as the theme's CSS variables (stop-color is not a token-aware style prop).
+  // The brand's own tokens, as their real values: stop-color here is an SVG attribute, and an attribute
+  // never resolves a CSS var() (the stop then falls back to black). If a shade were missing, brand.solid.
   const { token } = useChakraContext()
-  const light = token.var("colors.brand.300")
-  const dark = token.var("colors.brand.600")
+  const shade = (path: string) => token(path, token("colors.brand.500", "currentColor"))
+  const light = shade("colors.brand.300")
+  const dark = shade("colors.brand.600")
   const paint = gradient ? `url(#${id})` : "currentColor"
   const moving = busy && !gradient
   return (
