@@ -36,4 +36,11 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   // Two fixed columns, nothing folds.
   assert.match(app, /templateColumns="minmax\(0, 1fr\) minmax\(0, 1fr\)"/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
+  // The project (folder, name, path; click to choose another) is at the top of the Fitxers column, and
+  // Converses starts with its own header.
+  const files = app.indexOf('aria-label="Fitxers">');
+  const conversations = app.indexOf('aria-label="Converses">');
+  const projectButton = app.indexOf('onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte`');
+  assert.ok(conversations > 0 && files > conversations && projectButton > files && projectButton < app.indexOf("navigationHeader('Fitxers'"), 'the project block opens the Fitxers column');
+  assert.match(app.slice(conversations, conversations + 200), /aria-label="Converses">\s*\{navigationHeader\('Converses'/);
 });

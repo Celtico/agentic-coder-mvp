@@ -2033,16 +2033,8 @@ export function App(): React.JSX.Element {
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
-          {/* The project comes first: conversations and files below both belong to it. */}
-          <Box flex="none" bg="bg" borderRadius="panel" px="2" py="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
-            <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
-            <Box flex="1" minW="0" textAlign="left">
-              <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
-              <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
-            </Box>
-          </Button></Box>
           {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds). */}
-          <Grid flex="1" minH="0" minW="0" mt="1.5" gap="1.5" templateColumns="minmax(0, 1fr) minmax(0, 1fr)">
+          <Grid flex="1" minH="0" minW="0" gap="1.5" templateColumns="minmax(0, 1fr) minmax(0, 1fr)">
             <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
               {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
               <Box flex="1" minH="0" overflowY="auto" pb="2">
@@ -2060,6 +2052,14 @@ export function App(): React.JSX.Element {
               </Box>
             </Flex>
             <Flex direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
+              {/* The project the files belong to, at the top of its column: click to choose another folder. */}
+              <Box flex="none" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
+                <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
+                <Box flex="1" minW="0" textAlign="left">
+                  <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
+                  <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
+                </Box>
+              </Button></Box>
               {navigationHeader('Fitxers', <Menu.Root>
                 <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
                 <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
