@@ -88,8 +88,10 @@ async function ownModels(modelsRoot) {
   return found.sort((a, b) => a.label.localeCompare(b.label));
 }
 
+// The newest beta of each base (src/electron/learning-versions.cjs): the base's weights with an adapter.
 async function listModels(modelsRoot) {
-  return [...builtInModels, ...await ownModels(modelsRoot)];
+  const { betaModels } = require('./learning-versions.cjs');
+  return [...builtInModels, ...await betaModels(builtInModels, modelsRoot), ...await ownModels(modelsRoot)];
 }
 
 /** Finds a model by id or alias (e.g. "7b", "gemma"). */

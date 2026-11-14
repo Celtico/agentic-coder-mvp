@@ -11,7 +11,6 @@ const { pageActionsScript } = require('./page-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const mlxModels = require('./mlx-models.cjs');
 const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory.cjs');
-const { runTrainingPipeline } = require('./learning-training.cjs');
 const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
 const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
@@ -21,6 +20,7 @@ const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const dictation = require('./dictation.cjs');
+const versions = require('./learning-versions.cjs');
 const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
 const menuLabels = require('./menu-labels.cjs');
 const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
@@ -124,6 +124,8 @@ let permissionMode = 'ask';
 let agentPreferences = defaultAgentPreferences();
 /** Preferències › Agent › Dictat: the Whisper model and the language (src/electron/dictation.cjs). */
 let dictationPreferences = dictation.defaultDictationPreferences();
+/** Preferències › Aprenentatge: how a beta or a stable version is trained (src/electron/learning-versions.cjs). */
+let trainingPreferences = versions.defaultTrainingPreferences();
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
@@ -200,7 +202,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, dictation: dictationPreferences }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, dictation: dictationPreferences, training: trainingPreferences }, null, 2), 'utf8');
 }
 
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
@@ -520,6 +522,8 @@ async function startModelWorker() {
       AGENT_MLX_PYTHON: mlxPythonPath(),
       AGENT_MLX_LOCK_LABEL: 'el xat d’Agentic Coder',
       AGENT_MLX_MODEL_PATH: await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory()) || '',
+      // A beta is the base with its adapter (src/electron/learning-versions.cjs); any other model, none.
+      AGENT_MLX_ADAPTER_PATH: (await currentModel()).adapterPath || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
       AGENT_EMBEDDING_INDEX_PATH: path.join(app.getPath('userData'), 'learning', 'embedding-index-v1.json'),
     },
@@ -802,6 +806,7 @@ app.whenReady().then(async () => {
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
     agentPreferences = normalizeAgentPreferences(saved.agent);
     dictationPreferences = dictation.normalizeDictationPreferences(saved.dictation);
+    trainingPreferences = versions.normalizeTrainingPreferences(saved.training);
   } catch {}
   if (!selectedProject) {
     // From the repository the app opens itself; installed, it starts in an empty folder of its own,
@@ -1442,45 +1447,94 @@ ipcMain.handle('benchmark:open-project', async (_e, id, index) => {
 
 ipcMain.handle('learning:train-status', async () => ({ running: Boolean(trainingRun), ...(trainingRun ? { name: trainingRun.name, base: trainingRun.base } : {}) }));
 ipcMain.handle('learning:train-cancel', async () => { trainingRun?.controller.abort(); return { cancelled: Boolean(trainingRun) }; });
-ipcMain.handle('learning:train-start', async (_e, request) => {
+// Learning in versions, beta → stable (src/electron/learning-versions.cjs). Only from the panel's buttons.
+/** The base a version is trained from: the chosen model, or the base of a chosen beta; never a trained one. */
+async function trainingBase() {
+  const model = await currentModel();
+  const base = model.beta ? (await allModels()).find((item) => item.id === model.baseId) : model;
+  if (!base || base.own) throw new Error('Tria un model base (no un d’entrenat) al selector per entrenar-ne versions.');
+  const directory = await mlxModels.modelDirectory(base, projectModelsDirectory());
+  if (!directory) throw new Error('El model base no és disponible en aquest Mac.');
+  return { id: base.id, label: base.label, modelId: base.modelId, directory };
+}
+async function benchmarkSummary(base, adapterPath, signal, step) {
+  const out = path.join(app.getPath('temp'), `agentic-benchmark-${Date.now()}.json`);
+  const result = await runBenchmarkProcess({ modelId: base.id, adapterPath, out, signal, onLine: (line) => { if (/^(PASSA|FALLA)/.test(line)) sendTraining({ step, message: line.slice(0, 300) }); } });
+  if (!result) return null;
+  try { const report = JSON.parse(await fs.readFile(out, 'utf8')); await fs.rm(out, { force: true }); return { passed: report.summary.passed, runs: report.summary.runs }; }
+  catch { return null; }
+}
+async function startVersionRun(kind) {
   if (trainingRun) throw new Error('Ja hi ha un entrenament en marxa.');
   if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa; entrena quan acabi.');
   if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans d’entrenar.');
-  const name = typeof request?.name === 'string' ? request.name.trim() : '';
-  if (!name || name.length > 60) throw new Error('Tria un nom per al model (fins a 60 caràcters).');
-  const models = await allModels();
-  const base = models.find((model) => model.id === (request?.baseModelId || selectedModel));
-  const directory = base && await mlxModels.modelDirectory(base, projectModelsDirectory());
-  if (!base || !directory) throw new Error('El model base no és disponible en aquest Mac.');
+  const base = await trainingBase();
   const prepared = await readPreparedExperienceDataset();
-  if (!prepared.trainingReady) throw new Error(`Calen 30 casos verificats per entrenar; n’hi ha ${prepared.counts.included}.`);
-  const candidate = await writeTrainingCandidate(prepared, path.join(app.getPath('userData'), 'learning', 'candidates'));
-  // Training needs the memory the chat model is using.
-  if (modelWorker) { const child = modelWorker; modelWorker = null; child.kill('SIGTERM'); }
+  const needed = kind === 'beta' ? versions.BETA_MIN_CASES : versions.STABLE_MIN_CASES;
+  if (prepared.counts.included < needed) throw new Error(`Calen ${needed} casos verificats vàlids; n’hi ha ${prepared.counts.included}.`);
+  // Only one model on the GPU: the chat's model is unloaded first, and the training takes the GPU lock.
+  await stopModelWorker();
   const controller = new AbortController();
-  trainingRun = { controller, name, base: base.label };
-  const benchmark = async (adapterPath) => {
-    const out = path.join(app.getPath('temp'), `agentic-benchmark-${Date.now()}.json`);
-    const result = await runBenchmarkProcess({
-      modelId: base.id, adapterPath, out, signal: controller.signal,
-      onLine: (line) => { if (/^(PASSA|FALLA)/.test(line)) sendTraining({ step: adapterPath ? 'benchmark-adapter' : 'benchmark-base', message: line.slice(0, 300) }); },
-    });
-    if (!result) return null;
-    try { const report = JSON.parse(await fs.readFile(out, 'utf8')); await fs.rm(out, { force: true }); return { passed: report.summary.passed, runs: report.summary.runs }; }
-    catch { sendTraining({ step: 'benchmark', message: `El benchmark no ha donat resultat (codi ${result.code}).` }); return null; }
-  };
+  trainingRun = { controller, name: kind, base: base.label };
   (async () => {
     try {
-      const result = await runTrainingPipeline({
-        datasetDirectory: candidate.directory, base: { id: base.id, label: base.label, modelId: base.modelId, directory }, name,
-        modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), mlxLauncher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming, benchmark, onProgress: sendTraining, signal: controller.signal,
-      });
-      sendTraining({ step: 'finished', published: result.published, message: result.published ? `Nova versió: ${result.model.label}` : `Es manté la versió actual: ${result.reason}`, ...(result.published ? { modelId: result.model.id } : {}) });
+      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming, onProgress: sendTraining, signal: controller.signal });
+      if (kind === 'beta') {
+        sendTraining({ step: 'finished', published: true, message: `Beta ${adapter.number} a punt: ${base.label} beta · ${adapter.cases} ${adapter.cases === 1 ? 'cas' : 'casos'}${adapter.truncated ? ` (${adapter.truncated} retallats)` : ''}. Tria-la al selector per provar-la.` });
+        return;
+      }
+      sendTraining({ step: 'benchmark-base', message: `Benchmark del model base (${base.label})…` });
+      const baseResult = await benchmarkSummary(base, '', controller.signal, 'benchmark-base');
+      sendTraining({ step: 'benchmark-adapter', message: 'Benchmark de la candidata a estable…' });
+      const candidateResult = await benchmarkSummary(base, adapter.adapterPath, controller.signal, 'benchmark-adapter');
+      if (controller.signal.aborted) throw new Error('Entrenament aturat.');
+      if (!baseResult || !candidateResult) throw new Error('El benchmark no ha donat resultat; la candidata queda sense comparativa.');
+      await versions.recordComparison(adapter, { base: baseResult, candidate: candidateResult });
+      sendTraining({ step: 'finished', published: false, message: `Comparativa: base ${baseResult.passed}/${baseResult.runs}, candidata ${candidateResult.passed}/${candidateResult.runs}. Decideix tu si la promociones.` });
     } catch (error) {
       sendTraining({ step: 'failed', message: error instanceof Error ? error.message : String(error) });
     } finally { trainingRun = null; }
   })();
-  return { started: true, dataset: candidate.manifest.datasetVersion };
+  return { started: true };
+}
+ipcMain.handle('learning:versions', async () => {
+  const prepared = await readPreparedExperienceDataset();
+  let base = null;
+  try { base = await trainingBase(); } catch { /* the panel says so */ }
+  const betas = base ? await versions.listBetas(projectModelsDirectory(), base.id) : [];
+  const candidate = base ? await versions.latestCandidate(projectModelsDirectory(), base.id) : null;
+  const summary = (item) => item && { folder: item.folder, number: item.number, cases: item.cases, createdAt: item.createdAt, durationSeconds: item.durationSeconds, finalLoss: item.finalLoss, truncated: item.truncated, dropped: item.dropped, comparison: item.comparison || null, promoted: item.promoted || null };
+  return {
+    cases: prepared.counts.included,
+    base: base && { id: base.id, label: base.label },
+    betas: betas.map(summary),
+    candidate: summary(candidate),
+    buttons: versions.learningButtons({ cases: prepared.counts.included, running: Boolean(trainingRun), otherWork: activeModelRequestId !== null || Boolean(benchmarkRun), candidate }),
+    running: trainingRun ? { kind: trainingRun.name } : null,
+    fewCases: versions.FEW_CASES,
+  };
+});
+ipcMain.handle('learning:train-beta', () => startVersionRun('beta'));
+ipcMain.handle('learning:prepare-stable', () => startVersionRun('candidata'));
+ipcMain.handle('learning:promote-stable', async (_e, name) => {
+  if (trainingRun) throw new Error('Ja hi ha un entrenament en marxa.');
+  if (activeModelRequestId !== null || benchmarkRun) throw new Error('Espera que acabi la resposta o l’avaluació.');
+  const base = await trainingBase();
+  const candidate = await versions.latestCandidate(projectModelsDirectory(), base.id);
+  await stopModelWorker();
+  const meta = await versions.promoteStable({ candidate, name, base, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming });
+  return { label: meta.label, id: meta.id, models: await getAvailableModels() };
+});
+ipcMain.handle('learning:delete-beta', async (_e, folder) => {
+  const base = await trainingBase();
+  if ((await currentModel()).adapterPath?.endsWith(path.sep + folder)) throw new Error('Aquesta beta és la del xat; tria un altre model abans d’esborrar-la.');
+  return versions.deleteBeta(projectModelsDirectory(), base.id, folder);
+});
+ipcMain.handle('preferences:training', async () => ({ values: trainingPreferences, defaults: versions.defaultTrainingPreferences(), limits: versions.TRAINING_LIMITS }));
+ipcMain.handle('preferences:set-training', async (_e, change) => {
+  trainingPreferences = versions.normalizeTrainingPreferences({ ...trainingPreferences, ...(change && typeof change === 'object' ? change : {}) }, trainingPreferences);
+  await saveSettings();
+  return trainingPreferences;
 });
 
 ipcMain.handle('agent:ask', async (_e, request) => {

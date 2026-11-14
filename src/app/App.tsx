@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
@@ -168,6 +168,8 @@ const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray:
 const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string> = { auto: 'Detecta l’idioma', ca: 'Català', es: 'Castellà', en: 'Anglès' };
 const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
+/** Preferències › Aprenentatge: each value, its name and its step. */
+const TRAINING_FIELDS: [keyof TrainingPreferences, string, number][] = [['maxTokens', 'Tokens màxims per exemple', 256], ['numLayers', 'Capes LoRA', 1], ['learningRate', 'Taxa d’aprenentatge', 0.000001], ['itersPerCase', 'Iteracions per cas', 5], ['minIters', 'Iteracions mínimes', 10], ['maxIters', 'Iteracions màximes', 20], ['seed', 'Llavor', 1]];
 const STOPPED_WHILE_REVIEWING = '_(Aturat mentre es revisava: aquesta resposta no s’ha acabat de comprovar.)_';
 
 function getSplitSize(): number[] {
@@ -242,6 +244,7 @@ export function App(): React.JSX.Element {
   // Dictation (src/app/dictation.ts): record, then the text is transcribed on this Mac and added to the box.
   const [dictation, setDictation] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const recorderRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [trainingPrefs, setTrainingPrefs] = useState<Awaited<ReturnType<typeof window.agentic.trainingPreferences>> | null>(null);
   const [dictationInfo, setDictationInfo] = useState<Awaited<ReturnType<typeof window.agentic.dictationInfo>> | null>(null);
   const [chatDropActive, setChatDropActive] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
@@ -314,7 +317,12 @@ export function App(): React.JSX.Element {
   useEffect(() => { setAccent(appearance.accent); updateViewState(localStorage, (state) => { state.appearance = appearance; }); }, [appearance, setAccent]);
   async function openPreferences() {
     setPreferencesOpen(true); setPreferencesError('');
-    try { setAgentPreferencesState(await window.agentic.agentPreferences()); setDictationInfo(await window.agentic.dictationInfo()); } catch (error) { setPreferencesError(errorText(error)); }
+    try { setAgentPreferencesState(await window.agentic.agentPreferences()); setDictationInfo(await window.agentic.dictationInfo()); setTrainingPrefs(await window.agentic.trainingPreferences()); } catch (error) { setPreferencesError(errorText(error)); }
+  }
+  async function changeTrainingPreferences(change: Partial<TrainingPreferences>) {
+    setPreferencesError('');
+    try { const values = await window.agentic.setTrainingPreferences(change); setTrainingPrefs((current) => current && { ...current, values }); }
+    catch (error) { setPreferencesError(errorText(error)); }
   }
   async function changeDictationPreferences(change: Partial<DictationPreferences>) {
     setPreferencesError('');
@@ -360,11 +368,16 @@ export function App(): React.JSX.Element {
   }, [gitPaneNode]);
   const [gitLoading, setGitLoading] = useState(false);
   const [datasetPreview, setDatasetPreview] = useState<TrainingDatasetPreview | null>(null);
-  // Training a version of our own runs in the background in the main process; the panel shows its steps.
-  const [trainingName, setTrainingName] = useState(() => localStorage.getItem('agentic-training-name') || '');
+  // Learning in versions, beta → stable (src/electron/learning-versions.cjs): trained in the main process
+  // only from this panel's buttons; the panel shows the steps and what there is.
+  const [stableName, setStableName] = useState(() => localStorage.getItem('agentic-training-name') || 'El nostre model');
   const [trainingRunning, setTrainingRunning] = useState(false);
   const [trainingLog, setTrainingLog] = useState<TrainingProgress[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<number | null>(null);
+  const [learningVersions, setLearningVersions] = useState<Awaited<ReturnType<typeof window.agentic.learningVersions>> | null>(null);
+  const refreshLearningVersions = useCallback(async () => {
+    try { setLearningVersions(await window.agentic.learningVersions()); } catch { /* the panel keeps what it showed */ }
+  }, []);
   useEffect(() => {
     void window.agentic.trainingStatus().then((value) => setTrainingRunning(value.running)).catch(() => {});
     return window.agentic.onTrainingProgress((event) => {
@@ -372,23 +385,40 @@ export function App(): React.JSX.Element {
       if (typeof event.progress === 'number') setTrainingProgress(event.progress);
       if (event.step === 'finished' || event.step === 'failed') {
         setTrainingRunning(false); setTrainingProgress(null);
-        // A new version appears in the model selector.
+        if (event.step === 'failed') setStatus(`Entrenament: ${event.message}`);
+        // A new beta or stable version appears in the model selector.
         void window.agentic.listModels().then((available) => setModelOptions(available.models)).catch(() => {});
+        void refreshLearningVersions();
       }
     });
-  }, []);
-  async function startTraining() {
-    const name = trainingName.trim();
-    if (!name || trainingRunning) return;
-    try { localStorage.setItem('agentic-training-name', name); } catch {}
+  }, [refreshLearningVersions]);
+  async function startVersion(kind: 'beta' | 'stable') {
+    if (trainingRunning) return;
     setTrainingLog([]); setTrainingProgress(0);
     try {
-      await window.agentic.startTraining({ name, baseModelId: selectedModel });
+      await (kind === 'beta' ? window.agentic.trainBeta() : window.agentic.prepareStable());
       setTrainingRunning(true);
+      void refreshLearningVersions();
     } catch (error) {
       setTrainingProgress(null);
       setTrainingLog([{ step: 'failed', message: errorText(error) }]);
+      setStatus(`Entrenament: ${errorText(error)}`);
     }
+  }
+  async function promoteStable() {
+    const name = stableName.trim();
+    if (!name) return;
+    try { localStorage.setItem('agentic-training-name', name); } catch {}
+    try {
+      const result = await window.agentic.promoteStable(name);
+      setModelOptions(result.models);
+      setStatus(`Nova versió estable: ${result.label}. Tria-la al selector per fer-la servir.`);
+      void refreshLearningVersions();
+    } catch (error) { setStatus(`Promoció: ${errorText(error)}`); }
+  }
+  async function deleteBeta(folder: string) {
+    try { await window.agentic.deleteBeta(folder); void refreshLearningVersions(); void window.agentic.listModels().then((available) => setModelOptions(available.models)); }
+    catch (error) { setStatus(`Esborrar la beta: ${errorText(error)}`); }
   }
   const [learningBusy, setLearningBusy] = useState(false);
   const [learningStatus, setLearningStatus] = useState('');
@@ -1060,6 +1090,7 @@ export function App(): React.JSX.Element {
     const [preview, cases] = await Promise.all([window.agentic.learningDatasetPreview(), typeof window.agentic.listLearningCases === 'function' ? window.agentic.listLearningCases().catch(() => null) : null]);
     setDatasetPreview(preview);
     setLearningCases(cases);
+    void refreshLearningVersions();
   }
   async function openCaseDetail(id: string) {
     setCaseBusy(id); setCaseError('');
@@ -1665,51 +1696,23 @@ export function App(): React.JSX.Element {
     </Flex>
   );
 
+  // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
+  // Sections (with an icon) are sm and semibold; the rows inside them are xs and medium.
+  const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
+    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize={Icon ? 'sm' : 'xs'} fontWeight={Icon ? 'semibold' : 'medium'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
+    <Accordion.ItemIndicator/>
+  </>;
   const learningPane = (
     <Box h="full" minH="0" p="3" bg="bg" overflowY="auto"><Stack gap="3">
+      {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
-        : datasetPreview ? <>
-          <Box>
-            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos</Text>
-            <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
-              <Stat label="Examinats" value={datasetPreview.counts.input}/>
-              <Stat label="Preparats" value={datasetPreview.counts.included}/>
-              <Stat label="Duplicats" value={datasetPreview.counts.duplicates} dim/>
-              <Stat label="Possibles secrets" value={datasetPreview.counts.secrets} dim/>
-              <Stat label="Sense verificar" value={datasetPreview.counts.unverified} dim/>
-              <Stat label="Invàlids" value={datasetPreview.counts.invalid} dim/>
-            </Grid>
-          </Box>
-          <Box>
-            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Repartiment dels preparats</Text>
-            <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
-              <Stat label="Entrenament" value={datasetPreview.splitCounts.train} dim/>
-              <Stat label="Validació" value={datasetPreview.splitCounts.validation} dim/>
-              <Stat label="Prova final" value={datasetPreview.splitCounts.test} dim/>
-            </Grid>
-          </Box>
-          <HStack gap="3" flexWrap="wrap">
-            <Button size="sm" flex="none" colorPalette="agentic" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>
-              {learningBusy ? <Spinner size="sm"/> : <Brain size={15}/>}Prepara versió candidata
-            </Button>
-            <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Preparar dades no entrena el model, i des d’aquí no se’n pot activar cap.</Text>
-          </HStack>
-            <Notice tone={datasetPreview.trainingReady ? 'success' : 'warning'}>{datasetPreview.trainingReady ? 'Hi ha prou casos per preparar un conjunt; abans d’entrenar res, cal una revisió independent.' : `Encara no n’hi ha prou per entrenar: en tens ${datasetPreview.counts.included} de 30. Continua desant els que surtin bé.`}</Notice>
-          <Box>
-            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">El nostre model</Text>
-            <HStack gap="2" flexWrap="wrap">
-              <Input size="sm" flex="1" minW="160px" maxLength={60} value={trainingName} onChange={(event) => setTrainingName(event.target.value)} placeholder="Nom del model, p. ex. El nostre model" aria-label="Nom del model" disabled={trainingRunning}/>
-              {trainingRunning
-                ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Cancel·la</Button>
-                : <Button size="sm" flex="none" colorPalette="agentic" disabled={!datasetPreview.trainingReady || !trainingName.trim()} onClick={() => void startTraining()}><Brain size={15}/>Entrena</Button>}
-            </HStack>
-            <Text mt="1.5" fontSize="xs" color="fg.muted">Entrena un adaptador sobre {modelOptions.find((item) => item.id === selectedModel)?.label || 'el model actual'} amb els casos verificats, el compara amb el model base (casos de prova i benchmark) i només si millora en desa una versió nova al selector de models. Les versions anteriors es queden i s’hi pot tornar triant-les.</Text>
-            {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
-            {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
-          </Box>
-          {learningCases && <Box>
-            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Casos desats ({learningCases.cases.length})</Text>
-            {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
+        : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
+        : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant="enclosed" bg="bg">
+          <Accordion.Item value="cases">
+            <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0">
+              {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
+              {learningCases && <>
             <Stack gap="1.5">
               {learningCases.cases.map((item) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface" minW="0">
                 <Stack flex="1" minW="0" gap="1">
@@ -1731,10 +1734,82 @@ export function App(): React.JSX.Element {
               {!learningCases.cases.length && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas desat.</Text>}
               {learningCases.unreadable > 0 && <Text fontSize="xs" color="fg.muted">{learningCases.unreadable} línies del registre no són un cas llegible i es deixen tal com són.</Text>}
             </Stack>
-          </Box>}
-        </> : <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>}
-      {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
-      <Notice tone="info">Aquí es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
+              </>}
+            </Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+          <Accordion.Item value="data">
+            <Accordion.ItemTrigger>{rowHeader('Dades preparades', datasetPreview.counts.included, FileText)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="3">
+              <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
+                <Stat label="Examinats" value={datasetPreview.counts.input}/>
+                <Stat label="Preparats" value={datasetPreview.counts.included}/>
+                <Stat label="Duplicats" value={datasetPreview.counts.duplicates} dim/>
+                <Stat label="Possibles secrets" value={datasetPreview.counts.secrets} dim/>
+                <Stat label="Sense verificar" value={datasetPreview.counts.unverified} dim/>
+                <Stat label="Invàlids" value={datasetPreview.counts.invalid} dim/>
+              </Grid>
+              <Box>
+                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Repartiment per a l’estable</Text>
+                <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
+                  <Stat label="Entrenament" value={datasetPreview.splitCounts.train} dim/>
+                  <Stat label="Validació" value={datasetPreview.splitCounts.validation} dim/>
+                  <Stat label="Prova final" value={datasetPreview.splitCounts.test} dim/>
+                </Grid>
+              </Box>
+              <HStack gap="3" flexWrap="wrap">
+                <Button size="sm" flex="none" variant="outline" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>{learningBusy ? <Spinner size="sm"/> : <Brain size={15}/>}Prepara versió candidata</Button>
+                <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Desa una còpia de les dades per revisar-la; no entrena res.</Text>
+              </HStack>
+              <Notice tone="info">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+          <Accordion.Item value="training">
+            <Accordion.ItemTrigger>{rowHeader('Entrenament', learningVersions?.betas.length ? `${learningVersions.betas.length} ${learningVersions.betas.length === 1 ? 'beta' : 'betes'}` : undefined, Brain)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="4">
+              {!learningVersions?.base && <Notice tone="warning">Tria un model base al selector del xat per entrenar-ne versions.</Notice>}
+              {learningVersions?.base && <Text fontSize="xs" color="fg.muted">Sempre des de l’original: {learningVersions.base.label}, amb tots els casos vàlids ({learningVersions.cases}). Mai sobre una altra beta.</Text>}
+              <Box>
+                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Beta</Text>
+                <HStack gap="2" flexWrap="wrap">
+                  {trainingRunning
+                    ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
+                    : <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
+                  <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
+                </HStack>
+                {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
+                {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
+                {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
+                {learningVersions && learningVersions.betas.length > 0 && <Stack mt="2" gap="1">{learningVersions.betas.map((beta, index) => <HStack key={beta.folder} gap="2" px="2.5" py="1.5" borderWidth="1px" borderColor="border" borderRadius="md" minW="0">
+                  <Stack flex="1" minW="0" gap="0">
+                    <Text fontSize="sm" fontWeight="medium">Beta {beta.number} · {beta.cases} {beta.cases === 1 ? 'cas' : 'casos'}{index === 0 ? ' · al selector' : ''}</Text>
+                    <Text fontSize="2xs" color="fg.muted">{new Date(beta.createdAt).toLocaleString()} · {Math.round((beta.durationSeconds || 0) / 60)} min{beta.finalLoss !== null ? ` · pèrdua ${beta.finalLoss}` : ''}{beta.truncated ? ` · ${beta.truncated} retallats` : ''}{beta.dropped ? ` · ${beta.dropped} no hi cabien` : ''}</Text>
+                  </Stack>
+                  {index > 0 && <IconButton icon={Trash} label={`Esborra la beta ${beta.number}`} disabled={trainingRunning} onClick={() => void deleteBeta(beta.folder)}/>}
+                </HStack>)}</Stack>}
+              </Box>
+              <Box>
+                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Estable</Text>
+                <HStack gap="2" flexWrap="wrap">
+                  <Button size="sm" flex="none" variant="outline" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
+                  <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
+                </HStack>
+                {learningVersions?.candidate?.comparison && <Box mt="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
+                  <Text fontSize="sm" fontWeight="medium">Candidata {learningVersions.candidate.number} · {learningVersions.candidate.cases} casos</Text>
+                  <Grid mt="2" templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
+                    <Stat label={`Base · de ${learningVersions.candidate.comparison.base.runs}`} value={learningVersions.candidate.comparison.base.passed}/>
+                    <Stat label={`Candidata · de ${learningVersions.candidate.comparison.candidate.runs}`} value={learningVersions.candidate.comparison.candidate.passed}/>
+                  </Grid>
+                  {learningVersions.candidate.promoted
+                    ? <Text mt="2" fontSize="xs" color="agentic.fg">Promocionada: {learningVersions.candidate.promoted.label}</Text>
+                    : <HStack mt="2" gap="2" flexWrap="wrap">
+                      <Input size="sm" flex="1" minW="160px" maxLength={60} value={stableName} onChange={(event) => setStableName(event.target.value)} placeholder="Nom del model" aria-label="Nom de la versió estable"/>
+                      <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions.buttons.promote.enabled || !stableName.trim()} onClick={() => void promoteStable()}><Check size={15}/>Promociona a estable</Button>
+                    </HStack>}
+                </Box>}
+              </Box>
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+        </Accordion.Root>}
     </Stack></Box>
   );
 
@@ -1795,12 +1870,6 @@ export function App(): React.JSX.Element {
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
-  // One style for every accordion row of the evaluation panel: icon, title, count, chevron.
-  // Sections (with an icon) are sm and semibold; the rows inside them are xs and medium.
-  const rowHeader = (title: React.ReactNode, count?: React.ReactNode, Icon?: IconType) => <>
-    <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize={Icon ? 'sm' : 'xs'} fontWeight={Icon ? 'semibold' : 'medium'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
-    <Accordion.ItemIndicator/>
-  </>;
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
   const kindNote: Record<BenchmarkTask['kind'], string> = { open: 'Arreglar codi, fer pàgines i respondre sense tocar res.', app: 'Des d’una carpeta buida, amb la petició tal com la diries.', reference: 'La mateixa correcció dient exactament què canviar.' };
   const kindLabel: Record<BenchmarkTask['kind'], string> = { open: 'Tasques obertes de codi', app: 'Apps des d’una carpeta buida', reference: 'Tasca dirigida (referència)' };
@@ -2347,7 +2416,7 @@ export function App(): React.JSX.Element {
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
               <Tabs.Root defaultValue="model" variant="line" size="sm" colorPalette="agentic">
-                <Tabs.List><Tabs.Trigger value="model">Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
+                <Tabs.List><Tabs.Trigger value="model">Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="learning">Aprenentatge</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
                 <Tabs.Content value="model"><Stack gap="4">
                   <Box>
                     <Text fontSize="sm" fontWeight="medium" mb="1.5">Model per defecte</Text>
@@ -2402,6 +2471,22 @@ export function App(): React.JSX.Element {
                     </HStack>
                     <Text mt="1" fontSize="xs" color="fg.muted">Es transcriu en aquest Mac. Mentre transcriu, el model del xat es descarrega i torna a carregar-se amb el missatge següent.</Text>
                   </Box>}
+                </Stack></Tabs.Content>
+                <Tabs.Content value="learning"><Stack gap="4">
+                  {trainingPrefs && <>
+                    <Text fontSize="xs" color="fg.muted">Com s’entrenen les betes i l’estable (sempre des del model original, lot d’1 cas i memòria estalviada als gradients).</Text>
+                    <Grid templateColumns="repeat(auto-fill, minmax(200px, 1fr))" gap="3">
+                      {TRAINING_FIELDS.map(([key, label, step]) => <Box key={key}>
+                        <Text fontSize="sm" fontWeight="medium" mb="1.5">{label}</Text>
+                        <NumberInput.Root size="sm" min={trainingPrefs.limits[key].min} max={trainingPrefs.limits[key].max} step={step} value={String(trainingPrefs.values[key])} onValueChange={({ valueAsNumber }) => { if (Number.isFinite(valueAsNumber) && valueAsNumber >= trainingPrefs.limits[key].min && valueAsNumber <= trainingPrefs.limits[key].max) void changeTrainingPreferences({ [key]: valueAsNumber }); }}>
+                          <NumberInput.Control/><NumberInput.Input aria-label={label}/>
+                        </NumberInput.Root>
+                        <Text mt="1" fontSize="2xs" color="fg.muted">Per defecte {trainingPrefs.defaults[key]}</Text>
+                      </Box>)}
+                    </Grid>
+                    <Text fontSize="xs" color="fg.muted">Iteracions = el més gran entre el mínim i (per cas × casos), sense passar del màxim. Els exemples més llargs que el límit es retallen: primer el text de sistema, després els resultats d’eines; mai la petició ni la resposta.</Text>
+                    <Box><Button variant="outline" onClick={() => void changeTrainingPreferences(trainingPrefs.defaults)}><RefreshCw size={14}/>Restableix</Button></Box>
+                  </>}
                 </Stack></Tabs.Content>
                 <Tabs.Content value="appearance"><Stack gap="4">
                   <Box>

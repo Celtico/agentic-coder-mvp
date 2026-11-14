@@ -29,6 +29,9 @@ export type LearningCase = { id: string; at: string | null; model: string | null
 export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
 export type DictationPreferences = { model: string; language: 'auto' | 'ca' | 'es' | 'en' };
+export type TrainingPreferences = { maxTokens: number; numLayers: number; learningRate: number; itersPerCase: number; minIters: number; maxIters: number; seed: number };
+export type AdapterVersion = { folder: string; number: number; cases: number; createdAt: string; durationSeconds: number; finalLoss: number | null; truncated: number; dropped: number; comparison: { base: { passed: number; runs: number }; candidate: { passed: number; runs: number } } | null; promoted: { folder: string; label: string } | null };
+export type LearningVersions = { cases: number; base: { id: string; label: string } | null; betas: AdapterVersion[]; candidate: AdapterVersion | null; buttons: Record<'beta' | 'stable' | 'promote', { enabled: boolean; reason: string | null; fewCases?: boolean }>; running: { kind: string } | null; fewCases: number };
 export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string; vision?: boolean };
 
 export interface AgenticBridge {
@@ -88,7 +91,13 @@ export interface AgenticBridge {
   listBenchmarkProjects(): Promise<BenchmarkProject[]>;
   benchmarkTasks(): Promise<BenchmarkTask[]>;
   onBenchmarkProgress(callback: (value: { step: string; message: string; id?: string; current?: BenchmarkCurrent }) => void): () => void;
-  startTraining(request: { name: string; baseModelId?: string }): Promise<{ started: boolean; dataset: string }>;
+  learningVersions(): Promise<LearningVersions>;
+  trainBeta(): Promise<{ started: boolean }>;
+  prepareStable(): Promise<{ started: boolean }>;
+  promoteStable(name: string): Promise<{ label: string; id: string; models: LocalModelOption[] }>;
+  deleteBeta(folder: string): Promise<{ deleted: string }>;
+  trainingPreferences(): Promise<{ values: TrainingPreferences; defaults: TrainingPreferences; limits: Record<keyof TrainingPreferences, { min: number; max: number; default: number }> }>;
+  setTrainingPreferences(change: Partial<TrainingPreferences>): Promise<TrainingPreferences>;
   cancelTraining(): Promise<{ cancelled: boolean }>;
   trainingStatus(): Promise<{ running: boolean; name?: string; base?: string }>;
   onTrainingProgress(callback: (value: TrainingProgress) => void): () => void;

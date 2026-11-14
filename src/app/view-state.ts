@@ -20,6 +20,8 @@ export type ViewState = {
   rail: RailLayout
   appearance: Appearance
   evaluationSections: string[]
+  /** The open sections of the Aprenentatge local panel. */
+  learningSections: string[]
   history: { position?: { x: number; y: number }; size?: { width: number; height: number }; stage: WindowStage }
   projects: Record<string, ProjectView>
 }
@@ -33,6 +35,7 @@ export const defaultViewState = (): ViewState => ({
   rail: defaultRailLayout(),
   appearance: defaultAppearance(),
   evaluationSections: [],
+  learningSections: ["cases", "training"],
   history: { stage: "default" },
   projects: {},
 })
@@ -69,6 +72,7 @@ export function loadViewState(storage: Storage): ViewState {
   for (const name of PANELS) if (typeof saved.panels?.[name] === "boolean") state.panels[name] = saved.panels[name]
   state.rail = normalizeRailLayout(saved.rail)
   state.appearance = normalizeAppearance(saved.appearance)
+  if (Array.isArray(saved.learningSections)) state.learningSections = saved.learningSections.filter((item: unknown): item is string => typeof item === "string" && ["cases", "data", "training"].includes(item))
   if (Array.isArray(saved.evaluationSections)) state.evaluationSections = saved.evaluationSections.filter((item: unknown): item is string => typeof item === "string")
   const history = saved.history || {}
   if (isNumber(history.position?.x) && isNumber(history.position?.y)) state.history.position = { x: history.position.x, y: history.position.y }

@@ -63,7 +63,13 @@ contextBridge.exposeInMainWorld('agentic', {
     ipcRenderer.on('benchmark:progress', listener);
     return () => ipcRenderer.removeListener('benchmark:progress', listener);
   },
-  startTraining: (request) => ipcRenderer.invoke('learning:train-start', request),
+  learningVersions: () => ipcRenderer.invoke('learning:versions'),
+  trainBeta: () => ipcRenderer.invoke('learning:train-beta'),
+  prepareStable: () => ipcRenderer.invoke('learning:prepare-stable'),
+  promoteStable: (name) => ipcRenderer.invoke('learning:promote-stable', name),
+  deleteBeta: (folder) => ipcRenderer.invoke('learning:delete-beta', folder),
+  trainingPreferences: () => ipcRenderer.invoke('preferences:training'),
+  setTrainingPreferences: (change) => ipcRenderer.invoke('preferences:set-training', change),
   cancelTraining: () => ipcRenderer.invoke('learning:train-cancel'),
   trainingStatus: () => ipcRenderer.invoke('learning:train-status'),
   onTrainingProgress: (callback) => {
