@@ -7,7 +7,11 @@ import { prompt as promptText, toolDescriptions } from './prompts';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
 
 // 'draft': an answer the reviewer sent back; the window keeps it in case the user stops the work.
-export type AgentStatus = { type: 'status' | 'plan' | 'draft'; message: string };
+/**
+ * What the agent tells the window while it works: an activity, its plan, the reviewer's finished draft, or
+ * its progress (the iteration it is on, 1-based, of the limit in force, and the tool it runs, if any).
+ */
+export type AgentStatus = { type: 'status' | 'plan' | 'draft'; message: string } | { type: 'progress'; iteration: number; maxIterations: number; tool?: string };
 export type AgentToolCall =
   | { name: 'list_files' | 'run_tests' }
   | { name: 'create_git_commit'; arguments: { message: string } }
@@ -895,6 +899,7 @@ export class LocalCodingAgent {
           : plan
             ? `El model està triant l’acció següent segons el pla: ${plan}`
             : 'El model està decidint el pas següent…';
+      this.onStatus({ type: 'progress', iteration: Math.min(iteration + 1, maxIterations), maxIterations });
       this.onStatus({ type: 'status', message: modelActivity });
       const availableTools = compact
         ? agentToolDefinitions.filter((item) => COMPACT_TOOL_NAMES.has(item.function.name))
@@ -1044,6 +1049,7 @@ export class LocalCodingAgent {
       if (tool.name === 'write_file') writeFileAttempted = true;
       const activity: Record<string, string> = { list_files: 'Llegint l’estructura del projecte…', read_file: `Llegint ${args.path || 'un fitxer'}…`, search_text: `Cercant «${args.query || ''}»…`, install_dependencies: 'Instal·lant les dependències de package.json…', run_npx: `Executant npx ${args.packageName || ''} ${Array.isArray(args.args) ? args.args.join(' ') : ''}…`, web_search: `Cercant a Internet «${args.query || ''}»…`, read_web_page: `Llegint ${String(args.url || 'una pàgina').slice(0, 80)}…`, call_mcp_tool: `Consultant ${args.server || 'MCP'}: ${args.tool || ''}…`, list_mcp_tools: 'Mirant els servidors MCP del projecte…', delegate_tasks: `Preparant ${Array.isArray(args.tasks) ? args.tasks.length : ''} agents delegats…`, write_file: `Aplicant el canvi a ${args.path || 'un fitxer'}…`, delete_file: `Preparant l’eliminació de ${args.path || 'un fitxer'} per revisar-la…`, run_tests: 'Executant les proves…', run_project_script: `Executant l’script ${args.script || ''}…`, start_project: `Iniciant l’app (${args.script || ''})…`, stop_project: 'Aturant l’app…', create_git_commit: 'Creant el commit de Git…', install_package: `Preparant la instal·lació de ${args.packageName || 'la llibreria'} per revisar-la…`, inspect_browser: `Inspeccionant ${args.url || 'la pàgina local'}…` };
       lastToolActivity = activity[tool.name] || `Executant ${tool.name}`;
+      this.onStatus({ type: 'progress', iteration: Math.min(iteration + 1, maxIterations), maxIterations, tool: tool.name });
       this.onStatus({ type: 'status', message: lastToolActivity });
       let result: unknown;
       try {

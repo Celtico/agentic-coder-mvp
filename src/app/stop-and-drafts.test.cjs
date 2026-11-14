@@ -19,8 +19,11 @@ test('the stop button arms on the first click and stops on the second, within th
 
 test('a draft from the reviewer is kept when the work is stopped; other stops and errors are notices', () => {
   assert.match(app, /if \(s\.type === 'draft'\)/);
-  assert.match(app, /if \(cancelled && inFlight\?\.draft\)/);
-  assert.match(app, /\{ role: 'assistant', text, notice: true, \.\.\.\(cancelled \? \{\} : \{ error: true \}\) \}/);
+  // The stop and the error are written into the conversation by the main process (src/electron/active-turn.cjs).
+  const turns = fs.readFileSync(path.join(__dirname, '..', 'electron', 'active-turn.cjs'), 'utf8');
+  assert.match(turns, /if \(cancelled && turn\.draft\)/);
+  assert.match(turns, /else if \(cancelled\) messages\.push\(\{ role: 'assistant', text: CANCELLED_TEXT, notice: true/);
+  assert.match(turns, /notice: true, error: true, turn: turn\.id/);
   // Notices are not sent to the model nor offered as a verified case.
   assert.match(app, /filter\(\(message\) => !isWindowNotice\(message\)\)\.map\(\(message\) => \(\{ role: message\.role, content: message\.text \}\)\)/);
   assert.match(app, /previousUser && !isWindowNotice\(message\)/);

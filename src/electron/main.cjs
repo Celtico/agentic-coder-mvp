@@ -18,6 +18,7 @@ const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate
 const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
+const { createActiveTurns, withTurn } = require('./active-turn.cjs');
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const dictation = require('./dictation.cjs');
 const versions = require('./learning-versions.cjs');
@@ -187,6 +188,7 @@ async function checkStartedPage(result, actions = []) {
   }
 }
 
+const activeTurns = createActiveTurns();
 function getChatStore() {
   if (!chatStore) chatStore = new ChatStore(path.join(app.getPath('userData'), 'memory', 'conversations.sqlite'));
   return chatStore;
@@ -531,7 +533,7 @@ async function startModelWorker() {
   });
   modelWorker = child;
   child.on('message', (message) => {
-    if (message?.type === 'status') { win?.webContents.send('agent:status', message.value); return; }
+    if (message?.type === 'status') { activeTurns.status(message.value); win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
       const toolKey = `${message.id}:${message.toolId}`;
       activeModelToolCalls.add(toolKey);
@@ -1551,8 +1553,34 @@ ipcMain.handle('agent:ask', async (_e, request) => {
     const model = await currentModel();
     if (!await mlxModels.hasVision(await mlxModels.modelDirectory(model, projectModelsDirectory()))) throw new Error(`${model.label} no pot veure imatges. Tria un model amb visió o treu les imatges.`);
   }
-  return askModel(String(payload.prompt || ''), selectedProject, payload.history, images);
+  if (!payload.turn) return askModel(String(payload.prompt || ''), selectedProject, payload.history, images);
+  // A turn of a conversation: kept here while it runs, and written into the conversation here when it
+  // ends, so a reloaded or reopened window neither loses it nor sends it again.
+  if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
+  const turn = activeTurns.start(payload.turn);
+  if (!turn) throw new Error('La petició del xat no és vàlida.');
+  let outcome;
+  try { outcome = { answer: await askModel(String(payload.prompt || ''), selectedProject, payload.history, images) }; }
+  catch (error) { outcome = { error: error?.message || String(error) }; }
+  return endChatTurn(turn.id, outcome);
 });
+ipcMain.handle('agent:active-turn', () => activeTurns.current());
+
+/** Writes the end of the turn into its conversation and tells the window (whichever it is now). */
+function endChatTurn(id, outcome) {
+  const ended = activeTurns.finish(id, outcome);
+  if (!ended) return { turnId: id, session: null };
+  let session = null;
+  try {
+    const store = getChatStore();
+    // A conversation deleted while it was answering stays in the trash; it is not brought back.
+    const deleted = store.listDeleted().some((item) => item.id === ended.turn.sessionId);
+    if (!deleted) { session = withTurn(store.get(ended.turn.sessionId), ended.turn, ended.messages); store.saveMany([session]); }
+  } catch (error) { console.error('[chat] No s’ha pogut desar el final del torn:', error); }
+  const result = { turnId: id, sessionId: ended.turn.sessionId, session };
+  if (win && !win.isDestroyed()) win.webContents.send('agent:turn-finished', result);
+  return result;
+}
 
 ipcMain.handle('permissions:get', async () => permissionMode);
 

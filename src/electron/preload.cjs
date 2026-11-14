@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('agentic', {
   fileExists: (relativePath) => ipcRenderer.invoke('project:exists', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('project:write', relativePath, content),
   ask: (request) => ipcRenderer.invoke('agent:ask', request),
+  activeTurn: () => ipcRenderer.invoke('agent:active-turn'),
+  onTurnFinished: (callback) => {
+    const listener = (_e, value) => callback(value);
+    ipcRenderer.on('agent:turn-finished', listener);
+    return () => ipcRenderer.removeListener('agent:turn-finished', listener);
+  },
   getPermissionMode: () => ipcRenderer.invoke('permissions:get'),
   agentPreferences: () => ipcRenderer.invoke('preferences:agent'),
   dictationInfo: () => ipcRenderer.invoke('dictation:info'),

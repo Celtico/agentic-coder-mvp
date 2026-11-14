@@ -23,7 +23,8 @@ test('delegates independent subtasks sequentially through the shared local model
     generateResponse: async (_messages, options) => { toolLists.push(options.tools); return responses.shift(); },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
-  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  const progress = [];
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { if (status.type === 'progress') progress.push(status); else statuses.push(status.message); } });
   agent.allowDelegation = true;
   agent.historyDir = path.join(tempRoot, 'history');
   const answer = await agent.ask('Divideix aquesta revisió en dues tasques independents', tempRoot, async () => { throw new Error('read-only subtask should not call a project tool'); });
@@ -35,6 +36,9 @@ test('delegates independent subtasks sequentially through the shared local model
   assert.ok(toolLists[2].every((tool) => tool.function.name !== 'delegate_tasks'));
   assert.ok(statuses.some((message) => message.includes('Agent delegat 1/2')));
   assert.ok(statuses.some((message) => message.includes('Agent delegat 2/2')));
+  // The progress the chat shows («Iteració 1 de 28 · delegate_tasks»): the iteration, the limit in force and the tool.
+  assert.deepEqual(progress[0], { type: 'progress', iteration: 1, maxIterations: 28 });
+  assert.ok(progress.some((item) => item.iteration === 1 && item.maxIterations === 28 && item.tool === 'delegate_tasks'));
   assert.match(answer, /delegated both/i);
   const history = await fs.readFile(path.join(tempRoot, 'history', 'sessions.jsonl'), 'utf8');
   assert.equal(history.trim().split('\n').length, 1, 'delegated runs are not saved as separate chat conversations');
@@ -289,7 +293,7 @@ test('shows a plan before requesting a package installation', async (t) => {
   };
   const statuses = [];
   const statusEvents = [];
-  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { statuses.push(status.message); statusEvents.push(status); } });
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { if (status.type !== 'progress') { statuses.push(status.message); statusEvents.push(status); } } });
   agent.historyDir = path.join(tempRoot, 'history');
   const calls = [];
 
@@ -850,7 +854,7 @@ test('runs explicit local browser inspections directly without asking the model 
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const statuses = [];
-  const agent = new LocalCodingAgent({ engine, onStatus: (status) => statuses.push(status.message) });
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { if (status.type !== 'progress') statuses.push(status.message); } });
   agent.historyDir = path.join(tempRoot, 'history');
   const calls = [];
 

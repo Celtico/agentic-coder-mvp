@@ -4,7 +4,13 @@ export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
 /** `notice`: a message of the window itself (stopped, error), not sent to the model as history. */
 /** `images`: small thumbnails of the images sent with the message (the images themselves are not kept). */
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean; images?: { name: string; thumbnail: string }[] };
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean; images?: { name: string; thumbnail: string }[]; turn?: string };
+/** A chat turn as the window sends it; the main process keeps it while it runs (src/electron/active-turn.cjs). */
+export type ChatTurnRequest = { id: string; sessionId: string; projectPath?: string; userMessage: ChatMessage };
+/** Where the agent is in its turn: the iteration (1-based) of the limit in force, and the tool it runs. */
+export type TurnProgress = { iteration: number; maxIterations: number; tool?: string };
+export type ActiveChatTurn = { id: string; sessionId: string; projectPath?: string; startedAt: string; label: string; plan: string; progress?: TurnProgress };
+export type ChatTurnResult = { turnId: string; sessionId?: string; session: ChatSession | null };
 export type HistoryEntry = { prompt: string; answer: string; at?: string };
 export type ChatSession = { id: string; title: string; updatedAt: string; projectPath?: string | null; messages: ChatMessage[] };
 export type BenchmarkTask = { id: string; description: string; prompt: string; kind: 'open' | 'app' | 'reference' };
@@ -59,7 +65,9 @@ export interface AgenticBridge {
   /** Whether the file is in the project, without throwing when it is not. */
   fileExists(relativePath: string): Promise<boolean>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
-  ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[]; images?: { name: string; mime: string; data: string }[] }): Promise<string>;
+  ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[]; images?: { name: string; mime: string; data: string }[]; turn: ChatTurnRequest }): Promise<ChatTurnResult | string>;
+  activeTurn?(): Promise<ActiveChatTurn | null>;
+  onTurnFinished?(callback: (value: ChatTurnResult) => void): () => void;
   getPermissionMode(): Promise<'ask' | 'auto'>;
   agentPreferences(): Promise<{ values: AgentPreferences; defaults: AgentPreferences; limits: Record<'answerTokens' | 'maxIterations' | 'historyMessages', { min: number; max: number; default: number }> }>;
   setAgentPreferences(change: Partial<AgentPreferences>): Promise<AgentPreferences>;
@@ -107,7 +115,7 @@ export interface AgenticBridge {
   onTrainingProgress(callback: (value: TrainingProgress) => void): () => void;
   runTests(): Promise<{ code: number | null; output: string; timedOut?: boolean }>;
   runCommand(command: string): Promise<{ code: number | null; output: string }>;
-  onStatus(callback: (value: { type: string; message?: string }) => void): () => void;
+  onStatus(callback: (value: { type: string; message?: string; iteration?: number; maxIterations?: number; tool?: string }) => void): () => void;
   onTerminalOutput(callback: (value: string) => void): () => void;
   onProjectStarted(callback: (value: { projectPath: string; script: string; url: string }) => void): () => void;
   onTestOutput(callback: (value: string) => void): () => void;

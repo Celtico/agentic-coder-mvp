@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
@@ -17,6 +17,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
+import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
@@ -181,7 +182,6 @@ const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fos
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 /** Preferències › Aprenentatge: each value, its name and its step. */
 const TRAINING_FIELDS: [keyof TrainingPreferences, string, number][] = [['maxTokens', 'Tokens màxims per exemple', 256], ['numLayers', 'Capes LoRA', 1], ['learningRate', 'Taxa d’aprenentatge', 0.000001], ['itersPerCase', 'Iteracions per cas', 5], ['minIters', 'Iteracions mínimes', 10], ['maxIters', 'Iteracions màximes', 20], ['seed', 'Llavor', 1]];
-const STOPPED_WHILE_REVIEWING = '_(Aturat mentre es revisava: aquesta resposta no s’ha acabat de comprovar.)_';
 
 function getSplitSize(): number[] {
   try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
@@ -265,6 +265,8 @@ export function App(): React.JSX.Element {
   const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState(PREPARING_MODEL);
+  // The iteration the agent is on, of its limit, and its tool (src/app/turn-progress.ts).
+  const [turnProgress, setTurnProgress] = useState<TurnProgress | null>(null);
   // The browser and the file editor are independent: each opens beside the other instead of replacing it.
   const [browserOpen, setBrowserOpen] = useState(initialView.panels.browser);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -499,7 +501,7 @@ export function App(): React.JSX.Element {
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
   // `draft`: the last answer the reviewer sent back, shown instead of «stopped» if the user stops the work.
-  const inFlightConversationRef = useRef<{ sessionId: string; projectPath: string; messages: ChatMessage[]; draft?: string } | null>(null);
+  const inFlightConversationRef = useRef<{ sessionId: string; projectPath: string; messages: ChatMessage[]; draft?: string; turnId?: string } | null>(null);
   const webviewRef = useRef<ElectronWebviewTag | null>(null);
   // The browser element itself: when panes are rearranged React builds a new one, and whatever
   // listens to the page (address bar, console) has to follow it to the new element.
@@ -521,6 +523,46 @@ export function App(): React.JSX.Element {
       return next;
     });
   }, [storeSessions]);
+
+  // The end of a chat turn, already written into its conversation by the main process
+  // (src/electron/active-turn.cjs): the window takes that conversation as it is now. It can arrive twice
+  // (as the answer to the request and as the event the window gets); the second time nothing changes.
+  const applyTurnResult = useCallback((result: ChatTurnResult) => {
+    const session = result.session;
+    if (session) updateSessions((current) => [session, ...current.filter((item) => item.id !== session.id)].slice(0, 50));
+    if (inFlightConversationRef.current?.turnId === result.turnId) {
+      inFlightConversationRef.current = null;
+      setLoading(false); setTurnProgress(null); setStatus('Preparat');
+    }
+  }, [updateSessions]);
+  const applyTurnResultRef = useRef(applyTurnResult);
+  applyTurnResultRef.current = applyTurnResult;
+  // A reloaded (⌘R) or reopened window finds the turn the model is still working on: it shows it as
+  // working, with its activity and iteration, and takes its end when it comes. Nothing is sent again.
+  useEffect(() => {
+    let cancelled = false;
+    // Until the app is restarted after an update, its main process may not have these yet (optional calls).
+    const offTurnFinished = window.agentic.onTurnFinished?.((result) => applyTurnResultRef.current(result));
+    void (async () => {
+      try {
+        const turn = await window.agentic.activeTurn?.();
+        if (cancelled || !turn || inFlightConversationRef.current) return;
+        const stored = (await window.agentic.loadChatSessions()).find((session) => session.id === turn.sessionId);
+        if (cancelled || inFlightConversationRef.current) return;
+        inFlightConversationRef.current = { sessionId: turn.sessionId, projectPath: turn.projectPath || stored?.projectPath || '', messages: stored?.messages || [], turnId: turn.id };
+        setLoading(true); setLoadingLabel(turn.label || PREPARING_MODEL); setTurnProgress(turn.progress || null);
+        // Ended while this window was loading: its end has been applied already, or is applied here.
+        const still = await window.agentic.activeTurn?.();
+        if (!cancelled && still?.id !== turn.id && inFlightConversationRef.current?.turnId === turn.id) {
+          inFlightConversationRef.current = null;
+          setLoading(false); setTurnProgress(null);
+          const latest = (await window.agentic.loadChatSessions()).find((session) => session.id === turn.sessionId);
+          if (!cancelled && latest) applyTurnResultRef.current({ turnId: turn.id, sessionId: turn.sessionId, session: latest });
+        }
+      } catch { /* without the main process's turn, the window is as before */ }
+    })();
+    return () => { cancelled = true; offTurnFinished?.(); };
+  }, []);
 
   const persistMessages = useCallback((next: ChatMessage[], sessionId = activeSessionId, projectPath?: string) => {
     const trimmed = next.slice(-100);
@@ -572,6 +614,8 @@ export function App(): React.JSX.Element {
     // Files added or removed outside the app show up when its window gets the focus back.
     const refreshOnFocus = () => { void window.agentic.currentProject().then((refreshed) => { if (refreshed) setProject(refreshed); }).catch(() => {}); };
     const offStatus = window.agentic.onStatus((s) => {
+      const progress = progressFromStatus(s);
+      if (progress) { setTurnProgress(progress); return; }
       if (s.type === 'draft') {
         if (inFlightConversationRef.current && s.message) inFlightConversationRef.current.draft = s.message;
         return;
@@ -907,40 +951,35 @@ export function App(): React.JSX.Element {
     // The chat (and a verified case made from it) keeps the names and a thumbnail, never the image.
     const savedPrompt = sentImages.length ? `${savedWithFiles}\n\n[Imatges adjuntes: ${sentImages.map((image) => image.name).join(', ')}]` : savedWithFiles;
     const pendingMessages: ChatMessage[] = [...messages, { role: 'user' as const, text: savedPrompt, ...(sentImages.length ? { images: sentImages.map(({ name, thumbnail }) => ({ name, thumbnail })) } : {}) }];
-    inFlightConversationRef.current = { sessionId: requestSessionId, projectPath: project.path, messages: pendingMessages };
+    // The turn's id: the main process keeps the turn under it and writes its end into the conversation once.
+    const turnId = crypto.randomUUID();
+    inFlightConversationRef.current = { sessionId: requestSessionId, projectPath: project.path, messages: pendingMessages, turnId };
     persistMessages(pendingMessages, requestSessionId);
     setDraft('');
     setChatAttachments([]); setChatImages([]);
     setLoading(true);
     setLoadingLabel(PREPARING_MODEL);
+    setTurnProgress(null);
     try {
       // Keep the complete persisted conversation available to the local agent so
       // short follow-ups can refer to the original task without losing context.
       // The window's own notices (stopped, error) are not part of what the model said.
       const history = messages.slice(-100).filter((message) => !isWindowNotice(message)).map((message) => ({ role: message.role, content: message.text }));
-      const answer = await window.agentic.ask({ prompt: request, history, ...(sentImages.length ? { images: sentImages.map(({ name, mime, data }) => ({ name, mime, data })) } : {}) });
-      const latestMessages = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current.messages : pendingMessages;
-      // The plan is already on screen as its own message; the answer does not repeat it.
-      const planShown = latestMessages.some((message) => message.role === 'assistant' && message.text.startsWith('Pla abans de començar:\n'));
-      const finalText = planShown ? answer.replace(/^Pla: [^\n]*\n\n(?=\S)/, '') : answer;
-      persistMessages([...latestMessages, { role: 'assistant', text: finalText }], requestSessionId, project.path);
+      // The answer, the error or the stop is written into the conversation by the main process
+      // (src/electron/active-turn.cjs), even if this window is reloaded meanwhile.
+      const result = await window.agentic.ask({ prompt: request, history, ...(sentImages.length ? { images: sentImages.map(({ name, mime, data }) => ({ name, mime, data })) } : {}), turn: { id: turnId, sessionId: requestSessionId, projectPath: project.path, userMessage: pendingMessages[pendingMessages.length - 1] } });
+      // A main process older than this window (not restarted since the update) answers with the text only.
+      if (typeof result === 'string') {
+        const latestMessages = inFlightConversationRef.current?.turnId === turnId ? inFlightConversationRef.current.messages : pendingMessages;
+        persistMessages([...latestMessages, { role: 'assistant', text: result }], requestSessionId, project.path);
+      } else applyTurnResult(result);
     } catch (error) {
-      const message = errorText(error);
-      const cancelled = message.includes('Generació cancel·lada.');
-      const inFlight = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current : null;
-      const latestMessages = inFlight ? inFlight.messages : pendingMessages;
-      // Stopped while the reviewer had sent a finished answer back: that answer is kept, marked as such.
-      if (cancelled && inFlight?.draft) {
-        persistMessages([...latestMessages, { role: 'assistant', text: `${inFlight.draft}\n\n${STOPPED_WHILE_REVIEWING}` }], requestSessionId, project.path);
-        return;
-      }
-      const text = cancelled
-        ? 'Generació cancel·lada. El model local es tornarà a carregar quan enviïs la següent petició.'
-        : `Error: ${message}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
-      persistMessages([...latestMessages, { role: 'assistant', text, notice: true, ...(cancelled ? {} : { error: true }) }], requestSessionId, project.path);
+      // Refused before the turn started (no project, a training or an evaluation running…).
+      const inFlight = inFlightConversationRef.current?.turnId === turnId ? inFlightConversationRef.current : null;
+      persistMessages([...(inFlight ? inFlight.messages : pendingMessages), { role: 'assistant', text: `Error: ${errorText(error)}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`, notice: true, error: true }], requestSessionId, project.path);
     } finally {
-      if (inFlightConversationRef.current?.sessionId === requestSessionId) inFlightConversationRef.current = null;
-      setLoading(false); setStatus('Preparat');
+      if (inFlightConversationRef.current?.turnId === turnId) inFlightConversationRef.current = null;
+      setLoading(false); setTurnProgress(null); setStatus('Preparat');
       try { const refreshed = await window.agentic.currentProject(); if (refreshed) setProject(refreshed); } catch {}
     }
   }
@@ -1579,7 +1618,7 @@ export function App(): React.JSX.Element {
             {previousUser && !isWindowNotice(message) && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !isWindowNotice(item) && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}
-        {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
+        {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text>{turnProgressText(turnProgress) && <Text fontSize="xs" lineHeight="short" color="fg.muted" flex="none" data-turn-progress>{turnProgressText(turnProgress)}</Text>}</HStack>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
@@ -2145,9 +2184,9 @@ export function App(): React.JSX.Element {
               onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
               onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
               {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
-              {/* Always ghost. Open: the icon in the accent colour (the «agentic» palette is the accent) on a faint
-                  subtle background. Closed: muted. */}
-              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'agentic.fg' : 'fg.muted'} bg={button.palette === 'agentic' ? 'agentic.subtle' : undefined} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
+              {/* Plain ghost, no background: open, only the icon's colour changes to the accent (the «agentic»
+                  palette is the accent); closed, muted. Hover is Chakra's ghost. */}
+              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'agentic.fg' : 'fg.muted'} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
               {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>
@@ -2295,7 +2334,7 @@ export function App(): React.JSX.Element {
             </HStack>
             <HStack minW="0" gap="1.5" title={status}>
               <Mark size={13} busy={loading || modelChanging}/>
-              <Text maxW="250px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{loading ? loadingLabel : modelChanging ? 'Canviant el model…' : status}</Text>
+              <Text maxW="250px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{loading ? [turnProgressText(turnProgress), loadingLabel].filter(Boolean).join(' · ') : modelChanging ? 'Canviant el model…' : status}</Text>
             </HStack>
           </HStack>
     </Flex>
