@@ -37,8 +37,8 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   // The mark's drawing is as big as asked, in pixels: a bare number is a size token (sizes.28 is 112 px)
   // and made it spill over the first icon.
   assert.match(app, /<chakra\.svg viewBox="0 0 24 24" width=\{`\$\{size\}px`\} height=\{`\$\{size\}px`\}/);
-  assert.match(app, /navigationHeader\('Converses', <IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\)/);
-  assert.match(app, /navigationHeader\('Fitxers', <Menu\.Root>/);
+  assert.match(app, /<PaneHeader icon=\{Conversations\} title="Converses" actions=\{<IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\}\/>/);
+  assert.match(app, /<PaneHeader icon=\{FileText\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // One grid column per visible column of the side panel; each is shown or hidden from its icon.
   assert.match(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}, minmax\(0, 1fr\)\)`\}/);
@@ -54,11 +54,10 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /const navigationOpen = navigationColumns > 0;/);
   assert.match(app, /\{navigationOpen \? <Splitter\.Root key=\{`navigation-\$\{navigationColumns\}`\}/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
-  // The project (folder, name, path; click to choose another) is at the top of the Fitxers column, and
-  // Converses starts with its own header.
-  const files = app.indexOf('aria-label="Fitxers">');  // the project block stays inside Fitxers wherever it is
-  const conversations = app.indexOf('aria-label="Converses">');
-  const projectButton = app.indexOf('onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte`');
-  assert.ok(conversations > 0 && files > conversations && projectButton > files && projectButton < app.indexOf("navigationHeader('Fitxers'"), 'the project block opens the Fitxers column');
-  assert.match(app.slice(conversations, conversations + 200), /aria-label="Converses">\s*\{navigationHeader\('Converses'/);
+  // The project is the Fitxers header's subtitle («AGENT · /path»), with a folder button to choose another.
+  const files = app.indexOf('aria-label="Fitxers">');
+  const filesHeader = app.slice(files, app.indexOf('<Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta"', files));
+  assert.match(filesHeader, /subtitle=\{project \? `\$\{project\.path\.split/);
+  assert.match(filesHeader, /<IconButton icon=\{FolderOpen\} label=\{project \? `\$\{project\.path\} · canvia de projecte`[^}]*\} onClick=\{\(\) => void selectProject\(\)\}\/>/);
+  assert.doesNotMatch(app, /<Box flex="none" pt="1"><Button variant="ghost" w="full"/, 'the big project block is gone');
 });

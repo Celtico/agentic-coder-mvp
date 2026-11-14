@@ -17,6 +17,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
+import { PaneHeader } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -1597,15 +1598,7 @@ export function App(): React.JSX.Element {
 
   const terminalDock = (
     <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
-        <HStack minW="0" gap="3">
-          <Text flex="none" fontSize="xs" fontWeight="semibold">Terminal</Text>
-          <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path || 'Cap projecte seleccionat'}</Text>
-        </HStack>
-        <HStack flex="none" gap="2">
-          {terminalStatus && <Text fontSize="xs" color="fg.muted">{terminalStatus}</Text>}
-        </HStack>
-      </Flex>
+      <PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>
       <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
     </Flex>
   );
@@ -1862,11 +1855,10 @@ export function App(): React.JSX.Element {
   );
 
   // Panes have no × of their own: each has an icon in the left bar, its tab, that opens and closes it.
-  const dockPane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
+  type PaneHeaderExtras = { subtitle?: React.ReactNode; subtitleTitle?: string; badge?: React.ReactNode; actions?: React.ReactNode };
+  const dockPane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
     <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <Flex flex="none" h="32px" align="center" justify="space-between" gap="3" px="3">
-        <HStack minW="0" gap="2"><Text flex="none" fontSize="xs" fontWeight="semibold">{title}</Text>{badge}</HStack>
-      </Flex>
+      <PaneHeader icon={icon} title={title} {...extras}/>
       <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
     </Flex>
   );
@@ -1992,18 +1984,9 @@ export function App(): React.JSX.Element {
       </Accordion.Root>
     </Stack>
   );
-  /** The header of a column of the side panel: its name, and on the right its + . */
-  const navigationHeader = (title: string, action: React.ReactNode) => (
-    <Flex align="center" gap="1" h="36px" flex="none" minW="0" px="2" pr="0">
-      <Text flex="1" minW="0" whiteSpace="nowrap" overflow="hidden" textOverflow="ellipsis" color="fg.muted" fontSize="2xs" textTransform="uppercase" letterSpacing="0.1em">{title}</Text>
-      {action}
-    </Flex>
-  );
-  const sidePane = (title: string, content: React.ReactNode, badge?: React.ReactNode) => (
+  const sidePane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
     <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <Flex h="32px" flex="none" align="center" justify="space-between" gap="3" px="3">
-        <HStack gap="2" minW="0" overflow="hidden"><Text flex="none" fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">{title}</Text>{badge && <Box minW="0" overflow="hidden">{badge}</Box>}</HStack>
-      </Flex>
+      <PaneHeader icon={icon} title={title} {...extras}/>
       <Box flex="1" minH="0" overflow="hidden">{content}</Box>
     </Flex>
   );
@@ -2012,9 +1995,9 @@ export function App(): React.JSX.Element {
   // Converses and Fitxers: columns of the side panel while their icons are in the top group, panes of the
   // bottom row when they are in the bottom one (src/app/rail-layout.ts), the same content either way.
   const conversationsColumn = (
-            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Converses">
-              {navigationHeader('Converses', <IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>)}
-              <Box flex="1" minH="0" overflowY="auto" pb="2">
+            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden" aria-label="Converses">
+              <PaneHeader icon={Conversations} title="Converses" actions={<IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>}/>
+              <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
                 <Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
                       <Menu.ContextTrigger asChild><Box position="relative" data-group>
@@ -2030,23 +2013,19 @@ export function App(): React.JSX.Element {
             </Flex>
   );
   const filesColumn = (
-            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" px="2" overflow="hidden" aria-label="Fitxers">
-              {/* The project the files belong to, at the top of its column: click to choose another folder. */}
-              <Box flex="none" pt="1"><Button variant="ghost" w="full" minW="0" h="48px" px="2" justifyContent="flex-start" gap="2.5" onClick={() => void selectProject()} title={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'}>
-                <Box flex="none" color={project ? 'agentic.fg' : 'fg.muted'}><FolderOpen size={16}/></Box>
-                <Box flex="1" minW="0" textAlign="left">
-                  <Text fontSize="sm" fontWeight="semibold" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Selecciona un projecte'}</Text>
-                  <Text fontSize="2xs" fontWeight="normal" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path || 'Tria la carpeta on vols treballar'}</Text>
-                </Box>
-              </Button></Box>
-              {navigationHeader('Fitxers', <Menu.Root>
+            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden" aria-label="Fitxers">
+              {/* The header says which project the files are of; its folder button chooses another. */}
+              <PaneHeader icon={FileText} title="Fitxers" subtitle={project ? `${project.path.split(/[\\/]/).filter(Boolean).at(-1)} · ${project.path}` : 'Cap projecte'} subtitleTitle={project?.path} actions={<>
+                <IconButton icon={FolderOpen} label={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'} onClick={() => void selectProject()}/>
+                <Menu.Root>
                 <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
                 <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
                   <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                   <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
                 </Menu.Content></Menu.Positioner></Portal>
-              </Menu.Root>)}
-              <Box flex="1" minH="0" overflowY="auto" pb="2">
+              </Menu.Root>
+              </>}/>
+              <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
                       event.preventDefault();
@@ -2086,18 +2065,16 @@ export function App(): React.JSX.Element {
     switch (panel) {
       case 'conversations': return conversationsColumn;
       case 'files': return filesColumn;
-      case 'editor': return frame('Editor', editorPane, <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge>);
-      case 'browser': return frame('Navegador web', browserPane);
+      case 'editor': return frame(FileCode, 'Editor', editorPane, { badge: <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge> });
+      case 'browser': return frame(Globe2, 'Navegador web', browserPane);
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       case 'evaluation': return <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
-        <Card.Header flexDirection="row" alignItems="center" justifyContent="space-between" gap="3" py="1.5" px="3">
-          <HStack gap="2" minW="0"><Card.Title fontSize="xs">Avaluació</Card.Title>{evaluationRunning && <Badge size="xs" colorPalette="agentic">En marxa</Badge>}</HStack>
-        </Card.Header>
+        <PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>
         <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
       </Card.Root>;
-      case 'git': return frame('Git', gitPane, <Badge size="xs" colorPalette="gray">Només lectura</Badge>);
-      case 'learning': return frame('Aprenentatge local', learningPane);
-      case 'console': return frame('Consola', consolePane, consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined);
+      case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path });
+      case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
+      case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
       case 'terminal': return terminalDock;
     }
   };
