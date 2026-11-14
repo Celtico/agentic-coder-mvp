@@ -801,6 +801,27 @@ export function App(): React.JSX.Element {
     setBrowserContext('');
   }
 
+  // A conversation is deleted only after it is confirmed, and goes to the trash (restorable until emptied).
+  const [chatToDelete, setChatToDelete] = useState<ChatSession | null>(null);
+  const [chatTrash, setChatTrash] = useState<(ChatSession & { deletedAt: string })[] | null>(null);
+  const [emptyTrashArmed, setEmptyTrashArmed] = useState(false);
+  async function openChatTrash() {
+    setEmptyTrashArmed(false);
+    try { setChatTrash(await window.agentic.deletedChatSessions()); } catch (error) { setStatus(`Paperera: ${errorText(error)}`); }
+  }
+  async function restoreChatSession(id: string) {
+    try {
+      const restored = await window.agentic.restoreChatSession(id);
+      if (restored) updateSessions((current) => [restored, ...current.filter((session) => session.id !== restored.id)].slice(0, 50));
+      setChatTrash(await window.agentic.deletedChatSessions());
+      setStatus(restored ? `Conversa recuperada: ${restored.title}` : 'Aquesta conversa ja no és a la paperera.');
+    } catch (error) { setStatus(`Paperera: ${errorText(error)}`); }
+  }
+  async function emptyChatTrash() {
+    if (!emptyTrashArmed) { setEmptyTrashArmed(true); return; }
+    try { const removed = await window.agentic.emptyChatTrash(); setChatTrash([]); setEmptyTrashArmed(false); setStatus(`Paperera buidada: ${removed} ${removed === 1 ? 'conversa' : 'converses'}.`); }
+    catch (error) { setStatus(`Paperera: ${errorText(error)}`); }
+  }
   async function deleteChatSession(sessionId: string) {
     if (deletingChatId) return;
     if (loading && sessionId === activeSessionId) {
@@ -826,7 +847,7 @@ export function App(): React.JSX.Element {
         setChatAttachments([]); setChatImages([]);
         setBrowserContext('');
       }
-      setStatus('Conversa eliminada.');
+      setStatus('Conversa moguda a la paperera: la pots recuperar des de la icona de paperera de Converses.');
     } catch (error) {
       setStatus(`No s’ha pogut eliminar la conversa: ${errorText(error)}`);
     } finally { setDeletingChatId(null); }
@@ -2002,17 +2023,17 @@ export function App(): React.JSX.Element {
   // bottom row when they are in the bottom one (src/app/rail-layout.ts), the same content either way.
   const conversationsColumn = (
             <PaneCard label="Converses" header={<>
-              <PaneHeader icon={Conversations} title="Converses" actions={<IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>}/>
+              <PaneHeader icon={Conversations} title="Converses" actions={<><IconButton icon={Trash} label="Paperera de converses" onClick={() => void openChatTrash()}/><IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/></>}/>
               </>}>
               <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
                 <Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
                       <Menu.ContextTrigger asChild><Box position="relative" data-group>
                         <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
-                        <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" opacity="0" _groupHover={{ opacity: 1 }} _groupFocusWithin={{ opacity: 1 }} color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); void deleteChatSession(session.id); }}/>
+                        <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); setChatToDelete(session); }}/>
                       </Box></Menu.ContextTrigger>
                       <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
-                        <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => void deleteChatSession(session.id)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
+                        <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => setChatToDelete(session)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>)}
                   </Stack>
@@ -2292,8 +2313,8 @@ export function App(): React.JSX.Element {
               <Input autoFocus value={createEntryPath} onChange={(event) => setCreateEntryPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !createEntryBusy) void createProjectEntry(); }} placeholder={createEntryKind === 'directory' ? 'src/components' : 'src/notes.md'} aria-label={createEntryKind === 'directory' ? 'Nom o ruta del directori' : createEntryKind === 'rename' ? 'Nom nou' : 'Nom o ruta del fitxer'}/>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="ghost" disabled={createEntryBusy} onClick={() => setCreateEntryKind(null)}>Cancel·la</Button>
-              <Button colorPalette="agentic" disabled={!createEntryPath.trim() || createEntryBusy} onClick={() => void createProjectEntry()}>{createEntryBusy ? <Spinner size="xs"/> : createEntryKind === 'rename' ? <Pencil size={14}/> : createEntryKind === 'directory' ? <FolderPlus size={14}/> : <FilePlus size={14}/>} {createEntryKind === 'rename' ? 'Canvia el nom' : 'Crea'}</Button>
+              <ChakraButton size="sm" variant="outline" disabled={createEntryBusy} onClick={() => setCreateEntryKind(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="agentic" disabled={!createEntryPath.trim() || createEntryBusy} onClick={() => void createProjectEntry()}>{createEntryBusy ? <Spinner size="xs"/> : createEntryKind === 'rename' ? <Pencil size={14}/> : createEntryKind === 'directory' ? <FolderPlus size={14}/> : <FilePlus size={14}/>} {createEntryKind === 'rename' ? 'Canvia el nom' : 'Crea'}</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
@@ -2312,8 +2333,8 @@ export function App(): React.JSX.Element {
               <Input value={verifiedTask} onChange={(event) => setVerifiedTask(event.target.value)} placeholder="Per exemple: la primera petició de la conversa" aria-label="Petició general"/>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="ghost" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</Button>
-              <Button colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</Button>
+              <ChakraButton size="sm" variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
@@ -2333,8 +2354,8 @@ export function App(): React.JSX.Element {
               {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="ghost" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</Button>
-              <Button colorPalette="agentic" disabled={!caseEdit?.task.trim() || !caseEdit?.evidence.trim() || caseBusy !== null} onClick={() => void saveCaseEdit()}>{caseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</Button>
+              <ChakraButton size="sm" variant="outline" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="agentic" disabled={!caseEdit?.task.trim() || !caseEdit?.evidence.trim() || caseBusy !== null} onClick={() => void saveCaseEdit()}>{caseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
@@ -2352,8 +2373,8 @@ export function App(): React.JSX.Element {
               {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="ghost" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</Button>
-              <Button colorPalette="red" disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</Button>
+              <ChakraButton size="sm" variant="outline" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
@@ -2387,7 +2408,7 @@ export function App(): React.JSX.Element {
                 </Box>
               </Stack>}
             </Dialog.Body>
-            <Dialog.Footer><Button variant="ghost" onClick={() => setCaseDetail(null)}>Tanca</Button></Dialog.Footer>
+            <Dialog.Footer><ChakraButton size="sm" variant="outline" onClick={() => setCaseDetail(null)}>Tanca</ChakraButton></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
@@ -2544,7 +2565,49 @@ export function App(): React.JSX.Element {
                 </Stack></Tabs.Content>
               </Tabs.Root>
             </Dialog.Body>
-            <Dialog.Footer><Button variant="ghost" onClick={() => setPreferencesOpen(false)}>Tanca</Button></Dialog.Footer>
+            <Dialog.Footer><ChakraButton size="sm" variant="outline" onClick={() => setPreferencesOpen(false)}>Tanca</ChakraButton></Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    <Dialog.Root {...dialogMaterial} role="alertdialog" open={chatToDelete !== null} onOpenChange={({ open }) => { if (!open) setChatToDelete(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content>
+            <DialogHeading icon={Trash} title="Elimina la conversa?"/>
+            <Dialog.Body>
+              <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere">«{chatToDelete?.title}»</Text>
+              <Text mt="2" fontSize="sm" color="fg.muted">Es mou a la paperera de Converses, d’on la pots recuperar fins que la buidis.</Text>
+            </Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" onClick={() => setChatToDelete(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" disabled={deletingChatId !== null} onClick={() => { const target = chatToDelete; setChatToDelete(null); if (target) void deleteChatSession(target.id); }}><Trash size={14}/>Elimina</ChakraButton>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    <Dialog.Root {...dialogMaterial} size="md" scrollBehavior="inside" open={chatTrash !== null} onOpenChange={({ open }) => { if (!open) setChatTrash(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content>
+            <DialogHeading icon={Trash} title="Paperera de converses" subtitle={chatTrash ? `${chatTrash.length} ${chatTrash.length === 1 ? 'conversa' : 'converses'}` : undefined}/>
+            <Dialog.Body>
+              {chatTrash && chatTrash.length === 0 && <Text fontSize="sm" color="fg.muted">La paperera és buida.</Text>}
+              <Stack gap="1.5">{chatTrash?.map((session) => <HStack key={session.id} gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" minW="0">
+                <Stack flex="1" minW="0" gap="0">
+                  <Text fontSize="sm" fontWeight="medium" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={session.title}>{session.title}</Text>
+                  <Text fontSize="2xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">Eliminada {new Date(session.deletedAt).toLocaleString()} · {session.messages.filter((message) => message.role === 'user').length} peticions{session.projectPath ? ` · ${session.projectPath.split(/[\\/]/).filter(Boolean).at(-1)}` : ''}</Text>
+                </Stack>
+                <Button variant="ghost" onClick={() => void restoreChatSession(session.id)}><History size={14}/>Recupera</Button>
+              </HStack>)}</Stack>
+            </Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" onClick={() => setChatTrash(null)}>Tanca</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" variant={emptyTrashArmed ? 'solid' : 'outline'} disabled={!chatTrash?.length} onClick={() => void emptyChatTrash()}><Trash size={14}/>{emptyTrashArmed ? 'Torna a clicar per buidar-la del tot' : 'Buida la paperera'}</ChakraButton>
+            </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
@@ -2584,7 +2647,7 @@ export function App(): React.JSX.Element {
         </FloatingPanel.Body>
         <Flex flex="none" minH="54px" align="center" justify="space-between" gap="3" px="4" borderTopWidth="1px" borderColor="border">
           <Text fontSize="sm" color={fileHistoryStatus.startsWith('Restaurada') ? 'agentic.fg' : 'fg.muted'}>{fileHistoryStatus || 'La restauració desa primer la versió actual a l’historial.'}</Text>
-          <HStack><Button size="sm" variant="ghost" onClick={() => setFileHistoryPath(null)}>Tanca</Button><Button size="sm" colorPalette="agentic" disabled={!fileHistorySelectedId || fileHistoryBusy || fileHistoryLoading} onClick={() => void restoreFileHistoryVersion()}>{fileHistoryBusy ? <Spinner size="sm"/> : <History size={15}/>}Restaura la versió</Button></HStack>
+          <HStack><ChakraButton size="sm" variant="outline" onClick={() => setFileHistoryPath(null)}>Tanca</ChakraButton><ChakraButton size="sm" colorPalette="agentic" disabled={!fileHistorySelectedId || fileHistoryBusy || fileHistoryLoading} onClick={() => void restoreFileHistoryVersion()}>{fileHistoryBusy ? <Spinner size="sm"/> : <History size={15}/>}Restaura la versió</ChakraButton></HStack>
         </Flex>
         <FloatingPanel.ResizeTriggers/>
         </FloatingPanel.Content>

@@ -41,6 +41,22 @@ class ChatStore {
     if (!this.db.prepare('PRAGMA table_info(chat_sessions)').all().some((column) => column.name === 'project_path')) {
       this.db.exec('ALTER TABLE chat_sessions ADD COLUMN project_path TEXT');
     }
+    // The trash: a deleted conversation is moved here, and can be restored until the trash is emptied.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS chat_sessions_deleted (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      project_path TEXT,
+      messages_json TEXT NOT NULL,
+      deleted_at TEXT NOT NULL
+    )`);
+    this.toTrashStatement = this.db.prepare(`INSERT OR REPLACE INTO chat_sessions_deleted (id, title, updated_at, project_path, messages_json, deleted_at)
+      SELECT id, title, updated_at, project_path, messages_json, ? FROM chat_sessions WHERE id = ?`);
+    this.fromTrashStatement = this.db.prepare(`INSERT OR REPLACE INTO chat_sessions (id, title, updated_at, project_path, messages_json)
+      SELECT id, title, updated_at, project_path, messages_json FROM chat_sessions_deleted WHERE id = ?`);
+    this.listDeletedStatement = this.db.prepare('SELECT id, title, updated_at, project_path, messages_json, deleted_at FROM chat_sessions_deleted ORDER BY deleted_at DESC');
+    this.forgetDeletedStatement = this.db.prepare('DELETE FROM chat_sessions_deleted WHERE id = ?');
+    this.emptyTrashStatement = this.db.prepare('DELETE FROM chat_sessions_deleted');
     this.listStatement = this.db.prepare('SELECT id, title, updated_at, project_path, messages_json FROM chat_sessions ORDER BY updated_at DESC');
     this.getStatement = this.db.prepare('SELECT id, title, updated_at, project_path, messages_json FROM chat_sessions WHERE id = ?');
     this.upsertStatement = this.db.prepare(`INSERT INTO chat_sessions (id, title, updated_at, project_path, messages_json)
@@ -84,10 +100,43 @@ class ChatStore {
     return sessions.length;
   }
 
-  /** Deletes one conversation, when the user deletes it. */
-  delete(id) {
+  /** Deletes one conversation, when the user deletes it: it goes to the trash, from where it can be restored. */
+  delete(id, now = new Date()) {
     if (typeof id !== 'string' || !id.trim() || id.length > 200) throw new TypeError('La conversa no és vàlida.');
-    return this.deleteStatement.run(id).changes > 0;
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const moved = this.toTrashStatement.run(now.toISOString(), id).changes > 0;
+      const deleted = this.deleteStatement.run(id).changes > 0;
+      this.db.exec('COMMIT');
+      return moved && deleted;
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+
+  /** The conversations in the trash, most recently deleted first. */
+  listDeleted() {
+    return this.listDeletedStatement.all().flatMap((row) => {
+      try {
+        const session = cleanSession({ id: row.id, title: row.title, updatedAt: row.updated_at, projectPath: row.project_path, messages: JSON.parse(row.messages_json) });
+        return session ? [{ ...session, deletedAt: row.deleted_at }] : [];
+      } catch { return []; }
+    });
+  }
+
+  /** Puts a conversation back from the trash; returns it, or null if it is not there. */
+  restore(id) {
+    if (typeof id !== 'string' || !id.trim() || id.length > 200) throw new TypeError('La conversa no és vàlida.');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const restored = this.fromTrashStatement.run(id).changes > 0;
+      if (restored) this.forgetDeletedStatement.run(id);
+      this.db.exec('COMMIT');
+      return restored ? this.get(id) : null;
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+
+  /** Empties the trash for good; returns how many conversations were removed. */
+  emptyTrash() {
+    return this.emptyTrashStatement.run().changes;
   }
 
   close() { this.db.close(); }

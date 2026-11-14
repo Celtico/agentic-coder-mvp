@@ -78,8 +78,9 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         // and bg.panel (dialogs), fg.error or fg.warning had no colour at all.
         bg: {
           DEFAULT: { value: { _light: "#ffffff", _dark: "#212121" } },
-          // Dialogs and floating windows: a step lighter than the panes, so they stand out from the window.
-          panel: { value: { _light: "#ffffff", _dark: "#2a2a2a" } },
+          // Dialogs and floating windows: the panes' own dark (white in light mode); they stand out by
+          // their line and shadow, not by being lighter.
+          panel: { value: { _light: "#ffffff", _dark: "#212121" } },
           subtle: { value: { _light: "#f7f7f7", _dark: "#262626" } },
         },
         fg: {

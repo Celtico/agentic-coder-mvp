@@ -81,6 +81,10 @@ export interface AgenticBridge {
   saveChatSessions(sessions: ChatSession[]): Promise<number>;
   /** Deletes one conversation; saving never deletes the ones it is not given. */
   deleteChatSession(id: string): Promise<boolean>;
+  /** The conversations in the trash (deleted ones go there and can be restored). */
+  deletedChatSessions(): Promise<(ChatSession & { deletedAt: string })[]>;
+  restoreChatSession(id: string): Promise<ChatSession | null>;
+  emptyChatTrash(): Promise<number>;
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
   startBenchmark(request: { repeat: 1 | 2; tasks?: string[] }): Promise<{ started: boolean; id: string }>;
   cancelBenchmark(): Promise<{ cancelled: boolean }>;

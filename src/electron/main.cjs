@@ -1229,6 +1229,9 @@ ipcMain.handle('history:recent', async () => {
 ipcMain.handle('chat-store:load', () => getChatStore().list());
 ipcMain.handle('chat-store:save', (_event, sessions) => getChatStore().saveMany(sessions));
 ipcMain.handle('chat-store:delete', (_event, id) => getChatStore().delete(id));
+ipcMain.handle('chat-store:deleted', () => getChatStore().listDeleted());
+ipcMain.handle('chat-store:restore', (_event, id) => getChatStore().restore(id));
+ipcMain.handle('chat-store:empty-trash', () => getChatStore().emptyTrash());
 
 ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');

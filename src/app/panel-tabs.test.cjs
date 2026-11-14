@@ -37,7 +37,7 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   // The mark's drawing is as big as asked, in pixels: a bare number is a size token (sizes.28 is 112 px)
   // and made it spill over the first icon.
   assert.match(app, /<chakra\.svg viewBox="0 0 24 24" width=\{`\$\{size\}px`\} height=\{`\$\{size\}px`\}/);
-  assert.match(app, /<PaneHeader icon=\{Conversations\} title="Converses" actions=\{<IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\}\/>/);
+  assert.match(app, /<PaneHeader icon=\{Conversations\} title="Converses" actions=\{<><IconButton icon=\{Trash\} label="Paperera de converses" onClick=\{\(\) => void openChatTrash\(\)\}\/><IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/><\/>\}\/>/);
   assert.match(app, /<PaneHeader icon=\{FileText\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // One grid column per visible column of the side panel; each is shown or hidden from its icon.

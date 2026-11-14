@@ -17,7 +17,7 @@ import { Pane, PaneHeader, PaneTitle, PaneToolbar, PaneToneContext, PaneStyleCon
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
 export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const renderPane = (variant: any, fromContext = false) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneStyleContext.Provider value={fromContext ? variant : "subtle"}><Pane variant={fromContext ? undefined : variant} label="Git" header={<PaneHeader icon={LuGitBranch} title="Git"/>}>contingut</Pane></PaneStyleContext.Provider></ChakraProvider>)
-export const renderDialog = (material?: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open {...(material ? { material } : {})}><Dialog.Positioner><Dialog.Content>Preferències</Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
+export const renderDialog = (material?: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open {...(material ? { material } : {})}><Dialog.Positioner><Dialog.Content>Preferències<Dialog.CloseTrigger asChild><button>x</button></Dialog.CloseTrigger></Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
 export const renderTitle = (tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneTitle icon={LuGitBranch} title="Historial local" subtitle="src"/></PaneToneContext.Provider></ChakraProvider>)
 export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
@@ -139,7 +139,7 @@ test('every dialog has Chakra’s panel background, from the theme’s dialog re
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
-  assert.equal(contents.length, 6);
+  assert.equal(contents.length, 8);
   for (const tag of contents) assert.doesNotMatch(tag, /bg=|borderColor=|boxShadow=/, 'no dialog sets its own background');
   const html = built.renderDialog().replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
   assert.match(html, /chakra-dialog__content/);
@@ -149,12 +149,16 @@ test('every dialog and the floating Historial local window speak the panes’ la
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   // Dialogs: the panes' header with the close button, the title kept for screen readers, ghost secondary buttons.
   assert.match(app, /const DialogHeading = [\s\S]*?<Dialog\.Title srOnly>\{title\}<\/Dialog\.Title>\s*<PaneHeader icon=\{icon\} title=\{title\} subtitle=\{subtitle\} actions=\{<Dialog\.CloseTrigger asChild><IconButton icon=\{X\} label="Tanca"\/><\/Dialog\.CloseTrigger>\}\/>/);
-  assert.equal((app.match(/<DialogHeading /g) || []).length, 6);
+  assert.equal((app.match(/<DialogHeading /g) || []).length, 8);
   assert.doesNotMatch(app, /<Dialog\.Header><Dialog\.Title>/);
   for (const title of ['Desa com a cas verificat', 'Edita el cas desat', 'Esborra el cas desat', 'Detall del cas', 'Preferències']) assert.match(app, new RegExp(`<DialogHeading icon=\\{\\w+\\} title="${title}"\\/>`), title);
   const footers = app.match(/<Dialog\.Footer>[\s\S]*?<\/Dialog\.Footer>/g) || [];
-  assert.equal(footers.length, 6);
-  for (const footer of footers) assert.doesNotMatch(footer, /variant="outline"/, 'secondary buttons are ghost');
+  assert.equal(footers.length, 8);
+  // Footer buttons are all size sm: the secondary one outlined (visible, not bare text), the main one solid.
+  for (const footer of footers) {
+    assert.doesNotMatch(footer, /<Button /, 'no xs buttons in a footer');
+    assert.match(footer, /<ChakraButton size="sm" variant="outline"/);
+  }
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /header: \{ \.\.\.chakraDialog\.base\.header, p: "0", display: "block" \}/);
   // Historial local: panel background, the panes' title in its bar, plain labels, the selection in brand.
@@ -162,7 +166,7 @@ test('every dialog and the floating Historial local window speak the panes’ la
   assert.match(app, /title=\{<PaneTitle icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath\}\/>\}/);
   assert.doesNotMatch(app, />CARPETA<|>HISTORIAL DELS FITXERS</);
   assert.match(app, /fileHistoryVersionPath === version\.path \? 'agentic' : 'gray'/);
-  assert.match(app, /<Button size="sm" variant="ghost" onClick=\{\(\) => setFileHistoryPath\(null\)\}>Tanca<\/Button>/);
+  assert.match(app, /<ChakraButton size="sm" variant="outline" onClick=\{\(\) => setFileHistoryPath\(null\)\}>Tanca<\/ChakraButton>/);
 });
 
 test('the title of a floating window uses the panes’ header recipe, with its tone', () => {
@@ -186,11 +190,26 @@ test('dialogs are solid or frosted (glaçat): the dialog recipe’s material var
   assert.match(glass, /backdrop-filter:blur\(16px\) saturate\(1\.2\)/);
   assert.doesNotMatch(solid, /backdrop-filter:blur\(16px\)/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/<Dialog\.Root \{\.\.\.dialogMaterial\} /g) || []).length, 6);
+  assert.equal((app.match(/<Dialog\.Root \{\.\.\.dialogMaterial\} /g) || []).length, 8);
   // The backdrop is the recipe's too: no dialog sets its own.
-  assert.equal((app.match(/<Dialog\.Backdrop\/>/g) || []).length, 6);
+  assert.equal((app.match(/<Dialog\.Backdrop\/>/g) || []).length, 8);
   assert.doesNotMatch(app, /<Dialog\.Backdrop [^/]/);
   assert.match(app, /const dialogMaterial = \{ material: appearance\.dialogs \} as Record<string, string>;/);
   assert.match(app, /DIALOG_MATERIAL_OPTIONS\.map\(\(material\) => <Box key=\{material\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, dialogs: material \}\)\)\}>/);
   assert.match(app, /solid: 'Sòlid', glass: 'Glaçat'/);
+});
+
+test('the dialogs’ ✕ is one of the header’s actions, in its flow: not Chakra’s corner button', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /closeTrigger: \{ \.\.\.chakraDialog\.base\.closeTrigger, pos: "static", top: "auto", insetEnd: "auto" \}/);
+  const html = built.renderDialog('solid');
+  const cssClass = /class="chakra-dialog__closeTrigger (css-[a-z0-9]+)"/.exec(html)?.[1];
+  assert.ok(cssClass, 'the close button has its recipe class');
+  const rule = new RegExp(`\\.${cssClass}\\{([^}]*)\\}`).exec(html)?.[1] || '';
+  assert.match(rule, /position:static/);
+  assert.doesNotMatch(rule, /position:absolute/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  // The same IconButton (xs, ghost, muted) as the panes' + or ↻.
+  assert.match(app, /actions=\{<Dialog\.CloseTrigger asChild><IconButton icon=\{X\} label="Tanca"\/><\/Dialog\.CloseTrigger>\}/);
+  assert.match(app, /const IconButton = \(\{ icon: Icon, label, \.\.\.props \}: IconButtonProps\) => <Tip label=\{label\}><Button aria-label=\{label\} variant="ghost" size="xs"/);
 });
