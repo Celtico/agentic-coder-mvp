@@ -75,6 +75,8 @@ export interface AgenticBridge {
   recentHistory(): Promise<HistoryEntry[]>;
   loadChatSessions(): Promise<ChatSession[]>;
   saveChatSessions(sessions: ChatSession[]): Promise<number>;
+  /** Deletes one conversation; saving never deletes the ones it is not given. */
+  deleteChatSession(id: string): Promise<boolean>;
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
   startBenchmark(request: { repeat: 1 | 2; tasks?: string[] }): Promise<{ started: boolean; id: string }>;
   cancelBenchmark(): Promise<{ cancelled: boolean }>;

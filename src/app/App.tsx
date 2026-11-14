@@ -761,6 +761,7 @@ export function App(): React.JSX.Element {
     const nextSessions = fallback && !remaining.some((session) => session.id === fallback.id) ? [fallback, ...remaining].slice(0, 50) : remaining;
     setDeletingChatId(sessionId);
     try {
+      await window.agentic.deleteChatSession(sessionId);
       await window.agentic.saveChatSessions(nextSessions);
       localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(nextSessions));
       localStorage.removeItem(`${DRAFT_KEY}:${sessionId}`);

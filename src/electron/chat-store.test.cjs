@@ -22,15 +22,23 @@ test('SQLite chat store writes and restores conversations across reopen', () => 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('SQLite chat store removes conversations omitted from the saved snapshot', () => {
+test('saving never deletes a conversation it is not given; deleting is asked for one by one', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-chat-store-delete-'));
   const file = path.join(directory, 'conversations.sqlite');
   try {
     const store = new ChatStore(file);
-    store.saveMany([{ id: 'to-delete', title: 'Conversa', updatedAt: '2026-10-19T12:00:00.000Z', messages: [{ role: 'user', text: 'Hola' }] }]);
+    const today = { id: 'today', title: 'Avui', updatedAt: '2026-11-14T19:24:03.269Z', projectPath: '/Users/x/AGENT', messages: [{ role: 'user', text: 'executa npm i' }] };
+    const older = { id: 'older', title: 'Abans', updatedAt: '2026-11-12T17:11:22.699Z', projectPath: '/Users/x/AGENT', messages: [{ role: 'user', text: 'Hola' }] };
+    store.saveMany([today, older]);
+    // A window with an incomplete list (only a new, empty chat) saves: the others stay.
+    store.saveMany([{ id: 'new', title: 'Conversa nova', updatedAt: '2026-11-14T19:29:21.461Z', projectPath: '/Users/x/AGENT', messages: [] }]);
     store.saveMany([]);
-    assert.deepEqual(store.list(), []);
-    assert.equal(store.get('to-delete'), null);
+    assert.deepEqual(store.list().map((session) => session.id), ['new', 'today', 'older']);
+    assert.equal(store.delete('older'), true);
+    assert.equal(store.delete('older'), false);
+    assert.equal(store.get('older'), null);
+    assert.deepEqual(store.list().map((session) => session.id), ['new', 'today']);
+    assert.throws(() => store.delete(''), /no és vàlida/);
     store.close();
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

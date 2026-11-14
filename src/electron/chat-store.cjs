@@ -65,20 +65,29 @@ class ChatStore {
     catch { return null; }
   }
 
+  /**
+   * Writes the conversations it is given and nothing else: a conversation missing from the list is kept.
+   * (It used to delete every conversation not in the list, so a window with an incomplete list wiped
+   * the others; on 14-11-2026 that lost the day's conversations.) Deleting is `delete(id)`, on request.
+   */
   saveMany(values) {
     if (!Array.isArray(values)) throw new TypeError('L’historial de converses no és vàlid.');
     const sessions = values.slice(0, MAX_SESSIONS).map(cleanSession).filter(Boolean);
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      const ids = new Set(sessions.map((session) => session.id));
       for (const session of sessions) this.upsertStatement.run(session.id, session.title, session.updatedAt, session.projectPath || null, JSON.stringify(session.messages));
-      for (const row of this.listStatement.all()) if (!ids.has(row.id)) this.deleteStatement.run(row.id);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
     return sessions.length;
+  }
+
+  /** Deletes one conversation, when the user deletes it. */
+  delete(id) {
+    if (typeof id !== 'string' || !id.trim() || id.length > 200) throw new TypeError('La conversa no és vàlida.');
+    return this.deleteStatement.run(id).changes > 0;
   }
 
   close() { this.db.close(); }
