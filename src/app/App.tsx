@@ -2384,7 +2384,8 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+          {/* The Preferències dialog sits on Chakra's panel background (bg.panel), as cel asked. */}
+          <Dialog.Content bg="bg.panel" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl" data-preferences>
             <Dialog.Header><Dialog.Title><HStack gap="2"><Settings size={16}/><span>Preferències</span></HStack></Dialog.Title></Dialog.Header>
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}

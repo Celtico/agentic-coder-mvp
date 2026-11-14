@@ -127,3 +127,8 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane, \{ actions: <IconButton icon=\{RefreshCw\} label="Recarrega"/);
   assert.match(app, /case 'git': return frame\(GitBranch, 'Git', gitPane, \{[^\n]*actions: <IconButton icon=\{RefreshCw\} label="Actualitza l’historial de Git"/);
 });
+
+test('the Preferències dialog has Chakra’s panel background', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<Dialog\.Content bg="bg\.panel" color="fg"[^>]*data-preferences>/);
+});
