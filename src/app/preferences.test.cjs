@@ -82,3 +82,15 @@ test('every semantic colour the recipes and the app use exists in the theme (an 
   const system = theme.buildSystem('agentic');
   for (const token of new Set(named)) assert.ok(system.token(`colors.${token}`), `${token} used in a recipe is not defined`);
 });
+
+test('with the blue accent the panes’ palette is blue (a tinted header: blue.subtle and blue’s text colour); with agentic, the green', () => {
+  // The headers' recipes use colorPalette «agentic» (src/theme/pane-recipes.ts); the accent decides what it is.
+  assert.deepEqual(accent.accentSemantic('blue').subtle.value, { _light: '{colors.blue.100}', _dark: '{colors.blue.900}' });
+  assert.deepEqual(accent.accentSemantic('blue').solid.value, { _light: '{colors.blue.600}', _dark: '{colors.blue.600}' });
+  assert.equal(accent.accentSemantic('agentic').solid.value, '{colors.agentic.500}');
+  assert.equal(theme.buildSystem('blue').token('colors.agentic.500'), '#3b82f6');
+  assert.equal(theme.buildSystem('agentic').token('colors.agentic.500'), '#10a37f');
+  // The rail's mark alone stays in the fixed brand green.
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<Mark size=\{28\} busy=\{loading \|\| modelChanging\} color="brand\.solid"\/>/);
+});

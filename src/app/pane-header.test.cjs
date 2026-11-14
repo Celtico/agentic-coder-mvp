@@ -52,9 +52,12 @@ test('the look is the theme’s slot recipes, with the three tones; the componen
   assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe \}/);
   assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
   assert.match(recipes, /slots: \["root", "field", "action"\]/);
-  assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "brand\.solid" \}, title: \{ color: "fg" \} \}/);
+  assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "colorPalette\.solid" \}, title: \{ color: "fg" \} \}/);
   assert.match(recipes, /mono: \{ root: \{ bg: "transparent" \}, icon: \{ color: "fg\.muted" \}, title: \{ color: "fg\.muted" \} \}/);
-  assert.match(recipes, /tinted: \{ root: \{ bg: "brand\.subtle" \}, icon: \{ color: "brand\.fg" \}, title: \{ color: "brand\.fg" \} \}/);
+  assert.match(recipes, /tinted: \{ root: \{ bg: "colorPalette\.subtle" \}, icon: \{ color: "colorPalette\.fg" \}, title: \{ color: "colorPalette\.fg" \} \}/);
+  // The colour palette is the accent: «agentic», which Preferències points at the chosen palette.
+  assert.equal((recipes.match(/root: \{ colorPalette: "agentic",/g) || []).length, 2);
+  assert.doesNotMatch(recipes.slice(0, recipes.indexOf('export const paneCardRecipe')), /brand\./, 'the panes follow the accent, not the fixed green');
   assert.match(recipes, /defaultVariants: \{ tone: "brand" \}/);
   assert.doesNotMatch(recipes, /#[0-9a-f]{3,8}\b|rgb\(/i);
   const component = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
@@ -158,7 +161,7 @@ test('every dialog and the floating Historial local window speak the panes’ la
   assert.match(app, /<FloatingPanel\.Content [^>]*bg="bg\.panel"/);
   assert.match(app, /title=\{<PaneTitle icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath\}\/>\}/);
   assert.doesNotMatch(app, />CARPETA<|>HISTORIAL DELS FITXERS</);
-  assert.match(app, /fileHistoryVersionPath === version\.path \? 'brand' : 'gray'/);
+  assert.match(app, /fileHistoryVersionPath === version\.path \? 'agentic' : 'gray'/);
   assert.match(app, /<Button size="sm" variant="ghost" onClick=\{\(\) => setFileHistoryPath\(null\)\}>Tanca<\/Button>/);
 });
 

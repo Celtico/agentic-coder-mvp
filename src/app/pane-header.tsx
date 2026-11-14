@@ -6,7 +6,7 @@ import { paneHeaderRecipe, paneToolbarRecipe } from "../theme/pane-recipes"
 /**
  * The header of every pane (Converses, Fitxers, Editor, Navegador, Avaluació, Consola, Terminal, Git,
  * Aprenentatge) and the second row of those that have one. Their look is the theme's slot recipes
- * «paneHeader» and «paneToolbar» (src/theme/pane-recipes.ts); the tone comes from Preferències › Aparença.
+ * «paneHeader» and «paneToolbar» (src/theme/pane-recipes.ts); the tone comes from Preferències › Aparença, the colours from the accent.
  */
 export type PaneHeaderTone = "brand" | "mono" | "tinted"
 /** The tone every header and toolbar takes, unless one is given its own (the previews in Preferències). */
