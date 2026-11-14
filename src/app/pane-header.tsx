@@ -1,35 +1,41 @@
-import type React from "react"
+import { createContext, useContext, type ReactNode } from "react"
 import type { IconType } from "react-icons"
-import { Box, Flex, HStack, Text } from "@chakra-ui/react"
+import { Box, chakra, useSlotRecipe } from "@chakra-ui/react"
+import { paneHeaderRecipe, paneToolbarRecipe } from "../theme/pane-recipes"
 
 /**
  * The header of every pane (Converses, Fitxers, Editor, Navegador, Avaluació, Consola, Terminal, Git,
- * Aprenentatge): the pane's icon (the same as in the bar), its title, an optional subtitle (a path,
- * «Només lectura»…) and badge, and its actions on the right, all the same height and size.
- */
-/**
- * The header's colours, chosen in one place. «brand»: the icon in the brand green, the title in the text
- * colour, on the pane's background. «mono»: icon and title muted. «tinted»: a header tinted with the brand
- * green, with icon and title in its text colour. Change PANE_HEADER_TONE to try another one.
+ * Aprenentatge) and the second row of those that have one. Their look is the theme's slot recipes
+ * «paneHeader» and «paneToolbar» (src/theme/pane-recipes.ts); the tone comes from Preferències › Aparença.
  */
 export type PaneHeaderTone = "brand" | "mono" | "tinted"
-export const PANE_HEADER_TONE: PaneHeaderTone = "brand"
-export const PANE_HEADER_TONES: Record<PaneHeaderTone, { bg: string; icon: string; title: string }> = {
-  brand: { bg: "transparent", icon: "brand.solid", title: "fg" },
-  mono: { bg: "transparent", icon: "fg.muted", title: "fg.muted" },
-  tinted: { bg: "brand.subtle", icon: "brand.fg", title: "brand.fg" },
+/** The tone every header and toolbar takes, unless one is given its own (the previews in Preferències). */
+export const PaneToneContext = createContext<PaneHeaderTone>("brand")
+
+export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, actions, tone }: { icon: IconType; title: string; subtitle?: ReactNode; subtitleTitle?: string; badge?: ReactNode; actions?: ReactNode; tone?: PaneHeaderTone }) => {
+  const contextTone = useContext(PaneToneContext)
+  const chosen = tone ?? contextTone
+  const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: chosen })
+  return (
+    <chakra.div css={styles.root} data-pane-header data-tone={chosen}>
+      <chakra.span css={styles.icon}><Icon size={16} aria-hidden="true"/></chakra.span>
+      <chakra.span css={styles.title}>{title}</chakra.span>
+      {subtitle && <chakra.span css={styles.subtitle} title={subtitleTitle}>{subtitle}</chakra.span>}
+      {badge && <Box flex="none" minW="0" overflow="hidden">{badge}</Box>}
+      {actions && <chakra.div css={styles.actions}>{actions}</chakra.div>}
+    </chakra.div>
+  )
 }
 
-export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, actions, tone = PANE_HEADER_TONE }: { icon: IconType; title: string; subtitle?: React.ReactNode; subtitleTitle?: string; badge?: React.ReactNode; actions?: React.ReactNode; tone?: PaneHeaderTone }) => {
-  const colors = PANE_HEADER_TONES[tone]
+/** The second row: what needs width (`field`: an address, a path) and the pane's own small actions. */
+export const PaneToolbar = ({ children, field, fieldTitle, tone }: { children?: ReactNode; field?: ReactNode; fieldTitle?: string; tone?: PaneHeaderTone }) => {
+  const contextTone = useContext(PaneToneContext)
+  const chosen = tone ?? contextTone
+  const styles = useSlotRecipe({ recipe: paneToolbarRecipe })({ tone: chosen })
   return (
-    <Flex flex="none" h="10" align="center" gap="2" px="3" minW="0" bg={colors.bg} borderBottomWidth="1px" borderColor="border" data-pane-header data-tone={tone}>
-      <Box flex="none" color={colors.icon} display="inline-flex"><Icon size={16} aria-hidden="true"/></Box>
-      <Text flex="none" fontSize="sm" fontWeight="semibold" color={colors.title} whiteSpace="nowrap">{title}</Text>
-      {subtitle && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={subtitleTitle}>{subtitle}</Text>}
-      {badge && <Box flex="none" minW="0" overflow="hidden">{badge}</Box>}
-      <Box flex="1" minW="0"/>
-      {actions && <HStack flex="none" gap="0.5">{actions}</HStack>}
-    </Flex>
+    <chakra.div css={styles.root} data-pane-toolbar data-tone={chosen}>
+      {field !== undefined && <chakra.span css={styles.field} title={fieldTitle}>{field}</chakra.span>}
+      {children && <chakra.div css={styles.action} flex={field === undefined ? "1" : undefined} minW="0">{children}</chakra.div>}
+    </chakra.div>
   )
 }

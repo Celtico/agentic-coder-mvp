@@ -17,12 +17,12 @@ fs.rmSync(dir, { recursive: true, force: true });
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the default appearance is the app as it was: dark, normal sizes, its own green', () => {
-  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic' });
+  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand' });
 });
 
 test('a saved appearance keeps only valid values', () => {
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue' });
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000' }), prefs.defaultAppearance());
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted' });
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon' }), prefs.defaultAppearance());
   assert.deepEqual(prefs.normalizeAppearance(null), prefs.defaultAppearance());
 });
 
@@ -38,8 +38,8 @@ test('«system» follows the operating system; sizes move one step and stay in t
 
 test('the appearance is kept with the view state', () => {
   const storage = memoryStorage();
-  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple' }; });
-  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple' });
+  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono' }; });
+  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono' });
   assert.deepEqual(view.loadViewState(memoryStorage()).appearance, prefs.defaultAppearance());
 });
 

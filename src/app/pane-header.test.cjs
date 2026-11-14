@@ -13,8 +13,10 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { ChakraProvider } from "@chakra-ui/react"
 import { LuGitBranch, LuPlus } from "react-icons/lu"
 import { buildSystem } from ${JSON.stringify(path.join(__dirname, '..', 'theme', 'system.ts'))}
-import { PaneHeader } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
+import { PaneHeader, PaneToolbar, PaneToneContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
+export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
+export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
 `);
 const out = path.join(dir, 'entry.cjs');
@@ -41,26 +43,41 @@ test('a header with a subtitle (truncated, with its full text on hover), a badge
   assert.ok(html.indexOf('>Fitxers<') < html.indexOf('AGENT ·') && html.indexOf('AGENT ·') < html.indexOf('&lt;acció&gt;'), 'title, subtitle, then actions');
 });
 
-test('the same header with any accent: the icon keeps the brand green, never a fixed colour in the component', () => {
-  const source = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
-  assert.match(source, /h="10"/);
-  assert.match(source, /borderBottomWidth="1px" borderColor="border"/);
-  assert.match(source, /<Icon size=\{16\}/);
-  assert.match(source, /export const PANE_HEADER_TONE: PaneHeaderTone = "brand"/);
-  assert.match(source, /fontSize="sm" fontWeight="semibold"/);
-  assert.doesNotMatch(source, /#[0-9a-f]{3,8}\b|rgb\(|textTransform/i);
+test('the look is the theme’s slot recipes, with the three tones; the component has no colour of its own', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  const system = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
+  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe \}/);
+  assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
+  assert.match(recipes, /slots: \["root", "field", "action"\]/);
+  assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "brand\.solid" \}, title: \{ color: "fg" \} \}/);
+  assert.match(recipes, /mono: \{ root: \{ bg: "transparent" \}, icon: \{ color: "fg\.muted" \}, title: \{ color: "fg\.muted" \} \}/);
+  assert.match(recipes, /tinted: \{ root: \{ bg: "brand\.subtle" \}, icon: \{ color: "brand\.fg" \}, title: \{ color: "brand\.fg" \} \}/);
+  assert.match(recipes, /defaultVariants: \{ tone: "brand" \}/);
+  assert.doesNotMatch(recipes, /#[0-9a-f]{3,8}\b|rgb\(/i);
+  const component = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
+  assert.match(component, /useSlotRecipe\(\{ recipe: paneHeaderRecipe \}\)/);
+  assert.match(component, /useSlotRecipe\(\{ recipe: paneToolbarRecipe \}\)/);
+  assert.doesNotMatch(component, /color="|bg="|brand\.solid|fg\.muted|#[0-9a-f]{3,8}\b/i);
   for (const accent of ['agentic', 'blue', 'yellow']) assert.match(render({ icon: icons.LuPlus, title: 'Consola' }, accent), />Consola</);
 });
 
-test('the three colour variants are one choice: brand (default), mono and tinted', () => {
+test('each tone renders, from the prop or from Preferències (the context); its colours change', () => {
   const tone = (html) => /data-tone="([a-z]+)"/.exec(html)?.[1];
+  const classes = (html) => /data-pane-header[^>]*|class="([^"]*)"[^>]*data-pane-header/.exec(html)?.[0];
   assert.equal(tone(render({ icon: icons.LuPlus, title: 'Git' })), 'brand');
-  assert.equal(tone(render({ icon: icons.LuPlus, title: 'Git', tone: 'mono' })), 'mono');
-  assert.equal(tone(render({ icon: icons.LuPlus, title: 'Git', tone: 'tinted' })), 'tinted');
-  const source = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
-  assert.match(source, /brand: \{ bg: "transparent", icon: "brand\.solid", title: "fg" \}/);
-  assert.match(source, /mono: \{ bg: "transparent", icon: "fg\.muted", title: "fg\.muted" \}/);
-  assert.match(source, /tinted: \{ bg: "brand\.subtle", icon: "brand\.fg", title: "brand\.fg" \}/);
+  for (const value of ['brand', 'mono', 'tinted']) assert.equal(tone(render({ icon: icons.LuPlus, title: 'Git', tone: value })), value);
+  assert.equal(tone(built.renderInContext({ icon: icons.LuPlus, title: 'Git' }, 'tinted')), 'tinted');
+  // Different tones give the header different styles.
+  const styles = (value) => built.render({ icon: icons.LuPlus, title: 'Git', tone: value });
+  assert.notEqual(classes(styles('brand')), classes(styles('tinted')));
+});
+
+test('the second row: 36 px, its field (an address, a path) and its actions, in the same tone', () => {
+  const html = built.renderToolbar({ field: '/Users/cel/Desktop/AGENT', fieldTitle: '/Users/cel/Desktop/AGENT', children: 'Buida' }, 'mono').replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+  assert.match(html, /data-pane-toolbar/);
+  assert.match(html, /data-tone="mono"/);
+  assert.match(html, /title="\/Users\/cel\/Desktop\/AGENT"[^>]*>\/Users\/cel\/Desktop\/AGENT</);
+  assert.match(html, />Buida</);
 });
 
 test('every pane uses it', () => {
@@ -69,4 +86,18 @@ test('every pane uses it', () => {
   for (const [icon, title] of [['FileCode', 'Editor'], ['Globe2', 'Navegador web'], ['GitBranch', 'Git'], ['Brain', 'Aprenentatge local'], ['Bug', 'Consola']]) assert.match(app, new RegExp(`frame\\(${icon}, '${title}'`), title);
   assert.match(app, /<PaneHeader icon=\{icon\} title=\{title\} \{\.\.\.extras\}\/>/);
   assert.doesNotMatch(app, /navigationHeader|<Card\.Header/);
+});
+
+test('Preferències › Aparença chooses the tone for the whole app, with a preview of each', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<PaneToneContext\.Provider value=\{appearance\.paneTone\}>/);
+  assert.match(app, /Capçaleres dels panells/);
+  assert.match(app, /PANE_TONES\.map\(\(tone\) => <Box key=\{tone\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, paneTone: tone \}\)\)\}>/);
+  assert.match(app, /<PaneHeader icon=\{GitBranch\} title="Git" subtitle="Només lectura" tone=\{tone\}\/>/);
+  assert.match(app, /brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida'/);
+  assert.match(app, /setAppearance\(defaultAppearance\(\)\)\}><RefreshCw size=\{14\}\/>Restableix l’aparença/);
+  // The panes with a second row use the shared one; Git's and the browser's refresh go to the header.
+  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 4);
+  assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane, \{ actions: <IconButton icon=\{RefreshCw\} label="Recarrega"/);
+  assert.match(app, /case 'git': return frame\(GitBranch, 'Git', gitPane, \{[^\n]*actions: <IconButton icon=\{RefreshCw\} label="Actualitza l’historial de Git"/);
 });

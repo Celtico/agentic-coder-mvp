@@ -1,5 +1,6 @@
 import { createSystem, defaultConfig, defineConfig, type SystemStyleObject } from "@chakra-ui/react"
 import { accentSemantic, accentTokens, brandSemantic, BRAND_TOKENS, type Accent } from "./accent"
+import { paneHeaderRecipe, paneToolbarRecipe } from "./pane-recipes"
 
 // Tema de l'aplicació: els components Chakra consumeixen aquests colors semàntics.
 // The accent (Preferències) decides which palette «agentic» is (src/theme/accent.ts).
@@ -20,6 +21,8 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
     "[data-drag-region]": { WebkitAppRegion: "drag" } as unknown as SystemStyleObject,
   },
   theme: {
+    // Every pane's header and second row, with the tone chosen in Preferències (src/theme/pane-recipes.ts).
+    slotRecipes: { paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe },
     // The mark turns and breathes while the model works (src/app/App.tsx, Mark).
     keyframes: {
       agenticTurn: { to: { transform: "rotate(360deg)" } },

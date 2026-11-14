@@ -17,7 +17,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
-import { PaneHeader } from './pane-header';
+import { PaneHeader, PaneToneContext, PaneToolbar, type PaneHeaderTone } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -25,7 +25,7 @@ import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
-import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
+import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
 import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, sideColumnsShown, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
@@ -167,6 +167,8 @@ const STOP_CONFIRM_MS = 3000;
 /** The names of the accents in Preferències › Aparença (src/theme/accent.ts). */
 const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray: 'Gris', red: 'Vermell', orange: 'Taronja', yellow: 'Groc', green: 'Verd', teal: 'Verd blavós', blue: 'Blau', cyan: 'Cian', purple: 'Lila', pink: 'Rosa' };
 const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string> = { auto: 'Detecta l’idioma', ca: 'Català', es: 'Castellà', en: 'Anglès' };
+/** Preferències › Aparença › Capçaleres dels panells (src/theme/pane-recipes.ts). */
+const PANE_TONE_LABELS: Record<PaneHeaderTone, string> = { brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida' };
 const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 /** Preferències › Aprenentatge: each value, its name and its step. */
@@ -1579,17 +1581,16 @@ export function App(): React.JSX.Element {
 
   const browserPane = (
     <Flex h="full" w="full" minW="0" direction="column" bg="bg">
-      <Flex gap="1" align="center" p="2" borderBottomWidth="1px" borderColor="border" minW="0">
+      <PaneToolbar>
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
-        <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
-        <Input flex="1" minW="0" bg="surface.subtle" color="fg" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="sm"/>
-        <IconButton icon={ExternalLink} label="Ves a l’adreça" size="sm" colorPalette="agentic" onClick={navigateBrowser}/>
-        <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" size="sm" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
+        <Input flex="1" minW="0" bg="surface.subtle" color="fg" borderRadius="md" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="xs"/>
+        <IconButton icon={ExternalLink} label="Ves a l’adreça" colorPalette="agentic" onClick={navigateBrowser}/>
+        <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
           {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
         </Box>
-      </Flex>
+      </PaneToolbar>
       {browserUrl === 'about:blank'
         ? <Box flex="1" minH="0" bg="bg"/>
         : <WebView ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" display="flex" flex="1" w="full" h="full" minH="0" borderWidth="0" bg="bg"/>}
@@ -1646,10 +1647,7 @@ export function App(): React.JSX.Element {
 
   const gitPane = (
     <Flex h="full" minH="0" direction="column" bg="bg">
-      <Flex flex="none" h="36px" align="center" justify="space-between" px="3" borderBottomWidth="1px" borderColor="border" gap="3">
-        <HStack minW="0" gap="3"><Badge colorPalette="agentic" variant="subtle">Log</Badge><Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={project?.path}>{project?.path}</Text></HStack>
-        <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/>
-      </Flex>
+      <PaneToolbar field={<><Badge colorPalette="agentic" variant="subtle" me="2">Log</Badge>{project?.path}</>} fieldTitle={project?.path}/>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
         : !gitHistory?.available ? <Box p="3"><Notice tone="info">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Notice></Box>
           // The pane sits in the bottom dock and its width changes: narrow, everything is one column
@@ -1838,11 +1836,10 @@ export function App(): React.JSX.Element {
   const consoleTone = { error: 'fg.error', warn: 'fg.warning', info: 'fg.muted' } as const;
   const consolePane = (
     <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
-      <HStack flex="none" gap="2" px="3" py="1.5" borderBottomWidth="1px" borderColor="border">
-        <Text flex="1" minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={browserAddress}>{browserUrl === 'about:blank' ? 'Cap pàgina oberta' : browserAddress}</Text>
-        <Button size="xs" variant="outline" flex="none" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
-        <Button size="xs" variant="ghost" flex="none" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
-      </HStack>
+      <PaneToolbar field={browserUrl === 'about:blank' ? 'Cap pàgina oberta' : browserAddress} fieldTitle={browserAddress}>
+        <Button variant="ghost" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
+        <Button variant="ghost" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
+      </PaneToolbar>
       <Box flex="1" minH="0" overflowY="auto" px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
         {consoleEntries.length === 0
           ? <Notice tone="info">{browserUrl === 'about:blank' ? 'Obre una pàgina al navegador i aquí hi sortirà el que escrigui a la consola.' : 'La pàgina no ha escrit res a la consola.'}</Notice>
@@ -1867,18 +1864,20 @@ export function App(): React.JSX.Element {
   const kindLabel: Record<BenchmarkTask['kind'], string> = { open: 'Tasques obertes de codi', app: 'Apps des d’una carpeta buida', reference: 'Tasca dirigida (referència)' };
   const chosenCount = evaluationTasks.filter((task) => evaluationChosen.has(task.id)).length;
   const elapsed = evaluationCurrent ? Math.max(0, Math.round((evaluationNow - evaluationCurrent.since) / 1000)) : 0;
+  // The evaluation's second row: how many rounds, and the button that runs or stops the benchmark.
+  const evaluationToolbar = (
+    <PaneToolbar>
+        <NativeSelect.Root size="xs" width="auto" flex="none" minW="28" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+        {evaluationRunning
+          ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
+          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
+    </PaneToolbar>
+  );
   const evaluationPane = (
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
     // shrinking flex column the accordions, which clip their content, were squeezed to nothing).
     <Stack gap="3">
       <Stack gap="3">
-      <HStack gap="2" flexWrap="wrap">
-        <Text flex="1" minW="160px" fontSize="sm">Model: <b>{modelOptions.find((item) => item.id === selectedModel)?.label || selectedModel}</b></Text>
-        <NativeSelect.Root size="xs" width="auto" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
-        {evaluationRunning
-          ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
-          : <Button size="sm" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
-      </HStack>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
       {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.emphasized" borderRadius="sm" p="2">
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
@@ -2066,13 +2065,14 @@ export function App(): React.JSX.Element {
       case 'conversations': return conversationsColumn;
       case 'files': return filesColumn;
       case 'editor': return frame(FileCode, 'Editor', editorPane, { badge: <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge> });
-      case 'browser': return frame(Globe2, 'Navegador web', browserPane);
+      case 'browser': return frame(Globe2, 'Navegador web', browserPane, { actions: <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/> });
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       case 'evaluation': return <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
         <PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>
+        {evaluationToolbar}
         <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
       </Card.Root>;
-      case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path });
+      case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
       case 'terminal': return terminalDock;
@@ -2201,7 +2201,7 @@ export function App(): React.JSX.Element {
   ) : chatPane;
 
   return (
-    <>
+    <PaneToneContext.Provider value={appearance.paneTone}>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
     {ownTitleBar && <Flex flex="none" h="appTitleBar" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
@@ -2500,8 +2500,18 @@ export function App(): React.JSX.Element {
                     </Grid>
                   </Box>
                   <Box>
-                    <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Capçaleres dels panells</Text>
+                    <Grid templateColumns="repeat(auto-fill, minmax(190px, 1fr))" gap="2" role="radiogroup" aria-label="Capçaleres dels panells">
+                      {PANE_TONES.map((tone) => <Box key={tone} as="button" role="radio" aria-checked={appearance.paneTone === tone} textAlign="left" borderWidth="1px" borderColor={appearance.paneTone === tone ? 'agentic.solid' : 'border'} borderRadius="md" overflow="hidden" bg="bg" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneTone: tone }))}>
+                        <PaneHeader icon={GitBranch} title="Git" subtitle="Només lectura" tone={tone}/>
+                        <Text px="3" py="1.5" fontSize="xs" color={appearance.paneTone === tone ? 'agentic.fg' : 'fg.muted'}>{PANE_TONE_LABELS[tone]}</Text>
+                      </Box>)}
+                    </Grid>
                   </Box>
+                  <HStack gap="2" flexWrap="wrap">
+                    <Button variant="outline" onClick={() => setAppearance(defaultAppearance())}><RefreshCw size={14}/>Restableix l’aparença</Button>
+                    <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
+                  </HStack>
                 </Stack></Tabs.Content>
               </Tabs.Root>
             </Dialog.Body>
@@ -2552,7 +2562,7 @@ export function App(): React.JSX.Element {
       </FloatingPanel.Positioner>
       </Portal>
     </FloatingPanel.Root>
-    </>
+    </PaneToneContext.Provider>
   );
 }
 
