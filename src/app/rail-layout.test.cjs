@@ -52,6 +52,16 @@ test('a saved layout drops unknown, retired and repeated ids, and adds the panes
   assert.deepEqual(rail.normalizeRailLayout({ top: ['browser'], bottom: ['editor', 'git', 'terminal', 'console'] }), { top: ['browser', 'evaluation'], bottom: ['git', 'terminal', 'console', 'learning'] });
 });
 
+test('the layouts saved on this Mac before and after the editor left the bar load cleanly', () => {
+  // As saved while the editor still had an icon, and as saved since (every icon moved to the bottom).
+  assert.deepEqual(rail.normalizeRailLayout({ top: ['browser', 'editor', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] }), { top: ['browser', 'learning'], bottom: ['evaluation', 'terminal', 'git', 'console'] });
+  const allBelow = { top: [], bottom: ['evaluation', 'learning', 'browser', 'terminal', 'git', 'console'] };
+  assert.deepEqual(rail.normalizeRailLayout(allBelow), allBelow);
+  assert.deepEqual(rail.panelsInRow(allBelow, 'top', () => true), ['editor'], 'the editor still opens on top');
+  // An icon can be dragged back into the empty top group.
+  assert.deepEqual(rail.moveRailPanel(allBelow, 'browser', 'top', 0).top, ['browser']);
+});
+
 test('each open pane goes to the row of its icon, in the order of the icons; the editor is first on top', () => {
   const layout = rail.moveRailPanel(rail.moveRailPanel(defaults, 'terminal', 'top', 0), 'browser', 'bottom', 1);
   const open = new Set(['terminal', 'browser', 'editor', 'git']);

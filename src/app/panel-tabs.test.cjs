@@ -29,7 +29,14 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.doesNotMatch(app, /editor: \{ icon: FileCode/);
   assert.doesNotMatch(app, /PanelLeftClose|PanelLeftOpen|setNavigationOpen|Amaga converses i fitxers/);
   assert.doesNotMatch(app, /icon=\{MessageSquarePlus\}/);
-  assert.match(app, /role="img" aria-label="Agentic Coder"><Mark size=\{20\}/);
+  // The mark has its own slot, with space below it before the first group, and is always the brand green.
+  assert.match(app, /<Center flex="none" w="full" h="10" pt="2" mb="3" role="img" aria-label="Agentic Coder"><Mark size=\{28\} busy=\{loading \|\| modelChanging\} color="brand\.solid"\/><\/Center>/);
+  const nav = app.slice(app.indexOf('<Flex as="nav"'), app.indexOf("{railGroup('bottom')}"));
+  assert.ok(nav.indexOf('aria-label="Agentic Coder"') < nav.indexOf("{railGroup('top')}"), 'the mark comes before the first group');
+  assert.doesNotMatch(nav.slice(0, nav.indexOf("{railGroup('top')}")), /position="absolute"/);
+  // The mark's drawing is as big as asked, in pixels: a bare number is a size token (sizes.28 is 112 px)
+  // and made it spill over the first icon.
+  assert.match(app, /<chakra\.svg viewBox="0 0 24 24" width=\{`\$\{size\}px`\} height=\{`\$\{size\}px`\}/);
   assert.match(app, /navigationHeader\('Converses', <IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/>\)/);
   assert.match(app, /navigationHeader\('Fitxers', <Menu\.Root>/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);

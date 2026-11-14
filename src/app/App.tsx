@@ -97,9 +97,10 @@ const Stat = ({ label, value, dim = false }: { label: string; value: number; dim
 );
 
 /** The app's mark. Still when the model is ready; it turns and breathes while the model works. */
-const Mark = ({ size = 16, busy = false }: { size?: number; busy?: boolean }) => (
-  <Box as="span" display="inline-flex" flex="none" color="agentic.fg" aria-hidden="true" w={`${size}px`} h={`${size}px`}>
-    <chakra.svg viewBox="0 0 24 24" width={size} height={size} fill="none" animation={busy ? 'agenticTurn 2.4s linear infinite' : undefined} _motionReduce={{ animation: 'none' }}>
+const Mark = ({ size = 16, busy = false, color = 'agentic.fg' }: { size?: number; busy?: boolean; color?: string }) => (
+  <Box as="span" display="inline-flex" flex="none" color={color} aria-hidden="true" w={`${size}px`} h={`${size}px`}>
+    {/* In pixels: a bare number here would be read as a size token (28 → 7rem = 112 px). */}
+    <chakra.svg viewBox="0 0 24 24" width={`${size}px`} height={`${size}px`} fill="none" animation={busy ? 'agenticTurn 2.4s linear infinite' : undefined} _motionReduce={{ animation: 'none' }}>
       <chakra.path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" animation={busy ? 'agenticBreathe 1.2s ease-in-out infinite' : undefined} transformOrigin="12px 12px" _motionReduce={{ animation: 'none' }}/>
       <chakra.path d="M12 8 16 12 12 16 8 12Z" fill="currentColor" animation={busy ? 'agenticBeat 1.2s ease-in-out infinite' : undefined} transformOrigin="12px 12px" _motionReduce={{ animation: 'none' }}/>
     </chakra.svg>
@@ -2066,8 +2067,9 @@ export function App(): React.JSX.Element {
     </Flex>}
     <Grid ref={appAreaRef} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
-          {/* The app's mark at the top of the bar: it turns while the model works. */}
-          <Tip label={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Flex h="38px" w="38px" flex="none" align="center" justify="center" role="img" aria-label="Agentic Coder"><Mark size={20} busy={loading || modelChanging}/></Flex></Tip>
+          {/* The app's mark in its own slot at the top of the bar, always in the brand green (not the accent),
+              with clear space before the first group of icons. It turns while the model works. */}
+          <Tip label={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Center flex="none" w="full" h="10" pt="2" mb="3" role="img" aria-label="Agentic Coder"><Mark size={28} busy={loading || modelChanging} color="brand.solid"/></Center></Tip>
           {/* The panes: each group opens its panes in its own row; an icon can be dragged to the other group. */}
           {railGroup('top')}
           {railGroup('bottom')}
