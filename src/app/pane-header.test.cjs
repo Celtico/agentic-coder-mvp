@@ -13,11 +13,12 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { ChakraProvider, Dialog } from "@chakra-ui/react"
 import { LuGitBranch, LuPlus } from "react-icons/lu"
 import { buildSystem } from ${JSON.stringify(path.join(__dirname, '..', 'theme', 'system.ts'))}
-import { Pane, PaneHeader, PaneToolbar, PaneToneContext, PaneStyleContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
+import { Pane, PaneHeader, PaneTitle, PaneToolbar, PaneToneContext, PaneStyleContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
 export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const renderPane = (variant: any, fromContext = false) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneStyleContext.Provider value={fromContext ? variant : "subtle"}><Pane variant={fromContext ? undefined : variant} label="Git" header={<PaneHeader icon={LuGitBranch} title="Git"/>}>contingut</Pane></PaneStyleContext.Provider></ChakraProvider>)
 export const renderDialog = () => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open><Dialog.Positioner><Dialog.Content>Preferències</Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
+export const renderTitle = (tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneTitle icon={LuGitBranch} title="Historial local" subtitle="src"/></PaneToneContext.Provider></ChakraProvider>)
 export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
 `);
@@ -139,4 +140,31 @@ test('every dialog has Chakra’s panel background, from the theme’s dialog re
   for (const tag of contents) assert.doesNotMatch(tag, /bg=|borderColor=|boxShadow=/, 'no dialog sets its own background');
   const html = built.renderDialog().replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
   assert.match(html, /chakra-dialog__content/);
+});
+
+test('every dialog and the floating Historial local window speak the panes’ language', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  // Dialogs: the panes' header with the close button, the title kept for screen readers, ghost secondary buttons.
+  assert.match(app, /const DialogHeading = [\s\S]*?<Dialog\.Title srOnly>\{title\}<\/Dialog\.Title>\s*<PaneHeader icon=\{icon\} title=\{title\} subtitle=\{subtitle\} actions=\{<Dialog\.CloseTrigger asChild><IconButton icon=\{X\} label="Tanca"\/><\/Dialog\.CloseTrigger>\}\/>/);
+  assert.equal((app.match(/<DialogHeading /g) || []).length, 6);
+  assert.doesNotMatch(app, /<Dialog\.Header><Dialog\.Title>/);
+  for (const title of ['Desa com a cas verificat', 'Edita el cas desat', 'Esborra el cas desat', 'Detall del cas', 'Preferències']) assert.match(app, new RegExp(`<DialogHeading icon=\\{\\w+\\} title="${title}"\\/>`), title);
+  const footers = app.match(/<Dialog\.Footer>[\s\S]*?<\/Dialog\.Footer>/g) || [];
+  assert.equal(footers.length, 6);
+  for (const footer of footers) assert.doesNotMatch(footer, /variant="outline"/, 'secondary buttons are ghost');
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /header: \{ \.\.\.chakraDialog\.base\.header, p: "0", display: "block" \}/);
+  // Historial local: panel background, the panes' title in its bar, plain labels, the selection in brand.
+  assert.match(app, /<FloatingPanel\.Content [^>]*bg="bg\.panel"/);
+  assert.match(app, /title=\{<PaneTitle icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath\}\/>\}/);
+  assert.doesNotMatch(app, />CARPETA<|>HISTORIAL DELS FITXERS</);
+  assert.match(app, /fileHistoryVersionPath === version\.path \? 'brand' : 'gray'/);
+  assert.match(app, /<Button size="sm" variant="ghost" onClick=\{\(\) => setFileHistoryPath\(null\)\}>Tanca<\/Button>/);
+});
+
+test('the title of a floating window uses the panes’ header recipe, with its tone', () => {
+  const html = built.renderTitle('tinted').replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+  assert.match(html, /data-pane-title/);
+  assert.match(html, />Historial local</);
+  assert.match(html, />src</);
 });

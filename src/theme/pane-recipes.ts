@@ -79,6 +79,8 @@ export const dialogRecipe = defineSlotRecipe({
   slots: [...chakraDialog.slots],
   base: {
     ...chakraDialog.base,
-    content: { ...chakraDialog.base.content, bg: "bg.panel", color: "fg", borderWidth: "1px", borderColor: "border", borderRadius: "lg", boxShadow: "2xl" },
+    content: { ...chakraDialog.base.content, bg: "bg.panel", color: "fg", borderWidth: "1px", borderColor: "border", borderRadius: "lg", boxShadow: "2xl", overflow: "hidden" },
+    // The header is the panes' header (src/app/pane-header.tsx), which brings its own padding.
+    header: { ...chakraDialog.base.header, p: "0", display: "block" },
   },
 } as Parameters<typeof defineSlotRecipe>[0])

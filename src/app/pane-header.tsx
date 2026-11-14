@@ -42,6 +42,19 @@ export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, 
   )
 }
 
+/** A pane's title (icon, title, subtitle) on its own, for a bar that is not a pane header (a floating window's). */
+export const PaneTitle = ({ icon: Icon, title, subtitle, tone }: { icon: IconType; title: string; subtitle?: ReactNode; tone?: PaneHeaderTone }) => {
+  const contextTone = useContext(PaneToneContext)
+  const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: tone ?? contextTone })
+  return (
+    <chakra.span display="inline-flex" alignItems="center" gap="2" minW="0" maxW="full" data-pane-title>
+      <chakra.span css={styles.icon}><Icon size={16} aria-hidden="true"/></chakra.span>
+      <chakra.span css={styles.title}>{title}</chakra.span>
+      {subtitle && <chakra.span css={styles.subtitle}>{subtitle}</chakra.span>}
+    </chakra.span>
+  )
+}
+
 /** The second row: what needs width (`field`: an address, a path) and the pane's own small actions. */
 export const PaneToolbar = ({ children, field, fieldTitle, tone }: { children?: ReactNode; field?: ReactNode; fieldTitle?: string; tone?: PaneHeaderTone }) => {
   const contextTone = useContext(PaneToneContext)

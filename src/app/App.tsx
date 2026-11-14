@@ -17,7 +17,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
-import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
+import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -124,6 +124,13 @@ const Tip = ({ label, children }: { label: string; children: React.ReactElement 
   </Tooltip.Root>
 );
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Tip label={label}><Button aria-label={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button></Tip>;
+/** Every dialog's header: the panes' header (icon, title, subtitle) with its close button as the action. */
+const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: string; subtitle?: React.ReactNode }) => (
+  <Dialog.Header>
+    <Dialog.Title srOnly>{title}</Dialog.Title>
+    <PaneHeader icon={icon} title={title} subtitle={subtitle} actions={<Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca"/></Dialog.CloseTrigger>}/>
+  </Dialog.Header>
+);
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -2274,13 +2281,13 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop bg="black/70"/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
-            <Dialog.Header><Dialog.Title>{createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}</Dialog.Title></Dialog.Header>
+            <DialogHeading icon={createEntryKind === 'rename' ? Pencil : createEntryKind === 'directory' ? FolderPlus : FilePlus} title={createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">{createEntryKind === 'rename' ? `Escriu el nom nou de «${renameEntryPath}».` : 'Escriu un nom o una ruta relativa dins del projecte.'}</Text>
               <Input autoFocus value={createEntryPath} onChange={(event) => setCreateEntryPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !createEntryBusy) void createProjectEntry(); }} placeholder={createEntryKind === 'directory' ? 'src/components' : 'src/notes.md'} aria-label={createEntryKind === 'directory' ? 'Nom o ruta del directori' : createEntryKind === 'rename' ? 'Nom nou' : 'Nom o ruta del fitxer'}/>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="outline" disabled={createEntryBusy} onClick={() => setCreateEntryKind(null)}>Cancel·la</Button>
+              <Button variant="ghost" disabled={createEntryBusy} onClick={() => setCreateEntryKind(null)}>Cancel·la</Button>
               <Button colorPalette="agentic" disabled={!createEntryPath.trim() || createEntryBusy} onClick={() => void createProjectEntry()}>{createEntryBusy ? <Spinner size="xs"/> : createEntryKind === 'rename' ? <Pencil size={14}/> : createEntryKind === 'directory' ? <FolderPlus size={14}/> : <FilePlus size={14}/>} {createEntryKind === 'rename' ? 'Canvia el nom' : 'Crea'}</Button>
             </Dialog.Footer>
           </Dialog.Content>
@@ -2292,7 +2299,7 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop bg="black/70"/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
-            <Dialog.Header><Dialog.Title>Desa com a cas verificat</Dialog.Title></Dialog.Header>
+            <DialogHeading icon={Brain} title="Desa com a cas verificat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Indica què has comprovat perquè aquest exemple sigui fiable.</Text>
               <Input autoFocus value={verifiedEvidence} onChange={(event) => setVerifiedEvidence(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !verifiedExperienceBusy) void saveVerifiedExperience(); }} placeholder="Per exemple: build superat" aria-label="Comprovació realitzada"/>
@@ -2300,7 +2307,7 @@ export function App(): React.JSX.Element {
               <Input value={verifiedTask} onChange={(event) => setVerifiedTask(event.target.value)} placeholder="Per exemple: la primera petició de la conversa" aria-label="Petició general"/>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</Button>
+              <Button variant="ghost" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</Button>
               <Button colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</Button>
             </Dialog.Footer>
           </Dialog.Content>
@@ -2312,7 +2319,7 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
-            <Dialog.Header><Dialog.Title>Edita el cas desat</Dialog.Title></Dialog.Header>
+            <DialogHeading icon={Pencil} title="Edita el cas desat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Petició general</Text>
               <Textarea autoFocus rows={4} maxLength={4000} value={caseEdit?.task ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, task: event.target.value })} aria-label="Petició general"/>
@@ -2321,7 +2328,7 @@ export function App(): React.JSX.Element {
               {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="outline" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</Button>
+              <Button variant="ghost" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</Button>
               <Button colorPalette="agentic" disabled={!caseEdit?.task.trim() || !caseEdit?.evidence.trim() || caseBusy !== null} onClick={() => void saveCaseEdit()}>{caseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</Button>
             </Dialog.Footer>
           </Dialog.Content>
@@ -2333,14 +2340,14 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
-            <Dialog.Header><Dialog.Title>Esborra el cas desat</Dialog.Title></Dialog.Header>
+            <DialogHeading icon={Trash} title="Esborra el cas desat"/>
             <Dialog.Body>
               <Text fontSize="sm" lineClamp={3} overflowWrap="anywhere">«{caseToDelete?.task}»</Text>
               <Text mt="2" fontSize="sm" color="fg.muted">Deixarà de comptar per entrenar. No es perd: es mou a verified-experiences.deleted.jsonl, a la mateixa carpeta, i s’hi pot recuperar.</Text>
               {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="outline" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</Button>
+              <Button variant="ghost" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</Button>
               <Button colorPalette="red" disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</Button>
             </Dialog.Footer>
           </Dialog.Content>
@@ -2352,7 +2359,7 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
-            <Dialog.Header><Dialog.Title>Detall del cas</Dialog.Title></Dialog.Header>
+            <DialogHeading icon={Eye} title="Detall del cas"/>
             <Dialog.Body>
               {caseDetail && <Stack gap="4">
                 <Box>
@@ -2375,7 +2382,7 @@ export function App(): React.JSX.Element {
                 </Box>
               </Stack>}
             </Dialog.Body>
-            <Dialog.Footer><Button variant="outline" onClick={() => setCaseDetail(null)}>Tanca</Button></Dialog.Footer>
+            <Dialog.Footer><Button variant="ghost" onClick={() => setCaseDetail(null)}>Tanca</Button></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
@@ -2385,7 +2392,7 @@ export function App(): React.JSX.Element {
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content data-preferences>
-            <Dialog.Header><Dialog.Title><HStack gap="2"><Settings size={16}/><span>Preferències</span></HStack></Dialog.Title></Dialog.Header>
+            <DialogHeading icon={Settings} title="Preferències"/>
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
               <Tabs.Root defaultValue="model" variant="line" size="sm" colorPalette="agentic">
@@ -2520,7 +2527,7 @@ export function App(): React.JSX.Element {
                 </Stack></Tabs.Content>
               </Tabs.Root>
             </Dialog.Body>
-            <Dialog.Footer><Button variant="outline" onClick={() => setPreferencesOpen(false)}>Tanca</Button></Dialog.Footer>
+            <Dialog.Footer><Button variant="ghost" onClick={() => setPreferencesOpen(false)}>Tanca</Button></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
@@ -2532,22 +2539,22 @@ export function App(): React.JSX.Element {
       getBoundaryEl={() => appAreaRef.current} persistRect defaultPosition={{ x: historyStart.x, y: historyStart.y }} defaultSize={{ width: historyStart.width, height: historyStart.height }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
-        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
+        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg.panel" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
         <RestoreWindowStage stage={fileHistoryStage}/>
-        <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<>Historial local: {fileHistoryScopePath || project?.path || fileHistoryPath}</>}/>
+        <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<PaneTitle icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath}/>}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
         <Grid h="full" minH="0" minW="0" templateColumns="260px minmax(0, 1fr)">
           <Flex direction="column" minH="0" borderRightWidth="1px" borderColor="border">
             <Stack px="3" py="2" gap="1" flex="none">
-              <Text fontSize="xs" color="fg.muted">CARPETA</Text>
+              <Text fontSize="xs" color="fg.muted">Carpeta</Text>
               <NativeSelect.Root size="sm" width="full"><NativeSelect.Field aria-label="Carpeta de l’historial" value={fileHistoryScopePath} onChange={(event) => void changeFileHistoryScope(event.target.value)}>
                 <option value="">Tot el projecte</option>
                 {project?.files.filter((file) => file.directory).map((folder) => <option key={folder.path} value={folder.path}>{folder.path}</option>)}
               </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
-              <Text fontSize="xs" color="fg.muted">HISTORIAL DELS FITXERS</Text>
+              <Text fontSize="xs" color="fg.muted">Historial dels fitxers</Text>
             </Stack>
             {fileHistoryLoading && !fileHistoryVersions.length ? <HStack px="3" color="fg.muted"><Spinner size="sm"/><Text>Carregant historial…</Text></HStack>
-              : fileHistoryVersions.length ? <Box flex="1" minH="0" overflowY="auto">{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="64px" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'agentic' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
+              : fileHistoryVersions.length ? <Box flex="1" minH="0" overflowY="auto">{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="64px" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'brand' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
                 : <Text px="3" fontSize="sm" color="fg.muted">No hi ha versions desades en aquesta carpeta.</Text>}
           </Flex>
           <Flex minW="0" minH="0" direction="column">
@@ -2560,7 +2567,7 @@ export function App(): React.JSX.Element {
         </FloatingPanel.Body>
         <Flex flex="none" minH="54px" align="center" justify="space-between" gap="3" px="4" borderTopWidth="1px" borderColor="border">
           <Text fontSize="sm" color={fileHistoryStatus.startsWith('Restaurada') ? 'agentic.fg' : 'fg.muted'}>{fileHistoryStatus || 'La restauració desa primer la versió actual a l’historial.'}</Text>
-          <HStack><Button size="sm" variant="outline" onClick={() => setFileHistoryPath(null)}>Tanca</Button><Button size="sm" colorPalette="agentic" disabled={!fileHistorySelectedId || fileHistoryBusy || fileHistoryLoading} onClick={() => void restoreFileHistoryVersion()}>{fileHistoryBusy ? <Spinner size="sm"/> : <History size={15}/>}Restaura la versió</Button></HStack>
+          <HStack><Button size="sm" variant="ghost" onClick={() => setFileHistoryPath(null)}>Tanca</Button><Button size="sm" colorPalette="agentic" disabled={!fileHistorySelectedId || fileHistoryBusy || fileHistoryLoading} onClick={() => void restoreFileHistoryVersion()}>{fileHistoryBusy ? <Spinner size="sm"/> : <History size={15}/>}Restaura la versió</Button></HStack>
         </Flex>
         <FloatingPanel.ResizeTriggers/>
         </FloatingPanel.Content>
