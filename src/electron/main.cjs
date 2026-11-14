@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem, screen, session, systemPreferences } = require('electron');
 const windowState = require('./window-state.cjs');
 const path = require('node:path');
 const fsSync = require('node:fs');
@@ -20,6 +20,7 @@ const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
+const dictation = require('./dictation.cjs');
 const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
@@ -111,6 +112,8 @@ let selectedModel = mlxModels.DEFAULT_MODEL_ID;
 let permissionMode = 'ask';
 /** Preferències › Model and Agent (src/electron/preferences.cjs): sent to the agent with each request. */
 let agentPreferences = defaultAgentPreferences();
+/** Preferències › Agent › Dictat: the Whisper model and the language (src/electron/dictation.cjs). */
+let dictationPreferences = dictation.defaultDictationPreferences();
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
@@ -187,7 +190,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, dictation: dictationPreferences }, null, 2), 'utf8');
 }
 
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
@@ -773,6 +776,7 @@ app.whenReady().then(async () => {
     if ((await allModels()).some((model) => model.id === savedModel)) selectedModel = savedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
     agentPreferences = normalizeAgentPreferences(saved.agent);
+    dictationPreferences = dictation.normalizeDictationPreferences(saved.dictation);
   } catch {}
   if (!selectedProject) {
     // From the repository the app opens itself; installed, it starts in an empty folder of its own,
@@ -790,6 +794,12 @@ app.whenReady().then(async () => {
   if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
   addCaptureToMenu();
   addPreferencesToMenu();
+  // The microphone is for the window's dictation only, sound only; other requests keep Electron's answer.
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
+    if (permission !== 'media') { callback(true); return; }
+    const types = Array.isArray(details?.mediaTypes) ? details.mediaTypes : [];
+    callback(Boolean(win && !win.isDestroyed() && contents === win.webContents && types.length > 0 && types.every((type) => type === 'audio')));
+  });
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
@@ -1463,6 +1473,62 @@ ipcMain.handle('agent:ask', async (_e, request) => {
 });
 
 ipcMain.handle('permissions:get', async () => permissionMode);
+
+/** Unloads the chat's model (its worker and the MLX process under it); the next message loads it again. */
+async function stopModelWorker() {
+  if (!modelWorker) return;
+  const child = modelWorker;
+  modelWorker = null;
+  child.kill('SIGTERM');
+  await Promise.race([new Promise((resolve) => child.once('exit', resolve)), new Promise((resolve) => setTimeout(resolve, 5000))]);
+}
+
+// Dictation (src/electron/dictation.cjs): one transcription at a time, after the chat has finished what it
+// generates and its model is unloaded, so only one model is ever on the GPU.
+function runDictation({ file, model, language }) {
+  return new Promise((resolve, reject) => {
+    const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
+    const child = spawn(mlxPythonPath(), ['-u', script, dictation.dictationModelDirectory(model, projectModelsDirectory()), file, language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => child.kill('SIGKILL'), 180_000);
+    child.stdout.on('data', (chunk) => { stdout = (stdout + chunk).slice(-200_000); });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-4000); });
+    child.once('error', (error) => { clearTimeout(timer); reject(error); });
+    child.once('close', () => {
+      clearTimeout(timer);
+      try { resolve(dictation.parseDictationOutput(stdout)); }
+      catch (error) { reject(stdout.trim() ? error : new Error(`El dictat no ha acabat bé. ${stderr.trim().split('\n').pop() || ''}`.trim())); }
+    });
+  });
+}
+const enqueueDictation = dictation.createDictationQueue({
+  chatIdle: () => activeModelRequestId === null,
+  freeGpu: stopModelWorker,
+  run: runDictation,
+  onWaiting: () => { if (win && !win.isDestroyed()) win.webContents.send('agent:status', { type: 'status', message: 'El dictat espera que el xat acabi de respondre…' }); },
+});
+ipcMain.handle('dictation:info', async () => ({
+  preferences: dictationPreferences,
+  languages: dictation.DICTATION_LANGUAGES,
+  models: await Promise.all(dictation.DICTATION_MODELS.map(async (model) => ({ id: model.id, label: model.label, repo: model.repo, bytes: model.bytes, installed: await dictation.dictationModelInstalled(model, projectModelsDirectory()) }))),
+}));
+ipcMain.handle('preferences:set-dictation', async (_event, change) => {
+  dictationPreferences = dictation.normalizeDictationPreferences({ ...dictationPreferences, ...(change && typeof change === 'object' ? change : {}) }, dictationPreferences);
+  await saveSettings();
+  return dictationPreferences;
+});
+// macOS asks the user once for the microphone; the answer is the system's.
+ipcMain.handle('dictation:microphone', async () => process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true);
+ipcMain.handle('dictation:transcribe', async (_event, audio) => {
+  if (trainingRun || benchmarkRun) throw new Error('Hi ha un entrenament o una avaluació en marxa: el dictat pot esperar que acabi.');
+  const { buffer } = dictation.validateDictationAudio(audio);
+  const model = dictation.DICTATION_MODELS.find((item) => item.id === dictationPreferences.model);
+  if (!await dictation.dictationModelInstalled(model, projectModelsDirectory())) throw new Error(`Falta el model de dictat ${model.label} (${model.repo}, ${Math.round(model.bytes / 1e6)} MB) a models/whisper/${model.folder}.`);
+  const file = await dictation.writeDictationAudio(path.join(app.getPath('userData'), 'dictation'), buffer);
+  try { return { text: await enqueueDictation({ file, model, language: dictationPreferences.language }) }; }
+  finally { await fs.rm(file, { force: true }).catch(() => {}); }
+});
 // Preferències › Model and Agent: the limits and switches of the agent, kept in settings.json.
 ipcMain.handle('preferences:agent', async () => ({ values: agentPreferences, defaults: defaultAgentPreferences(), limits: AGENT_LIMITS }));
 ipcMain.handle('preferences:set-agent', async (_event, change) => {
@@ -1484,12 +1550,7 @@ ipcMain.handle('models:select', async (_e, modelId) => {
   if (!available?.available) throw new Error(available?.reason || 'Aquest model encara no està disponible en aquest Mac.');
   if (trainingRun) throw new Error('Hi ha un entrenament en marxa; canvia de model quan acabi.');
   if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa; canvia de model quan acabi.');
-  if (selectedModel !== model.id && modelWorker) {
-    const child = modelWorker;
-    modelWorker = null;
-    child.kill('SIGTERM');
-    await Promise.race([new Promise((resolve) => child.once('exit', resolve)), new Promise((resolve) => setTimeout(resolve, 2000))]);
-  }
+  if (selectedModel !== model.id) await stopModelWorker();
   selectedModel = model.id;
   await saveSettings();
   return { selectedModel, models: await getAvailableModels() };

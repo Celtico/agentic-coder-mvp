@@ -58,6 +58,8 @@
       "src/core/assistant/mlx-worker.py",
       "src/core/assistant/mlx_text.py",
       "src/core/assistant/mlx_lock.py",
+      "src/core/assistant/mlx_vision.py",
+      "src/core/assistant/mlx_dictation.py",
       "src/core/assistant/mlx-locked.py",
       "scripts/evaluate-agent.cjs",
       "scripts/agent-benchmark/*.cjs",

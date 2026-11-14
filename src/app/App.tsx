@@ -4,13 +4,13 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuSettings as Settings, LuMinus as Minus, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -19,6 +19,7 @@ import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
+import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
 import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image-attachments';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
@@ -162,6 +163,7 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 const STOP_CONFIRM_MS = 3000;
 /** The names of the accents in Preferències › Aparença (src/theme/accent.ts). */
 const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray: 'Gris', red: 'Vermell', orange: 'Taronja', yellow: 'Groc', green: 'Verd', teal: 'Verd blavós', blue: 'Blau', cyan: 'Cian', purple: 'Lila', pink: 'Rosa' };
+const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string> = { auto: 'Detecta l’idioma', ca: 'Català', es: 'Castellà', en: 'Anglès' };
 const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 const STOPPED_WHILE_REVIEWING = '_(Aturat mentre es revisava: aquesta resposta no s’ha acabat de comprovar.)_';
@@ -235,6 +237,10 @@ export function App(): React.JSX.Element {
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   // Images of the message being written (src/app/image-attachments.ts): sent with this request only.
   const [chatImages, setChatImages] = useState<ChatImage[]>([]);
+  // Dictation (src/app/dictation.ts): record, then the text is transcribed on this Mac and added to the box.
+  const [dictation, setDictation] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const recorderRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [dictationInfo, setDictationInfo] = useState<Awaited<ReturnType<typeof window.agentic.dictationInfo>> | null>(null);
   const [chatDropActive, setChatDropActive] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [status, setStatus] = useState('Preparat · model encara no carregat');
@@ -307,7 +313,12 @@ export function App(): React.JSX.Element {
   useEffect(() => window.agentic.onOpenPreferences?.(() => void openPreferences()) ?? undefined, []);
   async function openPreferences() {
     setPreferencesOpen(true); setPreferencesError('');
-    try { setAgentPreferencesState(await window.agentic.agentPreferences()); } catch (error) { setPreferencesError(errorText(error)); }
+    try { setAgentPreferencesState(await window.agentic.agentPreferences()); setDictationInfo(await window.agentic.dictationInfo()); } catch (error) { setPreferencesError(errorText(error)); }
+  }
+  async function changeDictationPreferences(change: Partial<DictationPreferences>) {
+    setPreferencesError('');
+    try { const preferences = await window.agentic.setDictationPreferences(change); setDictationInfo((current) => current && { ...current, preferences }); }
+    catch (error) { setPreferencesError(errorText(error)); }
   }
   async function changeAgentPreferences(change: Partial<AgentPreferences>) {
     setPreferencesError('');
@@ -765,6 +776,44 @@ export function App(): React.JSX.Element {
       setStatus(`No s’ha pogut eliminar la conversa: ${errorText(error)}`);
     } finally { setDeletingChatId(null); }
   }
+
+  async function toggleDictation() {
+    if (dictation === 'transcribing') return;
+    const current = recorderRef.current;
+    if (dictation === 'recording' && current) { current.recorder.stop(); return; }
+    try {
+      if (!await window.agentic.askMicrophone()) { setStatus('Cal permís per al micròfon: Configuració del Sistema › Privadesa i seguretat › Micròfon.'); return; }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        const recording = recorderRef.current;
+        recorderRef.current = null;
+        if (recording) clearTimeout(recording.timer);
+        stream.getTracks().forEach((track) => track.stop());
+        void transcribeRecording(new Blob(chunks, { type: recorder.mimeType }));
+      };
+      recorderRef.current = { recorder, stream, chunks, timer: setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, MAX_RECORDING_MS) };
+      recorder.start();
+      setDictation('recording');
+      setStatus('Gravant… torna a clicar el micròfon per acabar.');
+    } catch (error) {
+      setDictation('idle');
+      setStatus(error instanceof DOMException && error.name === 'NotAllowedError' ? 'No hi ha permís per fer servir el micròfon.' : `No s’ha pogut gravar: ${errorText(error)}`);
+    }
+  }
+  async function transcribeRecording(blob: Blob) {
+    setDictation('transcribing');
+    setStatus('Transcrivint en local…');
+    try {
+      const { text } = await window.agentic.transcribe({ data: toBase64(await recordingToWav(blob)) });
+      if (text) { setDraft((current) => appendDictation(current, text)); setStatus('Dictat afegit al quadre de text: revisa’l abans d’enviar.'); promptRef.current?.focus(); }
+      else setStatus('No s’ha entès cap paraula.');
+    } catch (error) { setStatus(`Dictat: ${errorText(error)}`); }
+    finally { setDictation('idle'); }
+  }
+  useEffect(() => () => { const recording = recorderRef.current; if (recording) { clearTimeout(recording.timer); recording.stream.getTracks().forEach((track) => track.stop()); } }, []);
 
   async function sendPrompt() {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
@@ -1478,6 +1527,8 @@ export function App(): React.JSX.Element {
         <Flex align="center" gap="2" mt="1.5" px="1" minW="0">
           <input ref={chatFilePickerRef} type="file" multiple hidden onChange={(event) => { if (event.target.files?.length) void addChatFiles(event.target.files); event.target.value = ''; }}/>
           <IconButton icon={Plus} label="Adjunta fitxers de text o codi" size="sm" onClick={() => chatFilePickerRef.current?.click()}/>
+          <IconButton icon={Mic} label={dictation === 'recording' ? 'Atura i transcriu' : dictation === 'transcribing' ? 'Transcrivint…' : 'Dicta (es transcriu en aquest Mac)'} size="sm" disabled={dictation === 'transcribing'} colorPalette={dictation === 'recording' ? 'red' : 'gray'} variant={dictation === 'recording' ? 'solid' : 'ghost'} aria-pressed={dictation === 'recording'} onClick={() => void toggleDictation()}/>
+          {dictation === 'transcribing' && <Spinner size="xs" color="fg.muted"/>}
           <Text flex="1" minW="0" fontSize="xs" color="fg.muted" textAlign="center" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">El model és local i pot equivocar-se.</Text>
           {modelSelect}
           <Button flex="none" size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>{permissionMode === 'auto' ? 'Automàtic' : 'Pregunta'}</Button>
@@ -2304,6 +2355,18 @@ export function App(): React.JSX.Element {
                       <Text mt="1" fontSize="xs" color="fg.muted">Entre 0 i {agentPreferences.limits.historyMessages.max}; per defecte {agentPreferences.defaults.historyMessages}. Amb 0, cada petició va sense la conversa anterior.</Text>
                     </Box>
                   </>}
+                  {dictationInfo && <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Dictat</Text>
+                    <HStack gap="2" flexWrap="wrap">
+                      <NativeSelect.Root size="sm" maxW="72"><NativeSelect.Field aria-label="Model de dictat" value={dictationInfo.preferences.model} onChange={(event) => void changeDictationPreferences({ model: event.currentTarget.value })}>
+                        {dictationInfo.models.map((model) => <option key={model.id} value={model.id}>{model.label} · {Math.round(model.bytes / 1e6)} MB{model.installed ? '' : ' · no baixat'}</option>)}
+                      </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+                      <NativeSelect.Root size="sm" maxW="44"><NativeSelect.Field aria-label="Idioma del dictat" value={dictationInfo.preferences.language} onChange={(event) => void changeDictationPreferences({ language: event.currentTarget.value as DictationPreferences['language'] })}>
+                        {dictationInfo.languages.map((language) => <option key={language} value={language}>{DICTATION_LANGUAGE_LABELS[language]}</option>)}
+                      </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+                    </HStack>
+                    <Text mt="1" fontSize="xs" color="fg.muted">Es transcriu en aquest Mac. Mentre transcriu, el model del xat es descarrega i torna a carregar-se amb el missatge següent.</Text>
+                  </Box>}
                 </Stack></Tabs.Content>
                 <Tabs.Content value="appearance"><Stack gap="4">
                   <Box>

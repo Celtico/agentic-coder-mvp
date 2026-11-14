@@ -28,6 +28,7 @@ export type TrainingDatasetPreview = { counts: { input: number; unverified: numb
 export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string };
 export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
+export type DictationPreferences = { model: string; language: 'auto' | 'ca' | 'es' | 'en' };
 export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string; vision?: boolean };
 
 export interface AgenticBridge {
@@ -60,6 +61,10 @@ export interface AgenticBridge {
   agentPreferences(): Promise<{ values: AgentPreferences; defaults: AgentPreferences; limits: Record<'answerTokens' | 'maxIterations' | 'historyMessages', { min: number; max: number; default: number }> }>;
   setAgentPreferences(change: Partial<AgentPreferences>): Promise<AgentPreferences>;
   onOpenPreferences(callback: () => void): () => void;
+  dictationInfo(): Promise<{ preferences: DictationPreferences; languages: DictationPreferences['language'][]; models: { id: string; label: string; repo: string; bytes: number; installed: boolean }[] }>;
+  setDictationPreferences(change: Partial<DictationPreferences>): Promise<DictationPreferences>;
+  askMicrophone(): Promise<boolean>;
+  transcribe(audio: { data: string }): Promise<{ text: string }>;
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;

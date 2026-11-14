@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('agentic', {
   ask: (request) => ipcRenderer.invoke('agent:ask', request),
   getPermissionMode: () => ipcRenderer.invoke('permissions:get'),
   agentPreferences: () => ipcRenderer.invoke('preferences:agent'),
+  dictationInfo: () => ipcRenderer.invoke('dictation:info'),
+  setDictationPreferences: (change) => ipcRenderer.invoke('preferences:set-dictation', change),
+  askMicrophone: () => ipcRenderer.invoke('dictation:microphone'),
+  transcribe: (audio) => ipcRenderer.invoke('dictation:transcribe', audio),
   setAgentPreferences: (change) => ipcRenderer.invoke('preferences:set-agent', change),
   onOpenPreferences: (callback) => {
     const listener = () => callback();
