@@ -569,6 +569,9 @@ export class LocalCodingAgent {
   reviewChanges = process.env.AGENT_REVIEW !== '0' && !process.env.NODE_TEST_CONTEXT;
   /** The public search engine is off unless switched on (AGENT_WEB_SEARCH=1): it rarely returned anything useful. Reading a given address is always available. */
   webSearch = process.env.AGENT_WEB_SEARCH === '1';
+  /** Preferències › Model: the length of an answer and the steps of a task (the small models keep their own). */
+  answerTokens = 2400;
+  maxIterations = 28;
 
   constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'transformers' ? new TransformersJsInferenceEngine() : new MlxInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
@@ -752,8 +755,8 @@ export class LocalCodingAgent {
     // A real app creation needs more than a few model turns (inspect, create
     // source files, install, check, start, then inspect in the local browser).
     // The small model gets a short leash; the larger one has room for real files and longer jobs.
-    const answerTokens = compact ? 700 : 2400;
-    const maxIterations = compact ? 16 : 28;
+    const answerTokens = compact ? 700 : this.answerTokens;
+    const maxIterations = compact ? 16 : this.maxIterations;
     const followUpRefersToUnfinishedTask = /\b(?:el que t['’]he demanat|el que he demanat|la tasca|aquesta tasca|continua|segueix|fes-ho|fesho|acaba-ho|acabal|mira el que diu|ell mateix t['’]explica|que quadri|quadra|no ho ha fet|no ho has fet|do what i asked|continue|finish it|make it work)\b/i.test(prompt);
     const unfinishedPriorCodingRequest = followUpRefersToUnfinishedTask
       ? [...conversationHistory].reverse().find((turn) => turn?.role === 'user' && typeof turn.content === 'string' && /\b(?:app|application|aplicaci[oó]|projecte|project|proyecto)\b/i.test(turn.content) && /\b(?:fes|crea|crear|fer|faci|build|create|implement|fix|modifica|canvia|programa)\b/i.test(turn.content))?.content

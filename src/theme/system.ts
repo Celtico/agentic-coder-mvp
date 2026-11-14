@@ -1,17 +1,18 @@
 import { createSystem, defaultConfig, defineConfig, type SystemStyleObject } from "@chakra-ui/react"
+import { accentSemantic, accentTokens, brandSemantic, BRAND_TOKENS, type Accent } from "./accent"
 
 // Tema de l'aplicació: els components Chakra consumeixen aquests colors semàntics.
-export const system = createSystem(defaultConfig, defineConfig({
+// The accent (Preferències) decides which palette «agentic» is (src/theme/accent.ts).
+export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultConfig, defineConfig({
   globalCss: {
     "html, body, #root": { height: "100%", width: "100%", margin: 0, overflow: "hidden" },
-    html: { colorScheme: "dark" },
+    html: { colorScheme: "light", "&.dark": { colorScheme: "dark" } },
     body: { minHeight: "100dvh", bg: "bg", color: "fg", fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" },
     "*, *::before, *::after": { boxSizing: "border-box" },
     "button, input, textarea": { font: "inherit" },
     "input, textarea, [contenteditable=true]": { cursor: "text" },
     "button, [role=button], a[href]": { cursor: "pointer" },
-    // El MVP és sempre fosc: els botons neutres de Chakra no han d'agafar el
-    // gris fosc del mode clar per damunt del fons fosc.
+    // Els botons neutres de Chakra prenen el color de text de l'app, en mode clar i fosc.
     '.chakra-button[data-variant="outline"], .chakra-button[data-variant="ghost"]': { color: "fg" },
     "webview": { display: "flex" },
     // The app's own title bar on macOS: the part marked data-drag-region moves the window.
@@ -27,12 +28,8 @@ export const system = createSystem(defaultConfig, defineConfig({
     },
     tokens: {
       colors: {
-        agentic: {
-          50: { value: "#e6fff6" }, 100: { value: "#c5f7e5" }, 200: { value: "#91e9ca" },
-          300: { value: "#65c9ad" }, 400: { value: "#28b891" }, 500: { value: "#10a37f" },
-          600: { value: "#078565" }, 700: { value: "#08694f" }, 800: { value: "#09543f" },
-          900: { value: "#094534" }, 950: { value: "#04271d" },
-        },
+        brand: BRAND_TOKENS,
+        agentic: accentTokens(accent),
       },
       // Every panel of the window (columns, the Converses and Fitxers boxes, the evaluation cards).
       radii: {
@@ -68,23 +65,17 @@ export const system = createSystem(defaultConfig, defineConfig({
     },
     semanticTokens: {
       colors: {
-        agentic: {
-          solid: { value: "{colors.agentic.500}" },
-          contrast: { value: "white" },
-          fg: { value: { _light: "{colors.agentic.700}", _dark: "{colors.agentic.200}" } },
-          muted: { value: { _light: "{colors.agentic.100}", _dark: "{colors.agentic.900}" } },
-          subtle: { value: { _light: "{colors.agentic.50}", _dark: "{colors.agentic.950}" } },
-          emphasized: { value: { _light: "{colors.agentic.200}", _dark: "{colors.agentic.800}" } },
-          focusRing: { value: "{colors.agentic.500}" },
-        },
-        // The window is a dark canvas; every pane is a rounded panel resting on it.
-        canvas: { value: "#171717" },
-        bg: { value: "#212121" },
-        fg: { value: "#ececec" },
-        "fg.muted": { value: "#a1a1a1" },
-        surface: { value: "#303030" },
-        "surface.subtle": { value: "#171717" },
-        border: { value: "#393939" },
+        brand: brandSemantic("brand"),
+        agentic: accentSemantic(accent),
+        // The window is a canvas; every pane is a rounded panel resting on it (dark by default; light
+        // when chosen in Preferències).
+        canvas: { value: { _light: "#f2f2f2", _dark: "#171717" } },
+        bg: { value: { _light: "#ffffff", _dark: "#212121" } },
+        fg: { value: { _light: "#1f1f1f", _dark: "#ececec" } },
+        "fg.muted": { value: { _light: "#5e5e5e", _dark: "#a1a1a1" } },
+        surface: { value: { _light: "#ececec", _dark: "#303030" } },
+        "surface.subtle": { value: { _light: "#f2f2f2", _dark: "#171717" } },
+        border: { value: { _light: "#dcdcdc", _dark: "#393939" } },
         accent: { value: "{colors.agentic.500}" },
         // The traffic lights of a floating window, like macOS (src/app/window-controls.tsx).
         "window.close": { value: "#ff5f57" },
@@ -96,3 +87,5 @@ export const system = createSystem(defaultConfig, defineConfig({
     },
   },
 }))
+
+export const system = buildSystem()

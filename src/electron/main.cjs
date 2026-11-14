@@ -19,6 +19,7 @@ const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate
 const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
+const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
@@ -107,6 +108,8 @@ let selectedProject = null;
 let selectedModel = mlxModels.DEFAULT_MODEL_ID;
 /** 'ask': the agent asks before installing packages. 'auto': it never asks. The user's choice, kept between sessions. */
 let permissionMode = 'ask';
+/** Preferències › Model and Agent (src/electron/preferences.cjs): sent to the agent with each request. */
+let agentPreferences = defaultAgentPreferences();
 let activeProjectProcess = null;
 let activeProjectRoot = null;
 let activeProjectOutput = '';
@@ -183,7 +186,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences }, null, 2), 'utf8');
 }
 
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
@@ -603,7 +606,8 @@ async function askModel(prompt, projectRoot, history = []) {
   catch (error) { activeModelRequestId = null; throw error; }
   return new Promise((resolve, reject) => {
     pendingModelRequests.set(id, { resolve, reject });
-    child.send({ id, prompt, projectRoot, history: cleanConversationHistory(history) }, (error) => {
+    const { answerTokens, maxIterations, review, webSearch, historyMessages } = agentPreferences;
+    child.send({ id, prompt, projectRoot, history: limitHistory(cleanConversationHistory(history), historyMessages), settings: { answerTokens, maxIterations, review, webSearch } }, (error) => {
       if (!error) return;
       pendingModelRequests.delete(id);
       if (activeModelRequestId === id) activeModelRequestId = null;
@@ -718,6 +722,18 @@ async function captureForDocs() {
   app.quit();
 }
 
+// Preferències… (⌘,) in the app menu on macOS, or the first menu elsewhere: the window opens its dialog.
+function addPreferencesToMenu() {
+  const menu = Menu.getApplicationMenu();
+  const target = menu?.items.find((item) => item.role === 'appmenu') || menu?.items[0];
+  if (!menu || !target?.submenu) return;
+  const item = new MenuItem({ label: 'Preferències…', accelerator: 'CmdOrCtrl+,', click: () => { if (win && !win.isDestroyed()) win.webContents.send('app:open-preferences'); } });
+  const about = target.submenu.items.findIndex((entry) => entry.role === 'about');
+  target.submenu.insert(about >= 0 ? about + 1 : 0, new MenuItem({ type: 'separator' }));
+  target.submenu.insert(about >= 0 ? about + 2 : 1, item);
+  Menu.setApplicationMenu(menu);
+}
+
 function addCaptureToMenu() {
   const menu = Menu.getApplicationMenu();
   const view = menu?.items.find((item) => item.role === 'viewmenu' || /^(View|Visualització|Visualización)$/.test(item.label));
@@ -750,6 +766,7 @@ app.whenReady().then(async () => {
     const savedModel = saved.selectedModel === 'qwen-1.5b' ? mlxModels.DEFAULT_MODEL_ID : saved.selectedModel;
     if ((await allModels()).some((model) => model.id === savedModel)) selectedModel = savedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
+    agentPreferences = normalizeAgentPreferences(saved.agent);
   } catch {}
   if (!selectedProject) {
     // From the repository the app opens itself; installed, it starts in an empty folder of its own,
@@ -766,6 +783,7 @@ app.whenReady().then(async () => {
   } catch { /* no Node: the worker reports it */ }
   if (process.env.AGENT_SCREENSHOT && process.env.AGENT_SCREENSHOT_PROJECT) selectedProject = path.resolve(process.env.AGENT_SCREENSHOT_PROJECT);
   addCaptureToMenu();
+  addPreferencesToMenu();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
@@ -1434,6 +1452,13 @@ ipcMain.handle('agent:ask', async (_e, request) => {
 });
 
 ipcMain.handle('permissions:get', async () => permissionMode);
+// Preferències › Model and Agent: the limits and switches of the agent, kept in settings.json.
+ipcMain.handle('preferences:agent', async () => ({ values: agentPreferences, defaults: defaultAgentPreferences(), limits: AGENT_LIMITS }));
+ipcMain.handle('preferences:set-agent', async (_event, change) => {
+  agentPreferences = normalizeAgentPreferences(change, agentPreferences);
+  await saveSettings();
+  return agentPreferences;
+});
 ipcMain.handle('permissions:set', async (_event, mode) => {
   permissionMode = mode === 'auto' ? 'auto' : 'ask';
   await saveSettings();

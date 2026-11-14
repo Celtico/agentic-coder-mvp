@@ -4,13 +4,13 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, ChatMessage, ChatSession, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra
+  Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuSettings as Settings, LuMinus as Minus, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
   LuMessageSquarePlus as MessageSquarePlus, LuPanelLeftClose as PanelLeftClose, LuPanelLeftOpen as PanelLeftOpen,
   LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
@@ -21,7 +21,11 @@ import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-c
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
-import { moveRailPanel, panelsInRow, sameRailLayout, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
+import { useSetAccent } from '../components/ui/provider';
+import { applyColorMode } from './color-mode';
+import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
+import { ACCENTS, type Accent } from '../theme/accent';
+import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
 
@@ -156,6 +160,10 @@ const WORKSPACE_CLOSE_BELOW = 10;
 const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot trigar fins a mig minut…';
 /** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
 const STOP_CONFIRM_MS = 3000;
+/** The names of the accents in Preferències › Aparença (src/theme/accent.ts). */
+const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray: 'Gris', red: 'Vermell', orange: 'Taronja', yellow: 'Groc', green: 'Verd', teal: 'Verd blavós', blue: 'Blau', cyan: 'Cian', purple: 'Lila', pink: 'Rosa' };
+const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
+const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 const STOPPED_WHILE_REVIEWING = '_(Aturat mentre es revisava: aquesta resposta no s’ha acabat de comprovar.)_';
 
 function getSplitSize(): number[] {
@@ -281,6 +289,35 @@ export function App(): React.JSX.Element {
   const [railLayout, setRailLayout] = useState<RailLayout>(() => initialView.rail);
   const [railDragging, setRailDragging] = useState<RailPanel | null>(null);
   const [railDrop, setRailDrop] = useState<{ group: RailGroup; index: number } | null>(null);
+  // Preferències (⌘,): the agent's values live in the main process; the appearance in the view state.
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [agentPreferences, setAgentPreferencesState] = useState<Awaited<ReturnType<typeof window.agentic.agentPreferences>> | null>(null);
+  const [preferencesError, setPreferencesError] = useState('');
+  const [appearance, setAppearance] = useState<Appearance>(() => initialView.appearance);
+  const setAccent = useSetAccent();
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true);
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return;
+    const change = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+  const colorMode = resolveColorMode(appearance.colorMode, systemDark);
+  useEffect(() => { applyColorMode(colorMode); }, [colorMode]);
+  useEffect(() => { setAccent(appearance.accent); updateViewState(localStorage, (state) => { state.appearance = appearance; }); }, [appearance, setAccent]);
+  useEffect(() => window.agentic.onOpenPreferences?.(() => void openPreferences()) ?? undefined, []);
+  async function openPreferences() {
+    setPreferencesOpen(true); setPreferencesError('');
+    try { setAgentPreferencesState(await window.agentic.agentPreferences()); } catch (error) { setPreferencesError(errorText(error)); }
+  }
+  async function changeAgentPreferences(change: Partial<AgentPreferences>) {
+    setPreferencesError('');
+    try {
+      const values = await window.agentic.setAgentPreferences(change);
+      setAgentPreferencesState((current) => current && { ...current, values });
+    } catch (error) { setPreferencesError(errorText(error)); }
+  }
   useEffect(() => { updateViewState(localStorage, (state) => { state.rail = railLayout; }); }, [railLayout]);
   const moveRailIcon = useCallback((panel: RailPanel, group: RailGroup, index: number) => {
     setRailLayout((current) => { const next = moveRailPanel(current, panel, group, index); return sameRailLayout(current, next) ? current : next; });
@@ -1329,7 +1366,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, terminalContainer]);
+  }, [terminalOpen, terminalContainer, colorMode]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1353,18 +1390,20 @@ export function App(): React.JSX.Element {
     window.addEventListener('pointerup', up);
   }
 
+  /** The chat's model selector and Preferències › Model both change the model here. */
+  async function changeModel(nextModel: string) {
+    setModelChanging(true);
+    try {
+      const result = await window.agentic.selectModel(nextModel);
+      setSelectedModel(result.selectedModel); setModelOptions(result.models);
+      const model = result.models.find((item) => item.id === result.selectedModel);
+      setStatus(`Seleccionat: ${model?.label || nextModel}. Envia una tasca per provar-lo.`);
+    } catch (error) { setStatus(`No s’ha pogut canviar el model: ${errorText(error)}`); }
+    finally { setModelChanging(false); }
+  }
+  function changePermissionMode(next: 'ask' | 'auto') { const previous = permissionMode; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(previous)); }
   const modelSelect = (
-    <NativeSelect.Root size="xs" width="auto" maxW="230px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={async (event) => {
-          const nextModel = event.currentTarget.value;
-          setModelChanging(true);
-          try {
-            const result = await window.agentic.selectModel(nextModel);
-            setSelectedModel(result.selectedModel); setModelOptions(result.models);
-            const model = result.models.find((item) => item.id === result.selectedModel);
-            setStatus(`Seleccionat: ${model?.label || nextModel}. Envia una tasca per provar-lo.`);
-          } catch (error) { setStatus(`No s’ha pogut canviar el model: ${errorText(error)}`); }
-          finally { setModelChanging(false); }
-        }}>{modelOptions.filter((model) => model.available || model.id === selectedModel).map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+    <NativeSelect.Root size="xs" width="auto" maxW="230px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={(event) => void changeModel(event.currentTarget.value)}>{modelOptions.filter((model) => model.available || model.id === selectedModel).map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
   );
   // The composer is one line that grows with what is typed.
   useEffect(() => {
@@ -1386,9 +1425,9 @@ export function App(): React.JSX.Element {
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
           const experienceKey = `${activeSessionId}:${index}`;
-          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
+          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" fontSize={appearance.chatFontSize} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
             {message.role === 'assistant'
-              ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode="dark" style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
+              ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
             {previousUser && !isWindowNotice(message) && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !isWindowNotice(item) && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
@@ -1476,7 +1515,7 @@ export function App(): React.JSX.Element {
           height="100%"
           width="100%"
           language={editorLanguage(editingPath)}
-          theme="vs-dark"
+          theme={colorMode === 'dark' ? 'vs-dark' : 'vs'}
           value={editorContent}
           onChange={(value) => setEditorContent(value ?? '')}
           onMount={(editor) => {
@@ -1485,7 +1524,7 @@ export function App(): React.JSX.Element {
             editor.onDidChangeCursorPosition(({ position: next }) => setEditorCursor({ line: next.lineNumber, column: next.column }));
           }}
           loading={<Flex h="full" align="center" justify="center" color="fg.muted"><Spinner size="sm"/></Flex>}
-          options={{ ariaLabel: editingPath ? `Editor de ${editingPath}` : 'Editor de codi', automaticLayout: true, fontSize: 11, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, tabSize: 2, wordWrap: 'on' }}
+          options={{ ariaLabel: editingPath ? `Editor de ${editingPath}` : 'Editor de codi', automaticLayout: true, fontSize: appearance.editorFontSize, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, tabSize: 2, wordWrap: 'on' }}
         />
         </> : <Center h="full" px="4" color="fg.muted" textAlign="center"><Text fontSize="sm">Cap fitxer obert. Tria’n un a la llista de Fitxers.</Text></Center>}
       </Box>
@@ -2209,6 +2248,104 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
+    <Dialog.Root size="lg" scrollBehavior="inside" open={preferencesOpen} onOpenChange={({ open }) => setPreferencesOpen(open)}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="lg" boxShadow="2xl">
+            <Dialog.Header><Dialog.Title><HStack gap="2"><Settings size={16}/><span>Preferències</span></HStack></Dialog.Title></Dialog.Header>
+            <Dialog.Body>
+              {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
+              <Tabs.Root defaultValue="model" variant="line" size="sm" colorPalette="agentic">
+                <Tabs.List><Tabs.Trigger value="model">Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
+                <Tabs.Content value="model"><Stack gap="4">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Model per defecte</Text>
+                    <NativeSelect.Root size="sm" disabled={loading || modelChanging}><NativeSelect.Field aria-label="Model per defecte" value={selectedModel} onChange={(event) => void changeModel(event.currentTarget.value)}>
+                      {modelOptions.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}
+                    </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+                    <Text mt="1" fontSize="xs" color="fg.muted">És el mateix que el selector del xat: canviar-lo aquí el canvia allà.</Text>
+                  </Box>
+                  {agentPreferences && <>
+                    {([['answerTokens', 'Límit de tokens de cada resposta', 64], ['maxIterations', 'Iteracions màximes per tasca', 1]] as const).map(([key, label, step]) => <Box key={key}>
+                      <Text fontSize="sm" fontWeight="medium" mb="1.5">{label}</Text>
+                      <NumberInput.Root size="sm" maxW="40" min={agentPreferences.limits[key].min} max={agentPreferences.limits[key].max} step={step} value={String(agentPreferences.values[key])} onValueChange={({ valueAsNumber }) => { if (Number.isFinite(valueAsNumber) && valueAsNumber >= agentPreferences.limits[key].min && valueAsNumber <= agentPreferences.limits[key].max) void changeAgentPreferences({ [key]: valueAsNumber }); }}>
+                        <NumberInput.Control/><NumberInput.Input aria-label={label}/>
+                      </NumberInput.Root>
+                      <Text mt="1" fontSize="xs" color="fg.muted">Entre {agentPreferences.limits[key].min} i {agentPreferences.limits[key].max}; per defecte {agentPreferences.defaults[key]}. Els models petits fan servir els seus propis límits.</Text>
+                    </Box>)}
+                    <Box><Button variant="outline" onClick={() => void changeAgentPreferences({ answerTokens: agentPreferences.defaults.answerTokens, maxIterations: agentPreferences.defaults.maxIterations })}><RefreshCw size={14}/>Restableix</Button></Box>
+                  </>}
+                </Stack></Tabs.Content>
+                <Tabs.Content value="agent"><Stack gap="4">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Permisos</Text>
+                    <SegmentGroup.Root size="sm" value={permissionMode} onValueChange={({ value }) => { if (value === 'ask' || value === 'auto') changePermissionMode(value); }}>
+                      <SegmentGroup.Indicator/><SegmentGroup.Items items={[{ value: 'auto', label: 'Automàtic' }, { value: 'ask', label: 'Demana' }]}/>
+                    </SegmentGroup.Root>
+                    <Text mt="1" fontSize="xs" color="fg.muted">El mateix que el botó del xat: «Demana» pregunta abans d’instal·lar paquets (un cop per projecte).</Text>
+                  </Box>
+                  {agentPreferences && <>
+                    {([['review', 'Revisor automàtic', 'Després d’escriure fitxers, una segona lectura comprova el que ha fet el programador.'], ['webSearch', 'Cerca web', 'L’agent pot cercar a Internet a més de llegir les adreces que li donis.']] as const).map(([key, label, help]) => <Box key={key}>
+                      <Switch.Root colorPalette="agentic" checked={agentPreferences.values[key]} onCheckedChange={({ checked }) => void changeAgentPreferences({ [key]: checked })}>
+                        <Switch.HiddenInput/><Switch.Control/><Switch.Label fontSize="sm" fontWeight="medium">{label}</Switch.Label>
+                      </Switch.Root>
+                      <Text mt="1" fontSize="xs" color="fg.muted">{help}</Text>
+                    </Box>)}
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" mb="1.5">Missatges de l’historial enviats al model</Text>
+                      <NumberInput.Root size="sm" maxW="40" min={agentPreferences.limits.historyMessages.min} max={agentPreferences.limits.historyMessages.max} value={String(agentPreferences.values.historyMessages)} onValueChange={({ valueAsNumber }) => { if (Number.isFinite(valueAsNumber) && valueAsNumber >= 0 && valueAsNumber <= agentPreferences.limits.historyMessages.max) void changeAgentPreferences({ historyMessages: valueAsNumber }); }}>
+                        <NumberInput.Control/><NumberInput.Input aria-label="Missatges de l’historial enviats al model"/>
+                      </NumberInput.Root>
+                      <Text mt="1" fontSize="xs" color="fg.muted">Entre 0 i {agentPreferences.limits.historyMessages.max}; per defecte {agentPreferences.defaults.historyMessages}. Amb 0, cada petició va sense la conversa anterior.</Text>
+                    </Box>
+                  </>}
+                </Stack></Tabs.Content>
+                <Tabs.Content value="appearance"><Stack gap="4">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Tema</Text>
+                    <SegmentGroup.Root size="sm" value={appearance.colorMode} onValueChange={({ value }) => { if (value === 'light' || value === 'dark' || value === 'system') setAppearance((current) => ({ ...current, colorMode: value })); }}>
+                      <SegmentGroup.Indicator/><SegmentGroup.Items items={(['light', 'dark', 'system'] as const).map((value) => ({ value, label: COLOR_MODE_LABELS[value] }))}/>
+                    </SegmentGroup.Root>
+                  </Box>
+                  <HStack gap="6" flexWrap="wrap" align="flex-start">
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" mb="1.5">Mida de lletra del xat</Text>
+                      <HStack gap="1">
+                        <IconButton icon={Minus} label="Més petita" variant="outline" disabled={appearance.chatFontSize === CHAT_FONT_SIZES[0]} onClick={() => setAppearance((current) => ({ ...current, chatFontSize: stepSize(CHAT_FONT_SIZES, current.chatFontSize, -1) }))}/>
+                        <Text minW="20" textAlign="center" fontSize={appearance.chatFontSize}>{CHAT_FONT_LABELS[appearance.chatFontSize]}</Text>
+                        <IconButton icon={Plus} label="Més gran" variant="outline" disabled={appearance.chatFontSize === CHAT_FONT_SIZES[CHAT_FONT_SIZES.length - 1]} onClick={() => setAppearance((current) => ({ ...current, chatFontSize: stepSize(CHAT_FONT_SIZES, current.chatFontSize, 1) }))}/>
+                      </HStack>
+                    </Box>
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" mb="1.5">Mida de lletra de l’editor</Text>
+                      <HStack gap="1">
+                        <IconButton icon={Minus} label="Més petita" variant="outline" disabled={appearance.editorFontSize === EDITOR_FONT_SIZES[0]} onClick={() => setAppearance((current) => ({ ...current, editorFontSize: stepSize(EDITOR_FONT_SIZES, current.editorFontSize as (typeof EDITOR_FONT_SIZES)[number], -1) }))}/>
+                        <Text minW="20" textAlign="center" fontSize="sm">{appearance.editorFontSize} px</Text>
+                        <IconButton icon={Plus} label="Més gran" variant="outline" disabled={appearance.editorFontSize === EDITOR_FONT_SIZES[EDITOR_FONT_SIZES.length - 1]} onClick={() => setAppearance((current) => ({ ...current, editorFontSize: stepSize(EDITOR_FONT_SIZES, current.editorFontSize as (typeof EDITOR_FONT_SIZES)[number], 1) }))}/>
+                      </HStack>
+                    </Box>
+                  </HStack>
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Color d’accent</Text>
+                    <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="1.5" role="radiogroup" aria-label="Color d’accent">
+                      {ACCENTS.map((accent) => <Button key={accent} role="radio" aria-checked={appearance.accent === accent} justifyContent="flex-start" variant={appearance.accent === accent ? 'subtle' : 'ghost'} colorPalette={appearance.accent === accent ? 'agentic' : 'gray'} onClick={() => setAppearance((current) => ({ ...current, accent }))}>
+                        <Box flex="none" boxSize="3.5" rounded="full" colorPalette={accent === 'agentic' ? 'brand' : accent} bg="colorPalette.solid" borderWidth="1px" borderColor="border"/>
+                        <Text as="span" fontSize="xs">{ACCENT_LABELS[accent]}</Text>
+                      </Button>)}
+                    </Grid>
+                  </Box>
+                  <Box>
+                    <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
+                  </Box>
+                </Stack></Tabs.Content>
+              </Tabs.Root>
+            </Dialog.Body>
+            <Dialog.Footer><Button variant="outline" onClick={() => setPreferencesOpen(false)}>Tanca</Button></Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
     <FloatingPanel.Root open={!!fileHistoryPath} onOpenChange={({ open }) => { if (!open) setFileHistoryPath(null); }}
       onStageChange={({ stage }) => { setFileHistoryStage(stage as WindowStage); updateViewState(localStorage, (state) => { state.history.stage = stage as WindowStage; }); }}
       onPositionChangeEnd={({ position }) => updateViewState(localStorage, (state) => { state.history.position = position; })}
@@ -2237,7 +2374,7 @@ export function App(): React.JSX.Element {
           <Flex minW="0" minH="0" direction="column">
             {fileHistorySelectedId && <Flex px="3" py="2" flex="none" justify="space-between" borderBottomWidth="1px" borderColor="border"><Text fontSize="xs" color="fg.muted">{fileHistoryVersionPath} · versió seleccionada a l’esquerra · actual a la dreta</Text>{fileHistoryLoading && <Spinner size="xs"/>}</Flex>}
             <Box flex="1" minW="0" minH="0">{fileHistorySelectedId && !fileHistoryLoading
-              ? <DiffEditor height="100%" width="100%" original={fileHistorySelectedContent} modified={fileHistoryCurrent} language={editorLanguage(fileHistoryVersionPath)} theme="vs-dark" options={{ readOnly: true, renderSideBySide: true, useInlineViewWhenSpaceIsLimited: false, renderOverviewRuler: false, automaticLayout: true, fontSize: 11, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, wordWrap: 'on'}}/>
+              ? <DiffEditor height="100%" width="100%" original={fileHistorySelectedContent} modified={fileHistoryCurrent} language={editorLanguage(fileHistoryVersionPath)} theme={colorMode === 'dark' ? 'vs-dark' : 'vs'} options={{ readOnly: true, renderSideBySide: true, useInlineViewWhenSpaceIsLimited: false, renderOverviewRuler: false, automaticLayout: true, fontSize: appearance.editorFontSize, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, wordWrap: 'on'}}/>
               : <Flex h="full" align="center" justify="center" color="fg.muted">{fileHistoryLoading ? <Spinner size="sm"/> : 'Selecciona una versió per comparar-la amb l’actual.'}</Flex>}</Box>
           </Flex>
         </Grid>

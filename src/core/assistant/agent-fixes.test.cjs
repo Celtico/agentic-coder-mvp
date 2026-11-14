@@ -110,3 +110,22 @@ test('«posa’l en marxa» is a request to start, not a change to the code', as
   });
   assert.ok(!inputs.some((input) => /Encara no has aplicat cap canvi al codi/.test(input)));
 });
+
+test('Preferències › Model: the answer length and the steps of a task come from the agent’s settings', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-limits-'));
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const tokens = [];
+  let calls = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async (_messages, options) => { calls += 1; tokens.push(options.max_new_tokens); return '{"type":"tool_call","name":"list_files"}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine, onStatus: () => {}, experienceRanker: { rank: async () => [] } });
+  agent.historyDir = path.join(tempRoot, 'history');
+  agent.answerTokens = 900;
+  agent.maxIterations = 3;
+  await agent.ask('llista els fitxers', tempRoot, async () => ({ files: [] }));
+  assert.ok(tokens.every((value) => value === 900), JSON.stringify(tokens));
+  assert.ok(calls <= 3 + 3, `a task of 3 steps stops early (${calls} generations)`);
+});

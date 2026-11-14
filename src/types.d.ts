@@ -26,6 +26,7 @@ export type ProjectFileHistoryVersion = { id: string; path: string; bytes: numbe
 export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
 export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string };
 export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
+export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
 export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string };
 
 export interface AgenticBridge {
@@ -55,6 +56,9 @@ export interface AgenticBridge {
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
   ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[] }): Promise<string>;
   getPermissionMode(): Promise<'ask' | 'auto'>;
+  agentPreferences(): Promise<{ values: AgentPreferences; defaults: AgentPreferences; limits: Record<'answerTokens' | 'maxIterations' | 'historyMessages', { min: number; max: number; default: number }> }>;
+  setAgentPreferences(change: Partial<AgentPreferences>): Promise<AgentPreferences>;
+  onOpenPreferences(callback: () => void): () => void;
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;

@@ -17,6 +17,12 @@ process.on('message', async (message) => {
     return;
   }
   if (!message || typeof message.id !== 'number') return;
+  // Preferències › Model and Agent, already checked by the main process (src/electron/preferences.cjs).
+  const settings = message.settings && typeof message.settings === 'object' ? message.settings : {};
+  if (Number.isInteger(settings.answerTokens)) agent.answerTokens = settings.answerTokens;
+  if (Number.isInteger(settings.maxIterations)) agent.maxIterations = settings.maxIterations;
+  if (typeof settings.review === 'boolean') agent.reviewChanges = settings.review;
+  if (typeof settings.webSearch === 'boolean') agent.webSearch = settings.webSearch;
   try {
     const executeTool = (tool) => new Promise((resolve, reject) => {
       const toolId = ++nextToolId;

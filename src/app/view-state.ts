@@ -1,12 +1,13 @@
 // What the app looked like when it was closed, so it opens the same way: which panels were open
 // (the editor opens again with its file, so it is kept per project),
-// the order and group of the icons of the left bar (src/app/rail-layout.ts), the open sections of the evaluation, the local history window (where, how big, minimized or big)
+// the appearance chosen in Preferències (src/app/preferences.ts), the order and group of the icons of the left bar (src/app/rail-layout.ts), the open sections of the evaluation, the local history window (where, how big, minimized or big)
 // and, per project, the page in the browser, the files open in the editor (its tabs, and the one in
 // front if the editor was open) and the history that was open.
 // Kept in localStorage, like the other sizes of the window.
 
 import type { WindowStage } from "./window-controls"
 import { defaultRailLayout, normalizeRailLayout, type RailLayout } from "./rail-layout"
+import { defaultAppearance, normalizeAppearance, type Appearance } from "./preferences"
 
 export const VIEW_STATE_KEY = "agentic-view-state-v1"
 
@@ -16,6 +17,7 @@ export type ProjectView = { browserUrl?: string; editorPath?: string; editorTabs
 export type ViewState = {
   panels: Panels
   rail: RailLayout
+  appearance: Appearance
   evaluationSections: string[]
   history: { position?: { x: number; y: number }; size?: { width: number; height: number }; stage: WindowStage }
   projects: Record<string, ProjectView>
@@ -28,6 +30,7 @@ const PANELS: PanelName[] = ["navigation", "browser", "evaluation", "git", "lear
 export const defaultViewState = (): ViewState => ({
   panels: { navigation: true, browser: false, evaluation: false, git: false, learning: false, console: false, terminal: false },
   rail: defaultRailLayout(),
+  appearance: defaultAppearance(),
   evaluationSections: [],
   history: { stage: "default" },
   projects: {},
@@ -64,6 +67,7 @@ export function loadViewState(storage: Storage): ViewState {
   if (!saved || typeof saved !== "object") return state
   for (const name of PANELS) if (typeof saved.panels?.[name] === "boolean") state.panels[name] = saved.panels[name]
   state.rail = normalizeRailLayout(saved.rail)
+  state.appearance = normalizeAppearance(saved.appearance)
   if (Array.isArray(saved.evaluationSections)) state.evaluationSections = saved.evaluationSections.filter((item: unknown): item is string => typeof item === "string")
   const history = saved.history || {}
   if (isNumber(history.position?.x) && isNumber(history.position?.y)) state.history.position = { x: history.position.x, y: history.position.y }
