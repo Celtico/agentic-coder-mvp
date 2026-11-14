@@ -229,3 +229,15 @@ test('the secondary bar: ghost actions, plain/subtle fields, the same small heig
   }
   assert.match(app, /variant="ghost" colorPalette="agentic" disabled=\{loading \|\| chosenCount === 0\}/, 'the benchmark button: ghost, in the accent');
 });
+
+test('Converses and Fitxers: their lists scroll inside the pane, and a handle between them sets their widths', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  for (const name of ['conversationsColumn', 'filesColumn']) {
+    const column = app.slice(app.indexOf(`const ${name} = (`), app.indexOf('</PaneCard>', app.indexOf(`const ${name} = (`)));
+    assert.match(column, /<Box flex="1" minH="0" overflowY="auto"/, name);
+  }
+  const aside = app.slice(app.indexOf('<Flex as="aside"'), app.indexOf('</Flex>\n        </Splitter.Panel>', app.indexOf('<Flex as="aside"')));
+  assert.match(aside, /<Splitter\.Root key=\{navigationKey\}/);
+  assert.match(aside, /<SplitterHandle id=\{`nav-\$\{sideColumns\[index - 1\]\}:nav-\$\{column\}`/);
+  assert.doesNotMatch(aside, /templateColumns=/, 'no fixed grid of equal columns');
+});

@@ -44,7 +44,8 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /<PaneHeader icon=\{FileText\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // One grid column per visible column of the side panel; each is shown or hidden from its icon.
-  assert.match(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}, minmax\(0, 1fr\)\)`\}/);
+  // Two columns side by side, with a handle between them (a splitter), as between the other panes.
+  assert.match(app, /<Splitter\.Root key=\{navigationKey\}/);
   // The same column is a side column or a pane of the bottom row, as its icon's group says.
   assert.match(app, /const sideColumns = sideColumnsShown\(railLayout, /);
   assert.match(app, /\{sideColumns\.map\(\(column\) => <React\.Fragment key=\{column\}>\{column === 'conversations' \? conversationsColumn : filesColumn\}/);

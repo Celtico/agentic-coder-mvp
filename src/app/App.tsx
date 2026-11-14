@@ -2233,6 +2233,10 @@ export function App(): React.JSX.Element {
       )}
     </Flex>
   );
+  // The side panel's columns (Converses | Fitxers) share a splitter; each arrangement keeps its widths.
+  const navigationKey = sideColumns.map((column) => `nav-${column}`).join('+');
+  const navigationPanels = useMemo(() => navigationKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 20 })), [navigationKey]);
+  const navigationEven = useMemo(() => navigationPanels.map(() => 100 / Math.max(1, navigationPanels.length)), [navigationPanels]);
   const sideKey = sideItems.map((item) => item.id).join('+');
   const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
   const sideEven = useMemo(() => sidePanels.map(() => 100 / Math.max(1, sidePanels.length)), [sidePanels]);
@@ -2295,10 +2299,16 @@ export function App(): React.JSX.Element {
         }}>
         <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
         <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
-          {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds). */}
-          <Grid flex="1" minH="0" minW="0" gap="1.5" templateColumns={`repeat(${navigationColumns}, minmax(0, 1fr))`}>
-            {sideColumns.map((column) => <React.Fragment key={column}>{column === 'conversations' ? conversationsColumn : filesColumn}</React.Fragment>)}
-          </Grid>
+          {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds),
+              with the same handle between them as between the other panes, to set their widths. */}
+          {sideColumns.length < 2
+            ? <Flex flex="1" minH="0" minW="0">{sideColumns.map((column) => <React.Fragment key={column}>{column === 'conversations' ? conversationsColumn : filesColumn}</React.Fragment>)}</Flex>
+            : <Splitter.Root key={navigationKey} flex="1" minH="0" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={navigationPanels} size={paneSizes[navigationKey] ?? navigationEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [navigationKey]: details.size }))}>
+              {sideColumns.map((column, index) => <React.Fragment key={column}>
+                {index > 0 && <SplitterHandle id={`nav-${sideColumns[index - 1]}:nav-${column}` as SplitterHandleId}/>}
+                <Splitter.Panel id={`nav-${column}`} display="flex" h="full" minW="0" minH="0" overflow="hidden">{column === 'conversations' ? conversationsColumn : filesColumn}</Splitter.Panel>
+              </React.Fragment>)}
+            </Splitter.Root>}
         </Flex>
         </Splitter.Panel>
         <SplitterHandle id={'navigation:main' as SplitterHandleId}/>
