@@ -3,6 +3,7 @@
 // example built from it puts the user's high-level request first and then the steps that worked, so
 // the model learns to do on its own, from one open request, what it was guided to do step by step.
 const { createHash } = require('node:crypto');
+const { isChatNotice } = require('./chat-notices.cjs');
 
 const MAX_TURNS = 40;
 const MAX_STEPS = 80;
@@ -33,6 +34,8 @@ function buildSessionTrajectory(turns, lookup) {
   let current = null;
   for (const turn of turns.slice(-MAX_TURNS * 3)) {
     if (!turn || typeof turn.content !== 'string') continue;
+    // A notice of the window (stopped, error) is neither a request nor an answer.
+    if (isChatNotice(turn)) continue;
     if (turn.role === 'user') { current = { request: turn.content.slice(0, 12000), steps: [], answer: null }; result.push(current); continue; }
     if (turn.role !== 'assistant' || !current) continue;
     // A request can show several assistant messages (the window shows the plan before the answer):

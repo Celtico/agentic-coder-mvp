@@ -1,1 +1,1 @@
-La crida no és vàlida o l’eina no està disponible. Continua amb una resposta final en prosa clara.
+La crida no és vàlida: l'eina existeix, però els arguments no són correctes o falten. Torna-la a fer, una sola crida JSON amb tots els arguments que demana l'eina. No diguis que l'eina no està disponible.

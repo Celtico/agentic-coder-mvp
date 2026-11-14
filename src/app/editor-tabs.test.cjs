@@ -61,3 +61,13 @@ test('the app restores only the tabs whose file is still there, and closes tabs 
   assert.match(app, /<Tabs\.Root[^>]*value=\{editingPath \?\? ''\}/);
   assert.match(app, /<CloseButton as="span" role="button"[^>]*onClick=\{\(event\) => \{ event\.stopPropagation\(\); closeEditorTab\(tab\); \}\}/);
 });
+
+test('the editor icon opens the first remembered file that still exists and forgets the deleted ones', async () => {
+  const there = new Set(['src/App.tsx']);
+  const exists = async (file) => there.has(file);
+  assert.deepEqual(await tabs.firstExistingFile(['package.json', 'src/App.tsx', 'README.md'], exists), { file: 'src/App.tsx', missing: ['package.json'] });
+  // In an empty folder nothing is left: the editor opens with no file, and every remembered one is forgotten.
+  assert.deepEqual(await tabs.firstExistingFile(['package.json', null, '', 'package.json', undefined, 'vite.config.ts'], async () => false), { file: null, missing: ['package.json', 'vite.config.ts'] });
+  assert.deepEqual(await tabs.firstExistingFile([], exists), { file: null, missing: [] });
+  assert.deepEqual(['package.json', 'src/App.tsx'].reduce(tabs.removeFromTabs, ['package.json', 'src/App.tsx', 'README.md']), ['README.md']);
+});

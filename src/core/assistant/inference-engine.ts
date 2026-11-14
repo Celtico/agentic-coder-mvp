@@ -78,7 +78,7 @@ export class MlxInferenceEngine implements InferenceEngine {
         if (!wasReady) reject(error);
         this.pending?.reject(error); this.pending = null;
       });
-      onStatus(`Carregant ${this.modelId} a la memòria unificada…`);
+      onStatus(`Carregant ${this.modelId} a la memòria unificada; la primera vegada pot trigar fins a mig minut…`);
     }).catch((error) => { this.state = 'unloaded'; throw error; }).finally(() => { this.ready = null; });
     return this.ready;
   }
@@ -124,7 +124,7 @@ export class TransformersJsInferenceEngine implements InferenceEngine {
     if (this.loading) return this.loading;
     this.state = 'loading';
     this.loading = (async () => {
-      onStatus(`Carregant el model local ${this.modelId}…`);
+      onStatus(`Carregant el model local ${this.modelId}; la primera vegada pot trigar fins a mig minut…`);
       const { pipeline, env } = await import('@huggingface/transformers');
       env.cacheDir = this.cacheDir;
       env.allowRemoteModels = false;

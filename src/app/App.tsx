@@ -19,7 +19,8 @@ import {
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
-import { closeTab, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
+import { isWindowNotice } from './chat-notices';
+import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { moveRailPanel, panelsInRow, sameRailLayout, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
@@ -150,6 +151,12 @@ const NAVIGATION_MIN_WIDTH = 150;
 const NAVIGATION_MAX_WIDTH = 760;
 /** The right-hand panel closes when dragged to less than this share of the width. */
 const WORKSPACE_CLOSE_BELOW = 10;
+/** Under an answer the reviewer had sent back when the user stopped the work. */
+/** Until the model answers its first word: loading it can take a while the first time. */
+const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot trigar fins a mig minut…';
+/** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
+const STOP_CONFIRM_MS = 3000;
+const STOPPED_WHILE_REVIEWING = '_(Aturat mentre es revisava: aquesta resposta no s’ha acabat de comprovar.)_';
 
 function getSplitSize(): number[] {
   try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
@@ -229,7 +236,7 @@ export function App(): React.JSX.Element {
   const [selectedModel, setSelectedModel] = useState('mimo-9b-mlx');
   const [modelChanging, setModelChanging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingLabel, setLoadingLabel] = useState('Preparant el model local…');
+  const [loadingLabel, setLoadingLabel] = useState(PREPARING_MODEL);
   // The browser and the file editor are independent: each opens beside the other instead of replacing it.
   const [browserOpen, setBrowserOpen] = useState(initialView.panels.browser);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -396,7 +403,8 @@ export function App(): React.JSX.Element {
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
   const previousSessionIdRef = useRef(activeSessionId);
-  const inFlightConversationRef = useRef<{ sessionId: string; projectPath: string; messages: ChatMessage[] } | null>(null);
+  // `draft`: the last answer the reviewer sent back, shown instead of «stopped» if the user stops the work.
+  const inFlightConversationRef = useRef<{ sessionId: string; projectPath: string; messages: ChatMessage[]; draft?: string } | null>(null);
   const webviewRef = useRef<ElectronWebviewTag | null>(null);
   // The browser element itself: when panes are rearranged React builds a new one, and whatever
   // listens to the page (address bar, console) has to follow it to the new element.
@@ -451,7 +459,7 @@ export function App(): React.JSX.Element {
       const notice = next.files.length === 0
         ? `Carpeta seleccionada: ${next.path}\nÉs buida. Demana què vols crear-hi.`
         : `Projecte seleccionat: ${next.path}\nPots preguntar sobre el codi, obrir fitxers per revisar-los o demanar canvis.`;
-      persistMessages([...session.messages, { role: 'assistant', text: notice }], session.id, next.path);
+      persistMessages([...session.messages, { role: 'assistant', text: notice, notice: true }], session.id, next.path);
     }
   }, [activeSessionId, draft, persistMessages, sessions, updateSessions]);
 
@@ -469,6 +477,10 @@ export function App(): React.JSX.Element {
     // Files added or removed outside the app show up when its window gets the focus back.
     const refreshOnFocus = () => { void window.agentic.currentProject().then((refreshed) => { if (refreshed) setProject(refreshed); }).catch(() => {}); };
     const offStatus = window.agentic.onStatus((s) => {
+      if (s.type === 'draft') {
+        if (inFlightConversationRef.current && s.message) inFlightConversationRef.current.draft = s.message;
+        return;
+      }
       const text = s.message || s.type;
       refreshProjectSoon();
       // Must match the agent's status text (src/core/assistant/agent.ts).
@@ -568,8 +580,10 @@ export function App(): React.JSX.Element {
     if (nearBottom) feed.scrollTop = feed.scrollHeight;
   }, [activeSessionId, messages, loading, loadingLabel]);
 
+  // Messages the window writes into the chat itself (checks run from the toolbar) are notices: shown,
+  // but not sent to the model as something it said, and not offered as a verified case.
   const appendMessage = useCallback((role: ChatMessage['role'], text: string) => {
-    const next = [...messages, { role, text }].slice(-100);
+    const next = [...messages, { role, text, ...(role === 'assistant' ? { notice: true } : {}) }].slice(-100);
     persistMessages(next);
   }, [messages, persistMessages]);
 
@@ -736,11 +750,12 @@ export function App(): React.JSX.Element {
     setDraft('');
     setChatAttachments([]);
     setLoading(true);
-    setLoadingLabel('Preparant el model local…');
+    setLoadingLabel(PREPARING_MODEL);
     try {
       // Keep the complete persisted conversation available to the local agent so
       // short follow-ups can refer to the original task without losing context.
-      const history = messages.slice(-100).map((message) => ({ role: message.role, content: message.text }));
+      // The window's own notices (stopped, error) are not part of what the model said.
+      const history = messages.slice(-100).filter((message) => !isWindowNotice(message)).map((message) => ({ role: message.role, content: message.text }));
       const answer = await window.agentic.ask({ prompt: request, history });
       const latestMessages = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current.messages : pendingMessages;
       // The plan is already on screen as its own message; the answer does not repeat it.
@@ -750,11 +765,17 @@ export function App(): React.JSX.Element {
     } catch (error) {
       const message = errorText(error);
       const cancelled = message.includes('Generació cancel·lada.');
+      const inFlight = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current : null;
+      const latestMessages = inFlight ? inFlight.messages : pendingMessages;
+      // Stopped while the reviewer had sent a finished answer back: that answer is kept, marked as such.
+      if (cancelled && inFlight?.draft) {
+        persistMessages([...latestMessages, { role: 'assistant', text: `${inFlight.draft}\n\n${STOPPED_WHILE_REVIEWING}` }], requestSessionId, project.path);
+        return;
+      }
       const text = cancelled
         ? 'Generació cancel·lada. El model local es tornarà a carregar quan enviïs la següent petició.'
         : `Error: ${message}\n\nLa resposta no s’ha pogut generar. Si el procés local del model s’ha aturat, la finestra de l’app hauria de continuar oberta.`;
-      const latestMessages = inFlightConversationRef.current?.sessionId === requestSessionId ? inFlightConversationRef.current.messages : pendingMessages;
-      persistMessages([...latestMessages, { role: 'assistant', text, error: !cancelled }], requestSessionId, project.path);
+      persistMessages([...latestMessages, { role: 'assistant', text, notice: true, ...(cancelled ? {} : { error: true }) }], requestSessionId, project.path);
     } finally {
       if (inFlightConversationRef.current?.sessionId === requestSessionId) inFlightConversationRef.current = null;
       setLoading(false); setStatus('Preparat');
@@ -790,6 +811,22 @@ export function App(): React.JSX.Element {
     setStatus(rejected.length ? `Adjuntats ${accepted.length}; ignorats: ${rejected.join(', ')}` : `${accepted.length} fitxer(s) adjuntat(s) al xat.`);
   }
 
+  // The first click on stop arms it for a few seconds; the second one stops the work.
+  const [stopArmed, setStopArmed] = useState(false);
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { if (!loading) { setStopArmed(false); if (stopTimerRef.current) clearTimeout(stopTimerRef.current); } }, [loading]);
+  useEffect(() => () => { if (stopTimerRef.current) clearTimeout(stopTimerRef.current); }, []);
+  async function stopPrompt() {
+    if (!stopArmed) {
+      setStopArmed(true);
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = setTimeout(() => setStopArmed(false), STOP_CONFIRM_MS);
+      return;
+    }
+    if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+    setStopArmed(false);
+    await cancelPrompt();
+  }
   async function cancelPrompt() {
     try {
       const result = await window.agentic.cancel();
@@ -958,7 +995,7 @@ export function App(): React.JSX.Element {
         : result.code < 0
           ? `No hi ha comprovacions disponibles.\n\n${result.output}`
           : `${result.code === 0 ? 'Comprovacions superades' : 'Les comprovacions han fallat'} (codi ${result.code}).\n\n\`\`\`\n${result.output}\n\`\`\``);
-    } catch (error) { appendMessage('assistant', `No s’han pogut executar les comprovacions: ${errorText(error)}`); }
+    } catch (error) { setStatus(`No s’han pogut executar les comprovacions: ${errorText(error)}`); }
     finally { setTestsBusy(false); }
   }
 
@@ -993,7 +1030,7 @@ export function App(): React.JSX.Element {
       });
       setEditorTabs((tabs) => openTab(tabs, relativePath));
       setEditingPath(relativePath); setEditorOriginal(original); setEditorContent(kept ? kept.content : original); setEditorCursor({ line: 1, column: 1 }); setEditorStatus(''); setEditorOpen(true);
-    } catch (error) { appendMessage('assistant', `No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
+    } catch (error) { setStatus(`No s’ha pogut obrir el fitxer: ${errorText(error)}`); }
   }
 
   /** Closes one tab; unsaved changes in it are dropped (the status bar says so). */
@@ -1189,9 +1226,15 @@ export function App(): React.JSX.Element {
     if (editorOpen) { setEditorOpen(false); return; }
     if (editingPath) { setEditorOpen(true); return; }
     const selected = selectedTreePath && !projectDirectoryPaths.has(selectedTreePath) ? selectedTreePath : null;
-    const file = editorTabs[editorTabs.length - 1] || selected || lastEditorPathRef.current;
+    // A remembered file that was deleted since is forgotten quietly; with none left the editor opens empty.
+    const { file, missing } = await firstExistingFile([...editorTabs].reverse().concat(selected ? [selected] : [], lastEditorPathRef.current ? [lastEditorPathRef.current] : []), (path) => window.agentic.fileExists(path).catch(() => false));
+    if (missing.length) {
+      setEditorTabs((tabs) => missing.reduce(removeFromTabs, tabs));
+      setTabBuffers((buffers) => Object.fromEntries(Object.entries(buffers).filter(([path]) => !missing.includes(path))));
+      if (lastEditorPathRef.current && missing.includes(lastEditorPathRef.current)) lastEditorPathRef.current = null;
+    }
     if (file) await openEditor(file);
-    else setStatus('Tria un fitxer a la llista de Fitxers per obrir-lo a l’editor');
+    else { setEditingPath(null); setEditorOpen(true); setStatus('Cap fitxer obert: tria’n un a la llista de Fitxers'); }
   }
 
   async function navigateBrowser() {
@@ -1347,7 +1390,7 @@ export function App(): React.JSX.Element {
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode="dark" style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
-            {previousUser && !message.error && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !item.error && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
+            {previousUser && !isWindowNotice(message) && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !isWindowNotice(item) && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}
         {loading && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text></HStack>}
@@ -1360,7 +1403,7 @@ export function App(): React.JSX.Element {
           <Flex align="flex-end" gap="2">
             <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
-              ? <Tip label="Atura la generació"><Button flex="none" aria-label="Atura la generació" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" bg="fg" color="bg" _hover={{ bg: 'white' }} onClick={cancelPrompt}><Stop size={12} fill="currentColor"/></Button></Tip>
+              ? <Tip label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'}><Button flex="none" aria-label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'} size="xs" h="28px" minW="28px" px={stopArmed ? '2' : '0'} borderRadius="8px" colorPalette={stopArmed ? 'red' : 'gray'} bg={stopArmed ? 'colorPalette.solid' : 'fg'} color={stopArmed ? 'colorPalette.contrast' : 'bg'} _hover={{ bg: stopArmed ? 'colorPalette.emphasized' : 'fg.muted' }} onClick={() => void stopPrompt()}><Stop size={12} fill="currentColor"/>{stopArmed && <Text as="span" fontSize="xs">Torna a clicar per aturar</Text>}</Button></Tip>
               : <Tip label="Envia (Retorn)"><Button flex="none" aria-label="Envia" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button></Tip>}
           </Flex>
         </Box>
@@ -1428,6 +1471,7 @@ export function App(): React.JSX.Element {
         </Tabs.Root>
         <HStack flex="none" gap="1"><IconButton icon={Check} label={editorContent === editorOriginal ? 'Sense canvis per desar' : 'Desa (⌘S)'} size="xs" variant={editorContent === editorOriginal ? 'ghost' : 'subtle'} colorPalette={editorContent === editorOriginal ? 'gray' : 'agentic'} disabled={editorBusy || editorContent === editorOriginal} onClick={() => void saveEdit()}/><IconButton icon={History} label="Historial local" size="xs" onClick={() => editingPath && void openFileHistory(editingPath, editorOriginal)}/></HStack></Flex>
       <Box flex="1" minH="0" overflow="hidden" onKeyDownCapture={(event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); void saveEdit(); } }}>
+        {editingPath ? <>
         <Editor
           height="100%"
           width="100%"
@@ -1443,6 +1487,7 @@ export function App(): React.JSX.Element {
           loading={<Flex h="full" align="center" justify="center" color="fg.muted"><Spinner size="sm"/></Flex>}
           options={{ ariaLabel: editingPath ? `Editor de ${editingPath}` : 'Editor de codi', automaticLayout: true, fontSize: 11, minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, scrollbar: { verticalScrollbarSize: 8, verticalSliderSize: 8, horizontalScrollbarSize: 8, horizontalSliderSize: 8 }, scrollBeyondLastLine: false, tabSize: 2, wordWrap: 'on' }}
         />
+        </> : <Center h="full" px="4" color="fg.muted" textAlign="center"><Text fontSize="sm">Cap fitxer obert. Tria’n un a la llista de Fitxers.</Text></Center>}
       </Box>
       {editorStatus && <Text color="fg.warning" fontSize="xs" mt="2">No s’ha pogut desar: {editorStatus}</Text>}
     </Flex>

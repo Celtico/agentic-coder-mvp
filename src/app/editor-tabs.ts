@@ -48,3 +48,16 @@ export function savedTabs(view: { editorTabs?: string[]; editorPath?: string }):
   if (view.editorPath) tabs = openTab(tabs, view.editorPath)
   return { tabs, active: view.editorPath ?? null }
 }
+
+/**
+ * The first of `candidates` that still exists, and those found missing on the way (to be forgotten).
+ * Empty or repeated candidates are skipped; with none left, `file` is null.
+ */
+export async function firstExistingFile(candidates: (string | null | undefined)[], exists: (path: string) => Promise<boolean>): Promise<{ file: string | null; missing: string[] }> {
+  const missing: string[] = []
+  for (const path of [...new Set(candidates.filter((item): item is string => typeof item === "string" && item.length > 0))]) {
+    if (await exists(path)) return { file: path, missing }
+    missing.push(path)
+  }
+  return { file: null, missing }
+}

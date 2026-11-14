@@ -2,7 +2,8 @@ import type { DetailedHTMLProps, HTMLAttributes, Ref } from 'react';
 
 export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean };
+/** `notice`: a message of the window itself (stopped, error), not sent to the model as history. */
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean };
 export type HistoryEntry = { prompt: string; answer: string; at?: string };
 export type ChatSession = { id: string; title: string; updatedAt: string; projectPath?: string | null; messages: ChatMessage[] };
 export type BenchmarkTask = { id: string; description: string; prompt: string; kind: 'open' | 'app' | 'reference' };

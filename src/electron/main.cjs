@@ -17,6 +17,8 @@ const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, l
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
 const learningCases = require('./learning-cases.cjs');
+const { isChatNotice } = require('./chat-notices.cjs');
+const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
@@ -583,6 +585,8 @@ function cleanConversationHistory(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(-100).flatMap((message) => {
     if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') return [];
+    // The window's notices (stopped, error) are not something the model said.
+    if (isChatNotice(message)) return [];
     const content = message.content.trim();
     if (!content || content.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) return [];
     if (message.role === 'assistant' && /(?:"type"\s*:\s*"tool_call"|<tool_call>|<\|tool_call\|>)/i.test(content)) return [];
@@ -622,6 +626,8 @@ function cancelModelRequest() {
   const child = modelWorker;
   modelWorker = null;
   pending.reject(new Error('Generació cancel·lada.'));
+  // The worker is stopped before it can write its turn: the stop is written to the same log.
+  if (!process.env.NODE_TEST_CONTEXT) void appendTurnLog(turnLogPath({ isPackaged: app.isPackaged, userData: app.getPath('userData'), appRoot: path.resolve(__dirname, '../..') }), { kind: 'cancelled', requestId: id }).catch(() => {});
   if (child && !child.killed) {
     let exited = false;
     const forceTimer = setTimeout(() => { if (!exited) child.kill('SIGKILL'); }, 1500);

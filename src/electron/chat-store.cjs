@@ -13,7 +13,7 @@ function cleanSession(value) {
   const messages = value.messages.slice(-MAX_MESSAGES).flatMap((message) => {
     if (!message || (message.role !== 'user' && message.role !== 'assistant') || typeof message.text !== 'string') return [];
     if (message.text.length > MAX_TEXT) return [];
-    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}) }];
+    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}), ...(message.notice === true ? { notice: true } : {}) }];
   });
   return {
     id: value.id,

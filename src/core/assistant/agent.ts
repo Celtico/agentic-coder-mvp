@@ -6,7 +6,8 @@ import { MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type 
 import { prompt as promptText, toolDescriptions } from './prompts';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
 
-export type AgentStatus = { type: 'status' | 'plan'; message: string };
+// 'draft': an answer the reviewer sent back; the window keeps it in case the user stops the work.
+export type AgentStatus = { type: 'status' | 'plan' | 'draft'; message: string };
 export type AgentToolCall =
   | { name: 'list_files' | 'run_tests' }
   | { name: 'create_git_commit'; arguments: { message: string } }
@@ -765,9 +766,10 @@ export class LocalCodingAgent {
     const intentPrompt = requestWords(prompt);
     const intentEffectivePrompt = requestWords(effectivePrompt);
     const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(intentPrompt);
-    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test)\b/i.test(intentEffectivePrompt);
+    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test|posa|posar|embolica|envolta|arrenca|engega|obre|treu|mou|escriu|reanomena|substitueix|usa|pon|poner|envuelve|arranca|abre|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra|ejecuta|lanza|inicia)\b/i.test(intentEffectivePrompt);
     const unnecessaryQuestion = /\b(?:vols que|vols que ho|hauria de|necessito saber|em pots dir|pots indicar|would you like me to|do you want me to|should i|can you provide|could you clarify|please tell me which)\b/i;
-    const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error)\b/i;
+    // «Posa'l en marxa» (start it) is not a change to the code; «posa un botó» is.
+    const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error|(?:posa|posar|pon|poner)(?!(?:['’][a-z]+)?\s+en\s+(?:marxa|funcionament|marcha|funcionamiento)\b)|embolica|envolta|treu|mou|escriu|reanomena|substitueix|envuelve|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra)\b/i;
     const appTargetMentioned = /\b(?:app|application)\b|aplicaci[oó](?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
     const projectTargetMentioned = appTargetMentioned || /\b(?:project|projecte|proyecto)\b/i.test(intentEffectivePrompt);
     const creationModeMentioned = /\b(?:from scratch|de zero|desde cero|de cero|new|nou|nuevo|create|creating|crea|crear|build|construeix|haz)\b|nova(?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
@@ -836,7 +838,9 @@ export class LocalCodingAgent {
     // instructions and none of the programmer's conversation: it sees the request, the files as they
     // are on disk and what the app saw on the page, and can send the programmer back once.
     const reviewChanges = async (): Promise<string | null> => {
-      if (!this.reviewChanges || compact || reviewed || !changeApplied || options.recordHistory === false) return null;
+      // Only files written in this request are reviewed: after an install or a command that ended well
+      // there is nothing for the reviewer to read, and it would send the programmer back for nothing.
+      if (!this.reviewChanges || compact || reviewed || !changeApplied || appliedProjectFiles.size === 0 || options.recordHistory === false) return null;
       reviewed = true;
       this.onStatus({ type: 'status', message: 'Revisor: comprovant el que ha escrit el programador…' });
       const files: string[] = [];
@@ -869,8 +873,12 @@ export class LocalCodingAgent {
     };
     // Asked to do something, the model sometimes answers with the plan and stops there. A plan is not
     // an answer: it is told to carry it out, and if it never does, the reply says so plainly.
-    const onlyAPlan = (text: string) => requestedAction && toolsRun === 0 && !changeApplied
-      && (/^\s*(?:pla\b|plan\b)/i.test(text) || /\b\p{L}{3,}(?:aré|eré|iré)\b/iu.test(text) || /\bI(?:'ll| will)\b/.test(text));
+    // (A word ending in «é» has no \b after it in JavaScript: the future tense is matched with letter look-arounds.)
+    // A «Pla:»/«Plan:» heading, or an answer that ends announcing it starts («Començo.»), is a plan
+    // whatever the request said.
+    const planMarkers = (text: string) => /(?:^|\n)\s*(?:[#*_>\s]*)(?:pla|plan)\s*(?:\*\*)?\s*:/i.test(text) || /(?:^|[\s.!])(?:Començo|Empiezo|Comienzo|Vaig)\.\s*$/u.test(text.trim());
+    const onlyAPlan = (text: string) => toolsRun === 0 && !changeApplied
+      && ((requestedAction && (/^\s*(?:pla\b|plan\b)/i.test(text) || /(?<!\p{L})\p{L}{3,}(?:aré|eré|iré)(?!\p{L})/iu.test(text) || /\bI(?:'ll| will)\b/.test(text))) || planMarkers(text));
     const carryOutPlan = promptText('nudge-carry-out-plan');
     const planNeverRun = 'He escrit el pla però no he arribat a executar-ne cap pas: no he instal·lat res ni he tocat cap fitxer. Torna-m’ho a demanar, si pot ser dient el primer pas concret (per exemple «instal·la el paquet que necessites»).';
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
@@ -912,7 +920,7 @@ export class LocalCodingAgent {
         }
         if (!unmet) {
           const fixes = await reviewChanges();
-          if (fixes) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
+          if (fixes) { this.onStatus({ type: 'draft', message: raw.slice(0, 30000) }); messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
         }
         answer = unmet ? incompleteAnswer() : raw;
         break;
@@ -952,7 +960,7 @@ export class LocalCodingAgent {
         }
         if (!unmet) {
           const fixes = await reviewChanges();
-          if (fixes) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
+          if (fixes) { this.onStatus({ type: 'draft', message: action.content.slice(0, 30000) }); messages.push({ role: 'assistant', content: raw }, { role: 'user', content: fixes }); continue; }
         }
         answer = unmet ? incompleteAnswer() : action.content;
         break;
@@ -963,7 +971,11 @@ export class LocalCodingAgent {
         continue;
       }
       if (!tool || (tool.name === 'delegate_tasks' && options.allowDelegation === false)) {
-        messages.push({ role: 'assistant', content: raw }, { role: 'user', content: promptText('nudge-invalid-call') });
+        // A tool that is not offered (or not at all) is named as such, with the list of those that are;
+        // a tool that exists but came with wrong or missing arguments is asked again, never «not available».
+        const offered = availableTools.map((item) => item.function.name);
+        const known = offered.includes(action.name) || action.name === 'list_mcp_tools';
+        messages.push({ role: 'assistant', content: raw }, { role: 'user', content: known ? promptText('nudge-invalid-call') : promptText('nudge-unknown-tool', { name: action.name.slice(0, 80), tools: offered.join(', ') }) });
         continue;
       }
       // A small model that already chose the right tool is not sent back to write a plan first: that
