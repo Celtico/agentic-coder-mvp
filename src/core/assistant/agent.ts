@@ -126,6 +126,36 @@ function tidyBlankLines(text: string): string {
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * A text the model wrote, without any tool call in it: the `<tool_call>…</tool_call>` blocks, the tags of
+ * its XML call format and any JSON object that names a tool or an action. What is left is prose, or
+ * nothing; a call (even to a tool that does not exist, like «plan») is never shown as a plan or as text.
+ */
+export function withoutToolCalls(text: string): string {
+  let rest = String(text || '')
+    .replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/gi, ' ')
+    .replace(/<\/?(?:tool_call|function(?:=[^>]*)?|parameter(?:=[^>]*)?)>/gi, ' ')
+    .replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```/gi, ' ');
+  // Bare JSON objects that are calls or actions ({"name": …} / {"type": …}).
+  for (let start = rest.indexOf('{'); start !== -1; start = rest.indexOf('{', start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let end = start; end < rest.length; end += 1) {
+      const character = rest[end];
+      if (inString) { if (escaped) escaped = false; else if (character === '\\') escaped = true; else if (character === '"') inString = false; continue; }
+      if (character === '"') inString = true;
+      else if (character === '{') depth += 1;
+      else if (character === '}' && --depth === 0) {
+        const candidate = rest.slice(start, end + 1);
+        if (/^\{\s*"(?:name|type)"\s*:/.test(candidate)) { rest = `${rest.slice(0, start)} ${rest.slice(end + 1)}`; start -= 1; }
+        break;
+      }
+    }
+  }
+  return rest.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+}
+
 function parseAction(raw: string): AgentAction | null {
   const parseCandidate = (candidate: string): AgentAction | null => {
     try {
@@ -829,9 +859,10 @@ export class LocalCodingAgent {
         : null;
     let automaticProjectInspectionCompleted = false;
     const inspectProjectForCreation = async (planningText = '') => {
-      if (!planPublished && planningText.trim()) {
+      const planningProse = withoutToolCalls(planningText);
+      if (!planPublished && planningProse) {
         planPublished = true;
-        this.onStatus({ type: 'plan', message: planningText.slice(0, 3000) });
+        this.onStatus({ type: 'plan', message: planningProse.slice(0, 3000) });
       }
       automaticProjectInspectionCompleted = true;
       this.onStatus({ type: 'status', message: 'Inspeccionant la carpeta abans de crear l’app…' });
@@ -909,9 +940,10 @@ export class LocalCodingAgent {
       const action = parseAction(raw);
       await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed' });
       if (!action) {
-        if (requestedCodeChange && !planPublished && /\b(?:pla|passos|pass|primer|abans de|per completar|plan|steps|first|to complete)\b/i.test(raw)) {
+        const rawProse = withoutToolCalls(raw);
+        if (requestedCodeChange && !planPublished && /\b(?:pla|passos|pass|primer|abans de|per completar|plan|steps|first|to complete)\b/i.test(rawProse)) {
           planPublished = true;
-          this.onStatus({ type: 'plan', message: raw.slice(0, 3000) });
+          this.onStatus({ type: 'plan', message: rawProse.slice(0, 3000) });
         }
         if (requestedProjectCreation && !hasApplicationEntry() && !automaticProjectInspectionCompleted) {
           messages.push({ role: 'assistant', content: raw });
@@ -937,7 +969,7 @@ export class LocalCodingAgent {
         break;
       }
       if (action.type === 'plan') {
-        plan = action.content.slice(0, 1000);
+        plan = (withoutToolCalls(action.content) || action.content).slice(0, 1000);
         if (!planPublished) this.onStatus({ type: 'plan', message: plan });
         planPublished = true;
         messages.push({ role: 'assistant', content: promptText('assistant-plan-brief', { plan }) }, { role: 'user', content: promptText('nudge-execute-plan') });
@@ -991,8 +1023,8 @@ export class LocalCodingAgent {
       }
       // A small model that already chose the right tool is not sent back to write a plan first: that
       // throws the call away and costs two more slow generations.
-      if (!planPublished && action.plan) {
-        plan = action.plan.slice(0, 3000);
+      if (!planPublished && action.plan && withoutToolCalls(action.plan)) {
+        plan = withoutToolCalls(action.plan).slice(0, 3000);
         planPublished = true;
         this.onStatus({ type: 'plan', message: plan });
       }
@@ -1001,11 +1033,15 @@ export class LocalCodingAgent {
         this.onStatus({ type: 'status', message: 'El model està escrivint el pla abans de començar…' });
         const planningRaw = await this.engine.generateResponse(messages, { max_new_tokens: 300, temperature: 0.2, do_sample: false, images: imageInput, tools: [] });
         const planningAction = parseAction(planningRaw);
-        const plannedText = planningAction?.type === 'plan'
+        // A call instead of a plan (even to a tool that does not exist, like «plan») is not a plan:
+        // its markup is never published, and the plan is the prose around it or the default one.
+        const plannedText = withoutToolCalls(planningAction?.type === 'plan'
           ? planningAction.content
           : planningAction?.type === 'final'
             ? planningAction.content
-            : planningRaw.trim();
+            : planningAction?.type === 'tool_call'
+              ? planningAction.plan || planningRaw
+              : planningRaw);
         plan = (plannedText || 'Inspeccionaré el projecte, aplicaré els canvis demanats i comprovaré el resultat.').slice(0, 3000);
         planPublished = true;
         this.onStatus({ type: 'plan', message: plan });

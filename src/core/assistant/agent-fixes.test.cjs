@@ -152,3 +152,29 @@ test('images go with the current request’s message to the programmer only, nev
   await agent.ask('i ara?', tempRoot, async () => ({ files: [] }), [{ role: 'user', content: 'què hi ha a la captura?\n\n[Imatges adjuntes: a.png]' }, { role: 'assistant', content: 'És una captura del formulari.' }]);
   assert.ok(seen.slice(before).every((call) => call.images === undefined), 'a later request carries no image');
 });
+
+test('a tool call is never published as the plan, not even one to a tool that does not exist («plan»)', async (t) => {
+  const { statuses } = await run(t, {
+    request: 'corregeix el botó de reiniciar de src/App.jsx',
+    responses: [
+      '{"type":"tool_call","name":"read_file","arguments":{"path":"src/App.jsx"}}',
+      '<tool_call>{"name": "plan", "arguments": {}}</tool_call>',
+    ],
+    tool: async () => ({ path: 'src/App.jsx', content: 'export default function App() { return null }' }),
+  });
+  const plans = statuses.filter((status) => status.type === 'plan').map((status) => status.message);
+  // The planning step answered with a call to «plan» (a tool that does not exist): the default plan is shown.
+  assert.deepEqual(plans, ['Inspeccionaré el projecte, aplicaré els canvis demanats i comprovaré el resultat.']);
+  for (const plan of plans) {
+    assert.doesNotMatch(plan, /<tool_call>|<\/tool_call>|"name"\s*:/);
+    assert.ok(plan.trim().length > 0);
+  }
+});
+
+test('withoutToolCalls keeps the prose and drops every call, tag and action object', () => {
+  const { withoutToolCalls } = require('./agent-runtime.cjs');
+  assert.equal(withoutToolCalls('<tool_call>{"name": "plan", "arguments": {}}</tool_call>'), '');
+  assert.equal(withoutToolCalls('1. Llegir App.jsx\n2. Afegir el botó\n<tool_call>{"name":"read_file","arguments":{"path":"src/App.jsx"}}</tool_call>'), '1. Llegir App.jsx\n2. Afegir el botó');
+  assert.equal(withoutToolCalls('Primer miro el projecte. {"type":"tool_call","name":"list_files"}'), 'Primer miro el projecte.');
+  assert.equal(withoutToolCalls('Faré servir {"a": 1} com a exemple.'), 'Faré servir {"a": 1} com a exemple.', 'an object that is not a call stays');
+});
