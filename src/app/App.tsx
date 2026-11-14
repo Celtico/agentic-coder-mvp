@@ -123,6 +123,11 @@ const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: strin
     <PaneHeader icon={icon} title={title} subtitle={subtitle} actions={<Dialog.CloseTrigger asChild><IconButton icon={X} label="Tanca"/></Dialog.CloseTrigger>}/>
   </Dialog.Header>
 );
+/**
+ * Where a dialog puts the focus when it opens: what is marked data-initial-focus in it (its first tab,
+ * its first field or its main button), not the ✕ of the header, which then showed highlighted.
+ */
+const focusDialogContent = () => document.querySelector<HTMLElement>('[data-scope="dialog"][data-part="content"][data-state="open"] [data-initial-focus]');
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -2294,7 +2299,7 @@ export function App(): React.JSX.Element {
           </HStack>
     </Flex>
     </Flex>
-    <Dialog.Root {...dialogMaterial} open={createEntryKind !== null} onOpenChange={({ open }) => { if (!open && !createEntryBusy) setCreateEntryKind(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={createEntryKind !== null} onOpenChange={({ open }) => { if (!open && !createEntryBusy) setCreateEntryKind(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2302,7 +2307,7 @@ export function App(): React.JSX.Element {
             <DialogHeading icon={createEntryKind === 'rename' ? Pencil : createEntryKind === 'directory' ? FolderPlus : FilePlus} title={createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">{createEntryKind === 'rename' ? `Escriu el nom nou de «${renameEntryPath}».` : 'Escriu un nom o una ruta relativa dins del projecte.'}</Text>
-              <Input autoFocus value={createEntryPath} onChange={(event) => setCreateEntryPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !createEntryBusy) void createProjectEntry(); }} placeholder={createEntryKind === 'directory' ? 'src/components' : 'src/notes.md'} aria-label={createEntryKind === 'directory' ? 'Nom o ruta del directori' : createEntryKind === 'rename' ? 'Nom nou' : 'Nom o ruta del fitxer'}/>
+              <Input autoFocus data-initial-focus value={createEntryPath} onChange={(event) => setCreateEntryPath(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !createEntryBusy) void createProjectEntry(); }} placeholder={createEntryKind === 'directory' ? 'src/components' : 'src/notes.md'} aria-label={createEntryKind === 'directory' ? 'Nom o ruta del directori' : createEntryKind === 'rename' ? 'Nom nou' : 'Nom o ruta del fitxer'}/>
             </Dialog.Body>
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" disabled={createEntryBusy} onClick={() => setCreateEntryKind(null)}>Cancel·la</ChakraButton>
@@ -2312,7 +2317,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} open={verifiedExperienceDraft !== null} onOpenChange={({ open }) => { if (!open && !verifiedExperienceBusy) setVerifiedExperienceDraft(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={verifiedExperienceDraft !== null} onOpenChange={({ open }) => { if (!open && !verifiedExperienceBusy) setVerifiedExperienceDraft(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2320,7 +2325,7 @@ export function App(): React.JSX.Element {
             <DialogHeading icon={Brain} title="Desa com a cas verificat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Indica què has comprovat perquè aquest exemple sigui fiable.</Text>
-              <Input autoFocus value={verifiedEvidence} onChange={(event) => setVerifiedEvidence(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !verifiedExperienceBusy) void saveVerifiedExperience(); }} placeholder="Per exemple: build superat" aria-label="Comprovació realitzada"/>
+              <Input autoFocus data-initial-focus value={verifiedEvidence} onChange={(event) => setVerifiedEvidence(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !verifiedExperienceBusy) void saveVerifiedExperience(); }} placeholder="Per exemple: build superat" aria-label="Comprovació realitzada"/>
               <Text mt="4" mb="2" fontSize="sm" color="fg.muted">Petició general: el que voldries demanar d’una sola vegada la propera vegada. Es desa amb tots els passos d’aquesta conversa.</Text>
               <Input value={verifiedTask} onChange={(event) => setVerifiedTask(event.target.value)} placeholder="Per exemple: la primera petició de la conversa" aria-label="Petició general"/>
             </Dialog.Body>
@@ -2332,7 +2337,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} open={caseEdit !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseEdit(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={caseEdit !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseEdit(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2340,7 +2345,7 @@ export function App(): React.JSX.Element {
             <DialogHeading icon={Pencil} title="Edita el cas desat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Petició general</Text>
-              <Textarea autoFocus rows={4} maxLength={4000} value={caseEdit?.task ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, task: event.target.value })} aria-label="Petició general"/>
+              <Textarea autoFocus data-initial-focus rows={4} maxLength={4000} value={caseEdit?.task ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, task: event.target.value })} aria-label="Petició general"/>
               <Text mt="4" mb="2" fontSize="sm" color="fg.muted">Comprovació</Text>
               <Input maxLength={4000} value={caseEdit?.evidence ?? ''} onChange={(event) => setCaseEdit((current) => current && { ...current, evidence: event.target.value })} aria-label="Comprovació realitzada"/>
               {caseError && <Box mt="3"><Notice tone="warning">{caseError}</Notice></Box>}
@@ -2353,7 +2358,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} role="alertdialog" open={caseToDelete !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseToDelete(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} role="alertdialog" open={caseToDelete !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseToDelete(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2366,13 +2371,13 @@ export function App(): React.JSX.Element {
             </Dialog.Body>
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" disabled={caseBusy !== null} onClick={() => setCaseToDelete(null)}>Cancel·la</ChakraButton>
-              <ChakraButton size="sm" colorPalette="red" disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" data-initial-focus disabled={caseBusy !== null} onClick={() => void confirmCaseDelete()}>{caseBusy ? <Spinner size="xs"/> : <Trash size={14}/>}Esborra</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} size="lg" scrollBehavior="inside" open={caseDetail !== null} onOpenChange={({ open }) => { if (!open) setCaseDetail(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} size="lg" scrollBehavior="inside" open={caseDetail !== null} onOpenChange={({ open }) => { if (!open) setCaseDetail(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2400,12 +2405,12 @@ export function App(): React.JSX.Element {
                 </Box>
               </Stack>}
             </Dialog.Body>
-            <Dialog.Footer><ChakraButton size="sm" variant="outline" onClick={() => setCaseDetail(null)}>Tanca</ChakraButton></Dialog.Footer>
+            <Dialog.Footer><ChakraButton size="sm" variant="outline" data-initial-focus onClick={() => setCaseDetail(null)}>Tanca</ChakraButton></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} size="lg" scrollBehavior="inside" open={preferencesOpen} onOpenChange={({ open }) => setPreferencesOpen(open)}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} size="lg" scrollBehavior="inside" open={preferencesOpen} onOpenChange={({ open }) => setPreferencesOpen(open)}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2414,7 +2419,7 @@ export function App(): React.JSX.Element {
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
               <Tabs.Root defaultValue="model" variant="line" size="sm" colorPalette="agentic">
-                <Tabs.List><Tabs.Trigger value="model">Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="learning">Aprenentatge</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
+                <Tabs.List><Tabs.Trigger value="model" data-initial-focus>Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="learning">Aprenentatge</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
                 <Tabs.Content value="model"><Stack gap="4">
                   <Box>
                     <Text fontSize="sm" fontWeight="medium" mb="1.5">Model per defecte</Text>
@@ -2562,7 +2567,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} role="alertdialog" open={chatToDelete !== null} onOpenChange={({ open }) => { if (!open) setChatToDelete(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} role="alertdialog" open={chatToDelete !== null} onOpenChange={({ open }) => { if (!open) setChatToDelete(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2574,13 +2579,13 @@ export function App(): React.JSX.Element {
             </Dialog.Body>
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" onClick={() => setChatToDelete(null)}>Cancel·la</ChakraButton>
-              <ChakraButton size="sm" colorPalette="red" disabled={deletingChatId !== null} onClick={() => { const target = chatToDelete; setChatToDelete(null); if (target) void deleteChatSession(target.id); }}><Trash size={14}/>Elimina</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" data-initial-focus disabled={deletingChatId !== null} onClick={() => { const target = chatToDelete; setChatToDelete(null); if (target) void deleteChatSession(target.id); }}><Trash size={14}/>Elimina</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root {...dialogMaterial} size="md" scrollBehavior="inside" open={chatTrash !== null} onOpenChange={({ open }) => { if (!open) setChatTrash(null); }}>
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} size="md" scrollBehavior="inside" open={chatTrash !== null} onOpenChange={({ open }) => { if (!open) setChatTrash(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2597,7 +2602,7 @@ export function App(): React.JSX.Element {
               </HStack>)}</Stack>
             </Dialog.Body>
             <Dialog.Footer>
-              <ChakraButton size="sm" variant="outline" onClick={() => setChatTrash(null)}>Tanca</ChakraButton>
+              <ChakraButton size="sm" variant="outline" data-initial-focus onClick={() => setChatTrash(null)}>Tanca</ChakraButton>
               <ChakraButton size="sm" colorPalette="red" variant={emptyTrashArmed ? 'solid' : 'outline'} disabled={!chatTrash?.length} onClick={() => void emptyChatTrash()}><Trash size={14}/>{emptyTrashArmed ? 'Torna a clicar per buidar-la del tot' : 'Buida la paperera'}</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
