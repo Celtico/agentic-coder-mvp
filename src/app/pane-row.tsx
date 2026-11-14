@@ -1,46 +1,49 @@
 import { Fragment, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { Box, Flex } from "@chakra-ui/react"
-import { draggedPaneWidth, paneMinWidth, paneWidth } from "./row-sizes"
+import { draggedPair, paneMinWidth, paneWidth } from "./row-sizes"
 
 export type RowItem = { id: string; node: ReactNode }
 
 /**
- * A row of panes, as in an IDE (src/app/row-sizes.ts): each pane but `flexId` has its own width, with a
- * divider on its right that changes that width only; the panes after it move along and `flexId` takes
- * what is left, down to its minimum. Arrow keys on a divider move it 16 px.
+ * A row of panes (src/app/row-sizes.ts): each pane but `flexId` has its own width, with a divider on its
+ * right that changes only the two panes beside it, one wider and the other narrower by as much; no other
+ * pane moves. Next to `flexId`, that one takes the difference. Arrow keys on a divider move it 16 px.
  */
 export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   items: RowItem[]
   flexId: string
   widths: Record<string, number>
-  /** While dragging. */
-  onWidth: (id: string, width: number) => void
-  /** When the drag (or a key) ends: the width to keep. */
-  onCommit: (id: string, width: number) => void
+  /** While dragging: the new widths of the two panes beside the divider. */
+  onWidth: (changes: Record<string, number>) => void
+  /** When the drag (or a key) ends: the widths to keep. */
+  onCommit: (changes: Record<string, number>) => void
   label: string
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const flexWidth = () => rowRef.current?.querySelector<HTMLElement>("[data-pane-flex]")?.getBoundingClientRect().width ?? 0
   const flexMin = paneMinWidth(flexId)
+  // The pane on the right of a pane's divider, and how wide each one is when a drag starts.
+  const rightOf = (id: string) => items[items.findIndex((item) => item.id === id) + 1]?.id ?? flexId
+  const pair = (id: string, delta: number, starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }) =>
+    draggedPair({ left: id, right: rightOf(id), startLeft: starts.left, startRight: starts.right, delta, rightIsFlex: rightOf(id) === flexId, flexMin })
 
   const startDrag = (id: string) => (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     event.preventDefault()
     const handle = event.currentTarget
     handle.setPointerCapture(event.pointerId)
-    const start = paneWidth(id, widths)
     const startX = event.clientX
-    const room = flexWidth()
-    let width = start
+    const starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }
+    let changes = pair(id, 0, starts)
     const move = (moved: globalThis.PointerEvent) => {
-      width = draggedPaneWidth({ id, start, delta: moved.clientX - startX, flexWidth: room, flexMin })
-      onWidth(id, width)
+      changes = pair(id, moved.clientX - startX, starts)
+      onWidth(changes)
     }
     const end = () => {
       handle.removeEventListener("pointermove", move)
       handle.removeEventListener("pointerup", end)
       handle.removeEventListener("pointercancel", end)
-      onCommit(id, width)
+      onCommit(changes)
     }
     handle.addEventListener("pointermove", move)
     handle.addEventListener("pointerup", end)
@@ -51,8 +54,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     const step = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0
     if (!step) return
     event.preventDefault()
-    const start = paneWidth(id, widths)
-    onCommit(id, draggedPaneWidth({ id, start, delta: step, flexWidth: flexWidth(), flexMin }))
+    onCommit(pair(id, step))
   }
 
   return (

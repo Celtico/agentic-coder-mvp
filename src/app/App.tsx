@@ -19,7 +19,7 @@ import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
-import { withPaneWidth } from './row-sizes';
+import { withPaneWidths } from './row-sizes';
 import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
@@ -288,10 +288,10 @@ export function App(): React.JSX.Element {
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
   // Each pane's own width in its row, in pixels, kept between launches (src/app/row-sizes.ts).
   const [paneWidths, setPaneWidths] = useState<Record<string, number>>(() => initialView.paneWidths);
-  const dragPaneWidth = useCallback((id: string, width: number) => setPaneWidths((current) => withPaneWidth(current, id, width)), []);
-  const keepPaneWidth = useCallback((id: string, width: number) => {
+  const dragPaneWidth = useCallback((changes: Record<string, number>) => setPaneWidths((current) => withPaneWidths(current, changes)), []);
+  const keepPaneWidth = useCallback((changes: Record<string, number>) => {
     setPaneWidths((current) => {
-      const next = withPaneWidth(current, id, width);
+      const next = withPaneWidths(current, changes);
       updateViewState(localStorage, (state) => { state.paneWidths = next; });
       return next;
     });

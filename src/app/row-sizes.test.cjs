@@ -78,3 +78,15 @@ test('the window: both rows are PaneRows (no proportional splitter); the chat is
   // The divider between the rows changes only the dock's height.
   assert.match(app, /<Flex flex="none" minH="0" minW="0" position="relative" mt="6px" h=\{`\$\{terminalHeight\}px`\}/);
 });
+
+test('a divider changes only the two panes beside it: one wider, the other narrower by as much', () => {
+  // Fitxers | Navegador: Fitxers +60, Navegador −60; nothing else is given a width.
+  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: 60, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 300, 'side-browser': 440 });
+  // Stopped by the right one's minimum (220) and by the left one's (160).
+  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: 900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 520, 'side-browser': 220 });
+  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: -900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 160, 'side-browser': 580 });
+  // Beside the chat: only the left one gets a width; the chat takes the rest, down to 320.
+  assert.deepEqual(rows.draggedPair({ left: 'side-evaluation', right: 'chat', startLeft: 400, startRight: 700, delta: 1000, rightIsFlex: true, flexMin: 320 }), { 'side-evaluation': 780 });
+  const widths = { 'nav-conversations': 200, 'nav-files': 240, 'side-browser': 500, 'side-evaluation': 400 };
+  assert.deepEqual(rows.withPaneWidths(widths, { 'nav-files': 300, 'side-browser': 440 }), { 'nav-conversations': 200, 'nav-files': 300, 'side-browser': 440, 'side-evaluation': 400 });
+});

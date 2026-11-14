@@ -1,8 +1,8 @@
-// The rows of panes work like an IDE's: every pane of a row has its own width, in pixels, kept between
-// launches (per pane id, in the view state), and one pane of the row is flexible and takes what is left:
-// the chat in the top row, the last pane in the bottom one. The divider on the right of a pane changes
-// that pane's width only: the panes after it keep theirs and move along, and the flexible pane takes the
-// difference. When the flexible pane is at its narrowest, the divider goes no further.
+// The rows of panes: every pane of a row has its own width, in pixels, kept between launches (per pane
+// id, in the view state), and one pane of the row is flexible and takes what is left: the chat in the top
+// row, the last pane in the bottom one. A divider changes only the two panes beside it, one wider and the
+// other narrower by as much: no other pane moves or changes. When the pane on its right is the flexible
+// one, that one takes the difference. Neither pane goes under its minimum.
 
 /** A pane's id in a row: «nav-…» the side columns, «side-…» the panes of the top group, «dock-…» the bottom row, «chat». */
 export const ROW_PANE_ID = /^(?:(?:nav|side|dock)-[a-z]{1,40}|chat)$/
@@ -36,10 +36,26 @@ export function draggedPaneWidth({ id, start, delta, flexWidth, flexMin }: { id:
   return Math.round(Math.max(paneMinWidth(id), Math.min(start + delta, most)))
 }
 
+/**
+ * The two widths while the divider between `left` and `right` is dragged `delta` pixels: the left one
+ * grows by as much as the right one shrinks, both within their minimums. With `right` the flexible pane,
+ * only the left one gets a width (the flexible one takes what is left, as before).
+ */
+export function draggedPair({ left, right, startLeft, startRight, delta, rightIsFlex, flexMin }: { left: string; right: string; startLeft: number; startRight: number; delta: number; rightIsFlex: boolean; flexMin: number }): Record<string, number> {
+  const rightMin = rightIsFlex ? flexMin : paneMinWidth(right)
+  const moved = Math.round(Math.max(paneMinWidth(left) - startLeft, Math.min(delta, startRight - rightMin)))
+  return rightIsFlex ? { [left]: startLeft + Math.max(moved, paneMinWidth(left) - startLeft) } : { [left]: startLeft + moved, [right]: startRight - moved }
+}
+
 /** The widths after one pane is resized: that pane's changes, every other pane keeps its own. */
 export function withPaneWidth(widths: Record<string, number>, id: string, width: number): Record<string, number> {
   if (!ROW_PANE_ID.test(id) || id === "chat" || !Number.isFinite(width)) return widths
   return { ...widths, [id]: Math.round(Math.max(paneMinWidth(id), Math.min(width, 4000))) }
+}
+
+/** The widths after several panes are resized at once (the two beside a divider). */
+export function withPaneWidths(widths: Record<string, number>, changes: Record<string, number>): Record<string, number> {
+  return Object.entries(changes).reduce((next, [id, width]) => withPaneWidth(next, id, width), widths)
 }
 
 /** Saved widths made safe: only pane ids, only widths between their minimum and 4000 px. */
