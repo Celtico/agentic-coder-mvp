@@ -46,8 +46,8 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /const sideColumns = sideColumnsShown\(railLayout, /);
   assert.match(app, /\{sideColumns\.map\(\(column\) => <React\.Fragment key=\{column\}>\{column === 'conversations' \? conversationsColumn : filesColumn\}/);
   assert.match(app, /case 'conversations': return conversationsColumn;\n\s*case 'files': return filesColumn;/);
-  assert.match(app, /const conversationsColumn = \(\n\s*<Flex flex="1" h="full" direction="column"[^>]*aria-label="Converses">/);
-  assert.match(app, /const filesColumn = \(\n\s*<Flex flex="1" h="full" direction="column"[^>]*aria-label="Fitxers">/);
+  assert.match(app, /const conversationsColumn = \(\n\s*<PaneCard label="Converses"/);
+  assert.match(app, /const filesColumn = \(\n\s*<PaneCard label="Fitxers"/);
   assert.match(app, /conversations: \{ icon: Conversations, label: [^\n]*palette: conversationsOpen \? 'agentic'/);
   assert.match(app, /files: \{ icon: FileText, label: [^\n]*palette: filesOpen \? 'agentic'/);
   // With both hidden, the side panel takes no width.
@@ -55,7 +55,7 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /\{navigationOpen \? <Splitter\.Root key=\{`navigation-\$\{navigationColumns\}`\}/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
   // The project is the Fitxers header's subtitle («AGENT · /path»), with a folder button to choose another.
-  const files = app.indexOf('aria-label="Fitxers">');
+  const files = app.indexOf('<PaneCard label="Fitxers"');
   const filesHeader = app.slice(files, app.indexOf('<Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta"', files));
   assert.match(filesHeader, /subtitle=\{project \? `\$\{project\.path\.split/);
   assert.match(filesHeader, /<IconButton icon=\{FolderOpen\} label=\{project \? `\$\{project\.path\} · canvia de projecte`[^}]*\} onClick=\{\(\) => void selectProject\(\)\}\/>/);

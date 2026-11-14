@@ -17,7 +17,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
-import { PaneHeader, PaneToneContext, PaneToolbar, type PaneHeaderTone } from './pane-header';
+import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -25,7 +25,7 @@ import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
-import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
+import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, PANE_STYLES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
 import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, sideColumnsShown, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
@@ -169,6 +169,8 @@ const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray:
 const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string> = { auto: 'Detecta l’idioma', ca: 'Català', es: 'Castellà', en: 'Anglès' };
 /** Preferències › Aparença › Capçaleres dels panells (src/theme/pane-recipes.ts). */
 const PANE_TONE_LABELS: Record<PaneHeaderTone, string> = { brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida' };
+/** Preferències › Aparença › Estil dels panells: Chakra's Card variants. */
+const PANE_STYLE_LABELS: Record<PaneStyle, string> = { subtle: 'Suau (com ara)', outline: 'Amb vora', elevated: 'Amb ombra' };
 const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 /** Preferències › Aprenentatge: each value, its name and its step. */
@@ -1598,10 +1600,9 @@ export function App(): React.JSX.Element {
   );
 
   const terminalDock = (
-    <Flex flex="1" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden">
-      <PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>
+    <PaneCard header={<PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>}>
       <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
-    </Flex>
+    </PaneCard>
   );
 
   const editorTabLabels = tabLabels(editorTabs);
@@ -1854,10 +1855,7 @@ export function App(): React.JSX.Element {
   // Panes have no × of their own: each has an icon in the left bar, its tab, that opens and closes it.
   type PaneHeaderExtras = { subtitle?: React.ReactNode; subtitleTitle?: string; badge?: React.ReactNode; actions?: React.ReactNode };
   const dockPane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
-    <Flex flex="1" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <PaneHeader icon={icon} title={title} {...extras}/>
-      <Box flex="1" minH="0" minW="0" overflow="hidden">{content}</Box>
-    </Flex>
+    <PaneCard header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
   );
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
   const kindNote: Record<BenchmarkTask['kind'], string> = { open: 'Arreglar codi, fer pàgines i respondre sense tocar res.', app: 'Des d’una carpeta buida, amb la petició tal com la diries.', reference: 'La mateixa correcció dient exactament què canviar.' };
@@ -1984,18 +1982,16 @@ export function App(): React.JSX.Element {
     </Stack>
   );
   const sidePane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
-    <Flex flex="1" h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <PaneHeader icon={icon} title={title} {...extras}/>
-      <Box flex="1" minH="0" overflow="hidden">{content}</Box>
-    </Flex>
+    <PaneCard header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
   );
   // Every pane, framed for the row its icon puts it in (src/app/rail-layout.ts): beside the chat for the
   // top group, in the bottom dock for the bottom one. Ids keep the row so each arrangement keeps its sizes.
   // Converses and Fitxers: columns of the side panel while their icons are in the top group, panes of the
   // bottom row when they are in the bottom one (src/app/rail-layout.ts), the same content either way.
   const conversationsColumn = (
-            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden" aria-label="Converses">
+            <PaneCard label="Converses" header={<>
               <PaneHeader icon={Conversations} title="Converses" actions={<IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/>}/>
+              </>}>
               <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
                 <Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).slice(0, 12).map((session) => <Menu.Root key={session.id}>
@@ -2009,10 +2005,10 @@ export function App(): React.JSX.Element {
                     </Menu.Root>)}
                   </Stack>
               </Box>
-            </Flex>
+            </PaneCard>
   );
   const filesColumn = (
-            <Flex flex="1" h="full" direction="column" minH="0" minW="0" bg="bg" borderRadius="panel" overflow="hidden" aria-label="Fitxers">
+            <PaneCard label="Fitxers" header={<>
               {/* The header says which project the files are of; its folder button chooses another. */}
               <PaneHeader icon={FileText} title="Fitxers" subtitle={project ? `${project.path.split(/[\\/]/).filter(Boolean).at(-1)} · ${project.path}` : 'Cap projecte'} subtitleTitle={project?.path} actions={<>
                 <IconButton icon={FolderOpen} label={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'} onClick={() => void selectProject()}/>
@@ -2024,6 +2020,7 @@ export function App(): React.JSX.Element {
                 </Menu.Content></Menu.Positioner></Portal>
               </Menu.Root>
               </>}/>
+              </>}>
               <Box flex="1" minH="0" overflowY="auto" px="2" pt="1.5" pb="2">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
@@ -2056,7 +2053,7 @@ export function App(): React.JSX.Element {
                     </Menu.Root>}
                     </Box>
               </Box>
-            </Flex>
+            </PaneCard>
   );
   const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
   const paneNode = (panel: Pane, row: RailGroup): React.JSX.Element => {
@@ -2067,11 +2064,10 @@ export function App(): React.JSX.Element {
       case 'editor': return frame(FileCode, 'Editor', editorPane, { badge: <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge> });
       case 'browser': return frame(Globe2, 'Navegador web', browserPane, { actions: <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/> });
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
-      case 'evaluation': return <Card.Root flex="1" h="full" minW="0" minH="0" bg="bg" borderWidth="0" borderRadius="panel" overflow="hidden" size="sm">
-        <PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>
-        {evaluationToolbar}
-        <Card.Body flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Card.Body>
-      </Card.Root>;
+      // One Chakra Card like every pane: header, the second row, and the body that scrolls.
+      case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>} toolbar={evaluationToolbar}>
+        <Box flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Box>
+      </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
@@ -2201,7 +2197,7 @@ export function App(): React.JSX.Element {
   ) : chatPane;
 
   return (
-    <PaneToneContext.Provider value={appearance.paneTone}>
+    <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
     {ownTitleBar && <Flex flex="none" h="appTitleBar" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
@@ -2508,6 +2504,15 @@ export function App(): React.JSX.Element {
                       </Box>)}
                     </Grid>
                   </Box>
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Estil dels panells</Text>
+                    <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Estil dels panells">
+                      {PANE_STYLES.map((style) => <Box key={style} as="button" role="radio" aria-checked={appearance.paneStyle === style} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneStyle === style ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneStyle: style }))}>
+                        <Box h="20" display="flex"><PaneCard variant={style} header={<PaneHeader icon={TerminalIcon} title="Terminal"/>}><Box/></PaneCard></Box>
+                        <Text mt="1.5" fontSize="xs" color={appearance.paneStyle === style ? 'agentic.fg' : 'fg.muted'}>{PANE_STYLE_LABELS[style]}</Text>
+                      </Box>)}
+                    </Grid>
+                  </Box>
                   <HStack gap="2" flexWrap="wrap">
                     <Button variant="outline" onClick={() => setAppearance(defaultAppearance())}><RefreshCw size={14}/>Restableix l’aparença</Button>
                     <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
@@ -2562,7 +2567,7 @@ export function App(): React.JSX.Element {
       </FloatingPanel.Positioner>
       </Portal>
     </FloatingPanel.Root>
-    </PaneToneContext.Provider>
+    </PaneStyleContext.Provider></PaneToneContext.Provider>
   );
 }
 

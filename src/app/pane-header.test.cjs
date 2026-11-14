@@ -13,9 +13,10 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { ChakraProvider } from "@chakra-ui/react"
 import { LuGitBranch, LuPlus } from "react-icons/lu"
 import { buildSystem } from ${JSON.stringify(path.join(__dirname, '..', 'theme', 'system.ts'))}
-import { PaneHeader, PaneToolbar, PaneToneContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
+import { Pane, PaneHeader, PaneToolbar, PaneToneContext, PaneStyleContext } from ${JSON.stringify(path.join(__dirname, 'pane-header.tsx'))}
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
 export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
+export const renderPane = (variant: any, fromContext = false) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneStyleContext.Provider value={fromContext ? variant : "subtle"}><Pane variant={fromContext ? undefined : variant} label="Git" header={<PaneHeader icon={LuGitBranch} title="Git"/>}>contingut</Pane></PaneStyleContext.Provider></ChakraProvider>)
 export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
 `);
@@ -46,7 +47,7 @@ test('a header with a subtitle (truncated, with its full text on hover), a badge
 test('the look is the theme’s slot recipes, with the three tones; the component has no colour of its own', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   const system = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe \}/);
+  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe \}/);
   assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
   assert.match(recipes, /slots: \["root", "field", "action"\]/);
   assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "brand\.solid" \}, title: \{ color: "fg" \} \}/);
@@ -86,6 +87,31 @@ test('every pane uses it', () => {
   for (const [icon, title] of [['FileCode', 'Editor'], ['Globe2', 'Navegador web'], ['GitBranch', 'Git'], ['Brain', 'Aprenentatge local'], ['Bug', 'Consola']]) assert.match(app, new RegExp(`frame\\(${icon}, '${title}'`), title);
   assert.match(app, /<PaneHeader icon=\{icon\} title=\{title\} \{\.\.\.extras\}\/>/);
   assert.doesNotMatch(app, /navigationHeader|<Card\.Header/);
+});
+
+test('every pane is a Chakra Card with its header and body, in Chakra’s three variants', () => {
+  const strip = (html) => html.replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+  for (const variant of ['subtle', 'outline', 'elevated']) {
+    for (const fromContext of [false, true]) {
+      const html = strip(built.renderPane(variant, fromContext));
+      assert.match(html, new RegExp(`data-pane-style="${variant}"`), `${variant} ${fromContext}`);
+      assert.match(html, /chakra-card__root/);
+      assert.match(html, /chakra-card__header[^]*>Git<[^]*chakra-card__body[^]*>contingut</);
+    }
+  }
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /subtle: \{ root: \{ bg: "bg" \} \}/);
+  assert.match(recipes, /outline: \{ root: \{ bg: "bg", borderWidth: "1px", borderColor: "border" \} \}/);
+  assert.match(recipes, /elevated: \{ root: \{ bg: "bg", boxShadow: "md" \} \}/);
+  assert.match(recipes, /defaultVariants: \{ \.\.\.chakraCard\.defaultVariants, variant: "subtle", size: "pane" \}/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.equal((app.match(/<PaneCard[ >]/g) || []).length, 7, 'terminal, the two frames, evaluation, the two columns, and the preview in Preferències');
+  // Only the chat (not one of the panes) still draws its own box.
+  assert.equal((app.match(/borderRadius="panel" overflow="hidden"/g) || []).length, 1, 'no pane draws its own box any more');
+  assert.match(app, /const chatPane = \(\n\s*<Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">/);
+  assert.match(app, /<PaneStyleContext\.Provider value=\{appearance\.paneStyle\}>/);
+  assert.match(app, /PANE_STYLES\.map\(\(style\) => <Box key=\{style\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, paneStyle: style \}\)\)\}>/);
+  assert.match(app, /subtle: 'Suau \(com ara\)', outline: 'Amb vora', elevated: 'Amb ombra'/);
 });
 
 test('Preferències › Aparença chooses the tone for the whole app, with a preview of each', () => {

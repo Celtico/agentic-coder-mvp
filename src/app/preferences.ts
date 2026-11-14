@@ -3,7 +3,7 @@
 // accent colour (src/theme/accent.ts).
 
 import { isAccent, type Accent } from "../theme/accent"
-import type { PaneHeaderTone } from "./pane-header"
+import type { PaneHeaderTone, PaneStyle } from "./pane-header"
 
 export type ColorMode = "light" | "dark" | "system"
 export const COLOR_MODES: ColorMode[] = ["light", "dark", "system"]
@@ -14,11 +14,13 @@ export const EDITOR_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18] as const
 
 /** How the panes' headers look (src/app/pane-header.tsx). */
 export const PANE_TONES: PaneHeaderTone[] = ["brand", "mono", "tinted"]
+/** How the panes themselves look: Chakra's Card variants (src/theme/pane-recipes.ts). */
+export const PANE_STYLES: PaneStyle[] = ["subtle", "outline", "elevated"]
 
-export type Appearance = { colorMode: ColorMode; chatFontSize: ChatFontSize; editorFontSize: number; accent: Accent; paneTone: PaneHeaderTone }
+export type Appearance = { colorMode: ColorMode; chatFontSize: ChatFontSize; editorFontSize: number; accent: Accent; paneTone: PaneHeaderTone; paneStyle: PaneStyle }
 
 /** As the app looked before there were preferences. */
-export const defaultAppearance = (): Appearance => ({ colorMode: "dark", chatFontSize: "sm", editorFontSize: 11, accent: "agentic", paneTone: "brand" })
+export const defaultAppearance = (): Appearance => ({ colorMode: "dark", chatFontSize: "sm", editorFontSize: 11, accent: "agentic", paneTone: "brand", paneStyle: "subtle" })
 
 export function normalizeAppearance(value: unknown): Appearance {
   const saved = value && typeof value === "object" ? value as Record<string, unknown> : {}
@@ -28,6 +30,7 @@ export function normalizeAppearance(value: unknown): Appearance {
   if ((EDITOR_FONT_SIZES as readonly number[]).includes(saved.editorFontSize as number)) result.editorFontSize = saved.editorFontSize as number
   if (isAccent(saved.accent)) result.accent = saved.accent
   if (PANE_TONES.includes(saved.paneTone as PaneHeaderTone)) result.paneTone = saved.paneTone as PaneHeaderTone
+  if (PANE_STYLES.includes(saved.paneStyle as PaneStyle)) result.paneStyle = saved.paneStyle as PaneStyle
   return result
 }
 

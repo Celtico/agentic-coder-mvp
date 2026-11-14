@@ -1,4 +1,4 @@
-import { defineSlotRecipe } from "@chakra-ui/react"
+import { defaultConfig, defineSlotRecipe } from "@chakra-ui/react"
 
 // The look of every pane's header and second row (src/app/pane-header.tsx), as Chakra slot recipes with a
 // `tone` variant chosen in Preferències › Aparença: «brand» (icon in the brand green), «mono» (icon and title
@@ -41,3 +41,31 @@ export const paneToolbarRecipe = defineSlotRecipe({
   },
   defaultVariants: { tone: "brand" },
 })
+
+// Every pane is a Chakra Card (src/app/pane-header.tsx, Pane), with Chakra's own variants chosen in
+// Preferències › Aparença › Estil dels panells: «subtle» (as the panes have always looked: the panel
+// colour, no line), «outline» (a thin line around) and «elevated» (a shadow). Chakra's card recipe is
+// extended, not replaced: the panes' radius, the app's panel colour, and no inner padding (header and
+// body bring their own).
+type CardRecipe = { slots: string[]; base: Record<string, Record<string, unknown>>; variants: Record<string, Record<string, unknown>>; defaultVariants?: Record<string, string> }
+const chakraCard = defaultConfig.theme?.slotRecipes?.card as unknown as CardRecipe
+
+export const paneCardRecipe = defineSlotRecipe({
+  ...chakraCard,
+  slots: [...chakraCard.slots],
+  base: {
+    ...chakraCard.base,
+    root: { ...chakraCard.base.root, borderRadius: "panel", overflow: "hidden", minH: "0", h: "full", flex: "1" },
+    body: { ...chakraCard.base.body, minH: "0", overflow: "hidden" },
+  },
+  variants: {
+    ...chakraCard.variants,
+    variant: {
+      subtle: { root: { bg: "bg" } },
+      outline: { root: { bg: "bg", borderWidth: "1px", borderColor: "border" } },
+      elevated: { root: { bg: "bg", boxShadow: "md" } },
+    },
+    size: { ...(chakraCard.variants.size as Record<string, unknown>), pane: { root: { "--card-padding": "0" } } },
+  },
+  defaultVariants: { ...chakraCard.defaultVariants, variant: "subtle", size: "pane" },
+} as Parameters<typeof defineSlotRecipe>[0])

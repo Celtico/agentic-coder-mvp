@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react"
 import type { IconType } from "react-icons"
-import { Box, chakra, useSlotRecipe } from "@chakra-ui/react"
+import { Box, Card, chakra, useSlotRecipe } from "@chakra-ui/react"
 import { paneHeaderRecipe, paneToolbarRecipe } from "../theme/pane-recipes"
 
 /**
@@ -11,6 +11,21 @@ import { paneHeaderRecipe, paneToolbarRecipe } from "../theme/pane-recipes"
 export type PaneHeaderTone = "brand" | "mono" | "tinted"
 /** The tone every header and toolbar takes, unless one is given its own (the previews in Preferències). */
 export const PaneToneContext = createContext<PaneHeaderTone>("brand")
+/** Chakra's Card variants for the panes (src/theme/pane-recipes.ts), chosen in Preferències › Aparença. */
+export type PaneStyle = "subtle" | "outline" | "elevated"
+export const PaneStyleContext = createContext<PaneStyle>("subtle")
+
+/** One pane: a Chakra Card with its header, and a body (an optional second row, then the content). */
+export const Pane = ({ header, toolbar, children, label, variant }: { header: ReactNode; toolbar?: ReactNode; children: ReactNode; label?: string; variant?: PaneStyle }) => {
+  const contextVariant = useContext(PaneStyleContext)
+  const chosen = variant ?? contextVariant
+  return (
+    <Card.Root variant={chosen} aria-label={label} data-pane data-pane-style={chosen}>
+      <Card.Header>{header}</Card.Header>
+      <Card.Body>{toolbar}<Box flex="1" minH="0" minW="0" display="flex" flexDirection="column" overflow="hidden">{children}</Box></Card.Body>
+    </Card.Root>
+  )
+}
 
 export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, actions, tone }: { icon: IconType; title: string; subtitle?: ReactNode; subtitleTitle?: string; badge?: ReactNode; actions?: ReactNode; tone?: PaneHeaderTone }) => {
   const contextTone = useContext(PaneToneContext)
