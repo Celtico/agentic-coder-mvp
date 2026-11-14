@@ -8,6 +8,7 @@
 import type { WindowStage } from "./window-controls"
 import { defaultRailLayout, normalizeRailLayout, type RailLayout } from "./rail-layout"
 import { defaultAppearance, normalizeAppearance, type Appearance } from "./preferences"
+import { normalizePaneWidths } from "./row-sizes"
 
 export const VIEW_STATE_KEY = "agentic-view-state-v1"
 
@@ -23,6 +24,8 @@ export type ViewState = {
   /** The open sections of the Aprenentatge local panel. */
   learningSections: string[]
   history: { position?: { x: number; y: number }; size?: { width: number; height: number }; stage: WindowStage }
+  /** Each pane's own width in its row, in pixels, by pane id (src/app/row-sizes.ts). */
+  paneWidths: Record<string, number>
   projects: Record<string, ProjectView>
 }
 
@@ -37,6 +40,7 @@ export const defaultViewState = (): ViewState => ({
   evaluationSections: [],
   learningSections: ["cases", "training"],
   history: { stage: "default" },
+  paneWidths: {},
   projects: {},
 })
 
@@ -72,6 +76,7 @@ export function loadViewState(storage: Storage): ViewState {
   for (const name of PANELS) if (typeof saved.panels?.[name] === "boolean") state.panels[name] = saved.panels[name]
   state.rail = normalizeRailLayout(saved.rail)
   state.appearance = normalizeAppearance(saved.appearance)
+  state.paneWidths = normalizePaneWidths(saved.paneWidths)
   if (Array.isArray(saved.learningSections)) state.learningSections = saved.learningSections.filter((item: unknown): item is string => typeof item === "string" && ["cases", "data", "training"].includes(item))
   if (Array.isArray(saved.evaluationSections)) state.evaluationSections = saved.evaluationSections.filter((item: unknown): item is string => typeof item === "string")
   const history = saved.history || {}

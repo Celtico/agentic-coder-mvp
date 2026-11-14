@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Splitter, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
+  Spinner, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -19,6 +19,8 @@ import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
+import { withPaneWidth } from './row-sizes';
+import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
@@ -38,8 +40,6 @@ const CHAT_KEY = 'agentic-chat-history-v1';
 const DRAFT_KEY = 'agentic-chat-draft-v1';
 const CHAT_SESSIONS_KEY = 'agentic-chat-sessions-v1';
 const ACTIVE_SESSION_KEY = 'agentic-active-session-v1';
-const SPLIT_KEY = 'agentic-split-size-v1';
-const NAVIGATION_WIDTH_KEY = 'agentic-navigation-width-v1';
 const TERMINAL_HEIGHT_KEY = 'agentic-terminal-height-v1';
 /** Dragged shorter than this, the terminal dock closes. */
 const TERMINAL_MIN_HEIGHT = 90;
@@ -149,21 +149,7 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
     </TreeView.NodeContext>
   </TreeView.NodeProvider>;
 }
-type SplitterHandleId = React.ComponentProps<typeof Splitter.ResizeTrigger>['id'];
-const SplitterHandle = ({ id }: { id: SplitterHandleId }) => (
-  <Splitter.ResizeTrigger data-group id={id} aria-label="Arrossega per ajustar l’amplada del panell" title="Arrossega per ajustar l’amplada del panell" w="6px" minW="6px" m="0" flex="none" cursor="col-resize" bg="transparent" _hover={{ bg: 'transparent' }} _focusVisible={{ outlineColor: 'border', outlineWidth: '1px' }}>
-    <Splitter.ResizeTriggerSeparator bg="transparent"/>
-    <Splitter.ResizeTriggerIndicator w="2px" h="32px" bg="transparent" borderWidth="0" boxShadow="none" _groupHover={{ bg: 'border' }}/>
-  </Splitter.ResizeTrigger>
-);
 
-/** The side column can be dragged between these widths; narrower than the minimum, it closes. */
-// Two columns (Converses | Fitxers) of at least about 150 px each.
-const NAVIGATION_MIN_WIDTH = 320;
-const NAVIGATION_COLUMN_MIN_WIDTH = 160;
-const NAVIGATION_MAX_WIDTH = 760;
-/** The right-hand panel closes when dragged to less than this share of the width. */
-const WORKSPACE_CLOSE_BELOW = 10;
 /** Under an answer the reviewer had sent back when the user stopped the work. */
 /** Until the model answers its first word: loading it can take a while the first time. */
 const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot trigar fins a mig minut…';
@@ -182,11 +168,6 @@ const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fos
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 /** Preferències › Aprenentatge: each value, its name and its step. */
 const TRAINING_FIELDS: [keyof TrainingPreferences, string, number][] = [['maxTokens', 'Tokens màxims per exemple', 256], ['numLayers', 'Capes LoRA', 1], ['learningRate', 'Taxa d’aprenentatge', 0.000001], ['itersPerCase', 'Iteracions per cas', 5], ['minIters', 'Iteracions mínimes', 10], ['maxIters', 'Iteracions màximes', 20], ['seed', 'Llavor', 1]];
-
-function getSplitSize(): number[] {
-  try { const value = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return Array.isArray(value) && value.length === 2 ? value : [62, 38]; }
-  catch { return [62, 38]; }
-}
 
 
 
@@ -305,7 +286,16 @@ export function App(): React.JSX.Element {
   const [evaluationOpenRun, setEvaluationOpenRun] = useState<string[]>([]);
   const [evaluationReports, setEvaluationReports] = useState<Record<string, BenchmarkReport>>({});
   // Widths of side-by-side panes, per arrangement, so resizing something else never resets them.
-  const [paneSizes, setPaneSizes] = useState<Record<string, number[]>>({});
+  // Each pane's own width in its row, in pixels, kept between launches (src/app/row-sizes.ts).
+  const [paneWidths, setPaneWidths] = useState<Record<string, number>>(() => initialView.paneWidths);
+  const dragPaneWidth = useCallback((id: string, width: number) => setPaneWidths((current) => withPaneWidth(current, id, width)), []);
+  const keepPaneWidth = useCallback((id: string, width: number) => {
+    setPaneWidths((current) => {
+      const next = withPaneWidth(current, id, width);
+      updateViewState(localStorage, (state) => { state.paneWidths = next; });
+      return next;
+    });
+  }, []);
   // Which icons of the left bar are in its top or bottom group, in order (src/app/rail-layout.ts): the
   // pane of each icon opens in the row of its group. An icon dragged to the other group takes its pane.
   const [railLayout, setRailLayout] = useState<RailLayout>(() => initialView.rail);
@@ -482,8 +472,6 @@ export function App(): React.JSX.Element {
   const [verifiedEvidence, setVerifiedEvidence] = useState('');
   const [verifiedExperienceBusy, setVerifiedExperienceBusy] = useState(false);
   const [testsBusy, setTestsBusy] = useState(false);
-  const [splitSize, setSplitSize] = useState(getSplitSize);
-  const lastExpandedSplitSizeRef = useRef(splitSize);
   // The side panel's two columns, Converses and Fitxers, each shown or hidden from its icon in the bar;
   // with both hidden the panel takes no width.
   const [conversationsOpen, setConversationsOpen] = useState(initialView.panels.conversations);
@@ -491,11 +479,6 @@ export function App(): React.JSX.Element {
   const sideColumns = sideColumnsShown(railLayout, (column) => column === 'conversations' ? conversationsOpen : filesOpen);
   const navigationColumns = sideColumns.length;
   const navigationOpen = navigationColumns > 0;
-  const navigationMinWidth = NAVIGATION_COLUMN_MIN_WIDTH * Math.max(1, navigationColumns);
-  const [navigationWidth, setNavigationWidth] = useState(() => {
-    const stored = Number(localStorage.getItem(NAVIGATION_WIDTH_KEY));
-    return Number.isFinite(stored) && stored >= NAVIGATION_COLUMN_MIN_WIDTH && stored <= NAVIGATION_MAX_WIDTH ? stored : 460;
-  });
   const [verifiedExperienceKeys, setVerifiedExperienceKeys] = useState<Set<string>>(() => new Set());
   const feedRef = useRef<HTMLDivElement | null>(null);
   const hasInitialScrollRef = useRef(false);
@@ -2143,7 +2126,6 @@ export function App(): React.JSX.Element {
       case 'terminal': return terminalDock;
     }
   };
-  const railClose: Record<Pane, () => void> = { conversations: () => setConversationsOpen(false), files: () => setFilesOpen(false), editor: () => setEditorOpen(false), browser: () => setBrowserOpen(false), evaluation: () => setEvaluationOpen(false), console: () => setConsoleOpen(false), terminal: () => setTerminalOpen(false), git: () => setGitOpen(false), learning: () => setLearningOpen(false) };
   // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
   const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
     conversations: { icon: Conversations, label: conversationsOpen ? 'Amaga les converses' : 'Mostra les converses', palette: conversationsOpen ? 'agentic' : 'gray', onClick: () => setConversationsOpen((open) => !open) },
@@ -2217,59 +2199,22 @@ export function App(): React.JSX.Element {
   const rowItems = (row: RailGroup) => panelsInRow(railLayout, row, (panel) => paneOpen[panel]).map((panel) => ({ id: `${row === 'top' ? 'side' : 'dock'}-${panel}`, node: paneNode(panel, row) }));
   const dockItems = rowItems('bottom');
   const sideItems = rowItems('top');
-  const dockKey = dockItems.map((item) => item.id).join('+');
-  const dockPanels = useMemo(() => dockKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 12 })), [dockKey]);
-  const dockEven = useMemo(() => dockPanels.map(() => 100 / Math.max(1, dockPanels.length)), [dockPanels]);
   const bottomDock = dockItems.length > 0 && (
     <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" h={`${terminalHeight}px`} maxH="calc(100vh - 240px)">
       <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} data-group><Box w="32px" h="2px" rounded="full" bg="transparent" _groupHover={{ bg: 'border' }}/></Center>
-      {dockItems.length === 1 ? dockItems[0].node : (
-        // One splitter per arrangement of open panes; each arrangement remembers its own widths.
-        <Splitter.Root key={dockKey} flex="1" minW="0" minH="0" display="flex" overflow="hidden" orientation="horizontal" panels={dockPanels} size={paneSizes[dockKey] ?? dockEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [dockKey]: details.size }))}>
-          {dockItems.map((item, index) => <React.Fragment key={item.id}>
-            {index > 0 && <SplitterHandle id={`${dockItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
-            <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
-          </React.Fragment>)}
-        </Splitter.Root>
-      )}
+      {/* The same as the top row: each pane its own width, the last one takes what is left. */}
+      {dockItems.length === 1 ? dockItems[0].node : <PaneRow items={dockItems} flexId={dockItems[dockItems.length - 1].id} widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila inferior de panells"/>}
     </Flex>
   );
-  // The side panel's columns (Converses | Fitxers) share a splitter; each arrangement keeps its widths.
-  const navigationKey = sideColumns.map((column) => `nav-${column}`).join('+');
-  const navigationPanels = useMemo(() => navigationKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 20 })), [navigationKey]);
-  const navigationEven = useMemo(() => navigationPanels.map(() => 100 / Math.max(1, navigationPanels.length)), [navigationPanels]);
-  const sideKey = sideItems.map((item) => item.id).join('+');
-  const sidePanels = useMemo(() => sideKey.split('+').filter(Boolean).map((id) => ({ id, minSize: 15 })), [sideKey]);
-  const sideEven = useMemo(() => sidePanels.map(() => 100 / Math.max(1, sidePanels.length)), [sidePanels]);
-  const workspacePane = sideItems.length === 0 ? null : sideItems.length === 1 ? sideItems[0].node : (
-    <Splitter.Root key={sideKey} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={sidePanels} size={paneSizes[sideKey] ?? sideEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [sideKey]: details.size }))}>
-      {sideItems.map((item, index) => <React.Fragment key={item.id}>
-        {index > 0 && <SplitterHandle id={`${sideItems[index - 1].id}:${item.id}` as SplitterHandleId}/>}
-        <Splitter.Panel id={item.id} display="flex" h="full" minW="0" minH="0" overflow="hidden">{item.node}</Splitter.Panel>
-      </React.Fragment>)}
-    </Splitter.Root>
-  );
-
-  const mainContent = workspacePane ? (
-    <Splitter.Root key={`main-${sideItems.length}`} h="full" w="full" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'workspace', minSize: 4 }, { id: 'chat', minSize: 18 }]} defaultSize={sideItems.length > 1 ? [100 - Math.min(splitSize[0], 40), Math.min(splitSize[0], 40)] : [splitSize[1], splitSize[0]]} onResize={(details) => setSplitSize([details.size[1], details.size[0]])} onResizeEnd={(shown) => {
-      // Stored as [chat, workspace], whatever side each one is drawn on.
-      const details = { size: [shown.size[1], shown.size[0]] };
-      if (details.size[1] < WORKSPACE_CLOSE_BELOW) {
-        // Every pane of the top row closes, whichever they are (src/app/rail-layout.ts).
-        for (const panel of panelsInRow(railLayout, 'top', (item) => paneOpen[item])) railClose[panel]();
-        setSplitSize(lastExpandedSplitSizeRef.current);
-        localStorage.setItem(SPLIT_KEY, JSON.stringify(lastExpandedSplitSizeRef.current));
-        return;
-      }
-      lastExpandedSplitSizeRef.current = details.size;
-      setSplitSize(details.size);
-      localStorage.setItem(SPLIT_KEY, JSON.stringify(details.size));
-    }}>
-      <Splitter.Panel id="workspace" h="full" minW="0" minH="0" overflow="hidden">{workspacePane}</Splitter.Panel>
-      <SplitterHandle id={'workspace:chat' as SplitterHandleId}/>
-      <Splitter.Panel id="chat" h="full" minW="0" minH="0" overflow="hidden">{chatPane}</Splitter.Panel>
-    </Splitter.Root>
-  ) : chatPane;
+  // The top row: Converses | Fitxers (while their icons are on top) | the panes of the top group | the
+  // chat. Each pane has its own width and the divider on its right changes only that one; the chat takes
+  // what is left (src/app/pane-row.tsx).
+  const topItems = [
+    ...sideColumns.map((column) => ({ id: `nav-${column}`, node: column === 'conversations' ? conversationsColumn : filesColumn })),
+    ...sideItems,
+    { id: 'chat', node: chatPane },
+  ];
+  const topRow = topItems.length === 1 ? chatPane : <PaneRow items={topItems} flexId="chat" widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila superior de panells"/>;
 
   return (
     <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}>
@@ -2290,31 +2235,7 @@ export function App(): React.JSX.Element {
         </Flex>
         <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
         <Box flex="1" minH="0" minW="0" overflow="hidden">
-        {navigationOpen ? <Splitter.Root key={`navigation-${navigationColumns}`} h="full" w="full" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={[{ id: 'navigation', minSize: `${navigationMinWidth}px`, maxSize: `${NAVIGATION_MAX_WIDTH}px`, resizeBehavior: 'preserve-pixel-size' }, { id: 'main', minSize: '320px' }]} defaultSize={[`${navigationWidth}px`]} onResizeEnd={(details) => {
-          const availableWidth = Math.max(380, window.innerWidth - 58);
-          const dragged = Math.round((details.size[0] / 100) * availableWidth);
-          // It is never closed: dragged narrower than its two columns need, it stays at that width.
-          const width = Math.min(NAVIGATION_MAX_WIDTH, Math.max(navigationMinWidth, dragged));
-          setNavigationWidth(width);
-          localStorage.setItem(NAVIGATION_WIDTH_KEY, String(width));
-        }}>
-        <Splitter.Panel id="navigation" h="full" minW="0" minH="0" overflow="hidden">
-        <Flex as="aside" h="full" minH="0" minW="0" direction="column" gap="0">
-          {/* Converses | Fitxers: two columns side by side, each with its header and its + (nothing folds),
-              with the same handle between them as between the other panes, to set their widths. */}
-          {sideColumns.length < 2
-            ? <Flex flex="1" minH="0" minW="0">{sideColumns.map((column) => <React.Fragment key={column}>{column === 'conversations' ? conversationsColumn : filesColumn}</React.Fragment>)}</Flex>
-            : <Splitter.Root key={navigationKey} flex="1" minH="0" minW="0" display="flex" overflow="hidden" orientation="horizontal" panels={navigationPanels} size={paneSizes[navigationKey] ?? navigationEven} onResize={(details) => setPaneSizes((current) => ({ ...current, [navigationKey]: details.size }))}>
-              {sideColumns.map((column, index) => <React.Fragment key={column}>
-                {index > 0 && <SplitterHandle id={`nav-${sideColumns[index - 1]}:nav-${column}` as SplitterHandleId}/>}
-                <Splitter.Panel id={`nav-${column}`} display="flex" h="full" minW="0" minH="0" overflow="hidden">{column === 'conversations' ? conversationsColumn : filesColumn}</Splitter.Panel>
-              </React.Fragment>)}
-            </Splitter.Root>}
-        </Flex>
-        </Splitter.Panel>
-        <SplitterHandle id={'navigation:main' as SplitterHandleId}/>
-        <Splitter.Panel id="main" h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Splitter.Panel>
-        </Splitter.Root> : <Box h="full" minW="0" minH="0" overflow="hidden">{mainContent}</Box>}
+        {topRow}
         </Box>
         {bottomDock}
         {terminalResizing && <Box position="fixed" inset="0" zIndex="4000" cursor="row-resize"/>}

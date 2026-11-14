@@ -43,20 +43,17 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /<PaneHeader icon=\{Conversations\} title="Converses" actions=\{<><IconButton icon=\{Trash\} label="Paperera de converses" onClick=\{\(\) => void openChatTrash\(\)\}\/><IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/><\/>\}\/>/);
   assert.match(app, /<PaneHeader icon=\{FileText\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
-  // One grid column per visible column of the side panel; each is shown or hidden from its icon.
-  // Two columns side by side, with a handle between them (a splitter), as between the other panes.
-  assert.match(app, /<Splitter\.Root key=\{navigationKey\}/);
+  // The visible side columns are the first panes of the top row's one splitter, in the order of their icons.
+  assert.match(app, /\.\.\.sideColumns\.map\(\(column\) => \(\{ id: `nav-\$\{column\}`, node: column === 'conversations' \? conversationsColumn : filesColumn \}\)\),\n\s*\.\.\.sideItems,\n\s*\{ id: 'chat', node: chatPane \},/);
   // The same column is a side column or a pane of the bottom row, as its icon's group says.
   assert.match(app, /const sideColumns = sideColumnsShown\(railLayout, /);
-  assert.match(app, /\{sideColumns\.map\(\(column\) => <React\.Fragment key=\{column\}>\{column === 'conversations' \? conversationsColumn : filesColumn\}/);
   assert.match(app, /case 'conversations': return conversationsColumn;\n\s*case 'files': return filesColumn;/);
   assert.match(app, /const conversationsColumn = \(\n\s*<PaneCard label="Converses"/);
   assert.match(app, /const filesColumn = \(\n\s*<PaneCard label="Fitxers"/);
   assert.match(app, /conversations: \{ icon: Conversations, label: [^\n]*palette: conversationsOpen \? 'agentic'/);
   assert.match(app, /files: \{ icon: FileText, label: [^\n]*palette: filesOpen \? 'agentic'/);
-  // With both hidden, the side panel takes no width.
+  // With both hidden, they are simply not in the row.
   assert.match(app, /const navigationOpen = navigationColumns > 0;/);
-  assert.match(app, /\{navigationOpen \? <Splitter\.Root key=\{`navigation-\$\{navigationColumns\}`\}/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);
   // The project is the Fitxers header's subtitle («AGENT · /path»), with a folder button to choose another.
   const files = app.indexOf('<PaneCard label="Fitxers"');

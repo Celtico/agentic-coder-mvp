@@ -239,8 +239,7 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
   // The whole list of the project's conversations, not the first 12: a long list scrolls.
   const conversations = app.slice(app.indexOf('const conversationsColumn = ('), app.indexOf('const filesColumn = ('));
   assert.doesNotMatch(conversations, /\.slice\(0, 12\)/);
-  const aside = app.slice(app.indexOf('<Flex as="aside"'), app.indexOf('</Flex>\n        </Splitter.Panel>', app.indexOf('<Flex as="aside"')));
-  assert.match(aside, /<Splitter\.Root key=\{navigationKey\}/);
-  assert.match(aside, /<SplitterHandle id=\{`nav-\$\{sideColumns\[index - 1\]\}:nav-\$\{column\}`/);
-  assert.doesNotMatch(aside, /templateColumns=/, 'no fixed grid of equal columns');
+  // Each with its own divider, as every pane of the row (src/app/pane-row.tsx).
+  assert.match(app, /<PaneRow items=\{topItems\} flexId="chat"/);
+  assert.doesNotMatch(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}/, 'no fixed grid of equal columns');
 });
