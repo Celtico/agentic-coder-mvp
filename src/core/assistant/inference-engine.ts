@@ -7,7 +7,8 @@ import readline from 'node:readline';
 export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatTurn = { role: ChatRole; content: string };
 export type InferenceToolDefinition = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };
-export type GenerationOptions = { max_new_tokens: number; temperature: number; do_sample: boolean; tools?: InferenceToolDefinition[] };
+/** `images`: files to show the model with the message at index `message` (a model with vision only). */
+export type GenerationOptions = { max_new_tokens: number; temperature: number; do_sample: boolean; tools?: InferenceToolDefinition[]; images?: { paths: string[]; message: number } };
 export type ModelStatus = { modelId: string; state: 'unloaded' | 'loading' | 'ready'; cacheDir: string };
 export type MemoryUsage = { residentBytes: number; heapBytes: number; externalBytes: number };
 
@@ -88,7 +89,7 @@ export class MlxInferenceEngine implements InferenceEngine {
     if (this.pending) throw new Error('El runtime MLX ja està generant una resposta.');
     return new Promise((resolve, reject) => {
       this.pending = { resolve, reject };
-      this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0 })}\n`, (error) => {
+      this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0, ...(options.images?.paths.length ? { images: options.images } : {}) })}\n`, (error) => {
         if (!error) return;
         this.pending = null; reject(error);
       });

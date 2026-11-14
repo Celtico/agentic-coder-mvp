@@ -34,7 +34,9 @@ process.on('message', async (message) => {
         reject(error);
       });
     });
-    const answer = await agent.ask(String(message.prompt || ''), String(message.projectRoot || ''), executeTool, Array.isArray(message.history) ? message.history : []);
+    // Images of this request: files the main process wrote and checked (src/electron/chat-images.cjs).
+    const images = Array.isArray(message.images) ? message.images.filter((item) => typeof item === 'string').slice(0, 4) : [];
+    const answer = await agent.ask(String(message.prompt || ''), String(message.projectRoot || ''), executeTool, Array.isArray(message.history) ? message.history : [], images.length ? { images } : {});
     process.send?.({ id: message.id, answer, trajectory: agent.lastTrajectory });
   } catch (error) {
     process.send?.({ id: message.id, error: error?.message || String(error) });

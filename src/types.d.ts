@@ -3,7 +3,8 @@ import type { DetailedHTMLProps, HTMLAttributes, Ref } from 'react';
 export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
 /** `notice`: a message of the window itself (stopped, error), not sent to the model as history. */
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean };
+/** `images`: small thumbnails of the images sent with the message (the images themselves are not kept). */
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean; images?: { name: string; thumbnail: string }[] };
 export type HistoryEntry = { prompt: string; answer: string; at?: string };
 export type ChatSession = { id: string; title: string; updatedAt: string; projectPath?: string | null; messages: ChatMessage[] };
 export type BenchmarkTask = { id: string; description: string; prompt: string; kind: 'open' | 'app' | 'reference' };
@@ -27,7 +28,7 @@ export type TrainingDatasetPreview = { counts: { input: number; unverified: numb
 export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string };
 export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
-export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string };
+export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string; vision?: boolean };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
@@ -54,7 +55,7 @@ export interface AgenticBridge {
   /** Whether the file is in the project, without throwing when it is not. */
   fileExists(relativePath: string): Promise<boolean>;
   writeFile(relativePath: string, content: string): Promise<{ ok: boolean; backupPath: string | null }>;
-  ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[] }): Promise<string>;
+  ask(request: { prompt: string; history: { role: 'user' | 'assistant'; content: string }[]; images?: { name: string; mime: string; data: string }[] }): Promise<string>;
   getPermissionMode(): Promise<'ask' | 'auto'>;
   agentPreferences(): Promise<{ values: AgentPreferences; defaults: AgentPreferences; limits: Record<'answerTokens' | 'maxIterations' | 'historyMessages', { min: number; max: number; default: number }> }>;
   setAgentPreferences(change: Partial<AgentPreferences>): Promise<AgentPreferences>;

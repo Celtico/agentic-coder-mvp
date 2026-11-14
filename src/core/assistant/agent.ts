@@ -598,7 +598,7 @@ export class LocalCodingAgent {
   private trajectorySystem = '';
   private askDepth = 0;
 
-  async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean } = {}): Promise<string> {
+  async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean; images?: string[] } = {}): Promise<string> {
     const topLevel = this.askDepth === 0;
     if (topLevel) { this.trajectorySteps = []; this.trajectorySystem = ''; this.lastTrajectory = null; }
     this.askDepth += 1;
@@ -612,7 +612,7 @@ export class LocalCodingAgent {
     }
   }
 
-  private async runAsk(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean } = {}): Promise<string> {
+  private async runAsk(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean; images?: string[] } = {}): Promise<string> {
     if (!prompt.trim()) throw new Error('Escriu una tasca.');
     if (options.allowDelegation === undefined) options = { ...options, allowDelegation: this.allowDelegation };
     const directInspection = explicitLocalInspectionRequest(prompt);
@@ -752,6 +752,9 @@ export class LocalCodingAgent {
       ...recentHistory,
       { role: 'user', content: prompt },
     ];
+    // Images of this request (files written by the app) go with the user's message of this request only:
+    // not with the history of later ones, nor to the reviewer or the delegated agents.
+    const imageInput = options.images?.length ? { paths: options.images.slice(0, 4), message: messages.length - 1 } : undefined;
     // A real app creation needs more than a few model turns (inspect, create
     // source files, install, check, start, then inspect in the local browser).
     // The small model gets a short leash; the larger one has room for real files and longer jobs.
@@ -897,7 +900,7 @@ export class LocalCodingAgent {
         ? agentToolDefinitions.filter((item) => COMPACT_TOOL_NAMES.has(item.function.name))
         : agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'));
       const startedAt = Date.now();
-      const raw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, tools: describedTools(availableTools) });
+      const raw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(availableTools) });
       const action = parseAction(raw);
       await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed' });
       if (!action) {
@@ -991,7 +994,7 @@ export class LocalCodingAgent {
       if (requestedCodeChange && !planPublished && !compact) {
         messages.push({ role: 'assistant', content: raw }, { role: 'user', content: promptText('nudge-write-plan') });
         this.onStatus({ type: 'status', message: 'El model està escrivint el pla abans de començar…' });
-        const planningRaw = await this.engine.generateResponse(messages, { max_new_tokens: 300, temperature: 0.2, do_sample: false, tools: [] });
+        const planningRaw = await this.engine.generateResponse(messages, { max_new_tokens: 300, temperature: 0.2, do_sample: false, images: imageInput, tools: [] });
         const planningAction = parseAction(planningRaw);
         const plannedText = planningAction?.type === 'plan'
           ? planningAction.content
@@ -1028,7 +1031,7 @@ export class LocalCodingAgent {
         }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: promptText('nudge-repeated-call', { tool: tool.name, result: previousResult }) });
-        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, tools: describedTools(agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'))) });
+        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'))) });
         const finalAction = parseAction(finalRaw);
         answer = finalAction?.type === 'final'
           ? finalAction.content

@@ -12,6 +12,8 @@ const builtInModels = [
   { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx', hfCache: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', aliases: ['7b'] },
   { id: 'gemma-4-12b-mlx', label: 'Gemma 4 12B · MLX', modelId: 'lmstudio-community/gemma-4-12B-it-MLX-4bit', runtime: 'mlx', folder: 'gemma-4-12b-it-4bit', aliases: ['gemma', 'gemma-4-12b'] },
   { id: 'mimo-9b-mlx', label: 'MiMo V2.6 9B · MLX', modelId: 'mlx-community/MiMo-V2.6-Distill-Qwen-9B-OptiQ-4bit', runtime: 'mlx', folder: 'mimo-v2.6-distill-qwen-9b-4bit', aliases: ['mimo', 'mimo-9b'] },
+  // The same model with its vision tower (4-bit, about 6 GB); offered once its weights are in mlx/<folder>.
+  { id: 'mimo-9b-vl-mlx', label: 'MiMo V2.6 9B amb visió · MLX', modelId: 'nativ-community/MiMo-V2.6-Distill-Qwen-9B-MLX-4bit', runtime: 'mlx', folder: 'mimo-v2.6-distill-qwen-9b-vl-4bit', aliases: ['mimo-vl'] },
 ];
 
 // The base model of the app: MiMo V2.6 9B (13-11-2026 benchmark: 9/10 open tasks, close to Gemma 4 12B's
@@ -41,6 +43,35 @@ async function modelDirectory(model, modelsRoot) {
   return await hasWeights(directory) ? directory : null;
 }
 
+/**
+ * Whether the weights in `directory` can see images: the config describes a vision tower and the weights
+ * have it (a text-only quant of a vision model keeps the config's image tokens but not the tower).
+ */
+async function hasVision(directory) {
+  if (!directory) return false;
+  try {
+    const config = JSON.parse(await fs.readFile(path.join(directory, 'config.json'), 'utf8'));
+    if (!config.vision_config || typeof config.vision_config !== 'object') return false;
+    const isVisionWeight = (name) => /(?:^|\.)(?:vision_tower|visual|vision_model)\./.test(name);
+    try {
+      const index = JSON.parse(await fs.readFile(path.join(directory, 'model.safetensors.index.json'), 'utf8'));
+      return Object.keys(index.weight_map || {}).some(isVisionWeight);
+    } catch {
+      // One file of weights: its header lists the tensors.
+      const handle = await fs.open(path.join(directory, 'model.safetensors'));
+      try {
+        const head = Buffer.alloc(8);
+        await handle.read(head, 0, 8, 0);
+        const length = Number(head.readBigUInt64LE(0));
+        if (length <= 0 || length > 50_000_000) return false;
+        const header = Buffer.alloc(length);
+        await handle.read(header, 0, length, 8);
+        return Object.keys(JSON.parse(header.toString('utf8'))).some(isVisionWeight);
+      } finally { await handle.close(); }
+    }
+  } catch { return false; }
+}
+
 /** Models of our own: every mlx/<folder>/agentic-model.json with an id, a label and weights beside it. */
 async function ownModels(modelsRoot) {
   const found = [];
@@ -66,4 +97,4 @@ async function findModel(modelsRoot, idOrAlias) {
   return (await listModels(modelsRoot)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
 }
 
-module.exports = { builtInModels, listModels, findModel, modelDirectory, DEFAULT_MODEL_ID, defaultModel };
+module.exports = { builtInModels, listModels, findModel, modelDirectory, hasVision, DEFAULT_MODEL_ID, defaultModel };

@@ -19,6 +19,7 @@ const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate
 const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
+const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
@@ -205,7 +206,7 @@ async function getAvailableModels() {
     const directory = await mlxModels.modelDirectory(model, projectModelsDirectory());
     const available = Boolean(directory && mlxPythonReady);
     const reason = available ? undefined : !directory ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.';
-    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, ...(reason ? { reason } : {}) });
+    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, vision: await mlxModels.hasVision(directory), ...(reason ? { reason } : {}) });
   }
   return result;
 }
@@ -597,17 +598,22 @@ function cleanConversationHistory(value) {
   });
 }
 
-async function askModel(prompt, projectRoot, history = []) {
+async function askModel(prompt, projectRoot, history = [], images = []) {
   if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
   const id = ++requestId;
   activeModelRequestId = id;
   let child;
-  try { child = await startModelWorker(); }
-  catch (error) { activeModelRequestId = null; throw error; }
+  let imagePaths = [];
+  try {
+    // Images go to the worker as files for this request only, and are removed when it ends.
+    if (images.length) imagePaths = await writeChatImages(path.join(app.getPath('userData'), 'chat-images'), images);
+    child = await startModelWorker();
+  } catch (error) { activeModelRequestId = null; await removeChatImages(imagePaths); throw error; }
   return new Promise((resolve, reject) => {
-    pendingModelRequests.set(id, { resolve, reject });
+    const done = (settle) => (value) => { void removeChatImages(imagePaths); settle(value); };
+    pendingModelRequests.set(id, { resolve: done(resolve), reject: done(reject) });
     const { answerTokens, maxIterations, review, webSearch, historyMessages } = agentPreferences;
-    child.send({ id, prompt, projectRoot, history: limitHistory(cleanConversationHistory(history), historyMessages), settings: { answerTokens, maxIterations, review, webSearch } }, (error) => {
+    child.send({ id, prompt, projectRoot, history: limitHistory(cleanConversationHistory(history), historyMessages), settings: { answerTokens, maxIterations, review, webSearch }, images: imagePaths }, (error) => {
       if (!error) return;
       pendingModelRequests.delete(id);
       if (activeModelRequestId === id) activeModelRequestId = null;
@@ -1448,7 +1454,12 @@ ipcMain.handle('agent:ask', async (_e, request) => {
   if (trainingRun) throw new Error('Hi ha un entrenament en marxa. Espera que acabi o cancel·la’l al panell d’aprenentatge.');
   if (benchmarkRun) throw new Error('Hi ha una avaluació en marxa. Espera que acabi o cancel·la-la al panell d’avaluació.');
   const payload = request && typeof request === 'object' ? request : { prompt: request };
-  return askModel(String(payload.prompt || ''), selectedProject, payload.history);
+  const images = validateChatImages(payload.images);
+  if (images.length) {
+    const model = await currentModel();
+    if (!await mlxModels.hasVision(await mlxModels.modelDirectory(model, projectModelsDirectory()))) throw new Error(`${model.label} no pot veure imatges. Tria un model amb visió o treu les imatges.`);
+  }
+  return askModel(String(payload.prompt || ''), selectedProject, payload.history, images);
 });
 
 ipcMain.handle('permissions:get', async () => permissionMode);

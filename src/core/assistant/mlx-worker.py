@@ -1,3 +1,5 @@
+import gc
+import importlib.util
 import json
 import os
 import sys
@@ -6,6 +8,7 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mlx_text  # noqa: E402
 import mlx_lock  # noqa: E402
+import mlx_vision  # noqa: E402
 
 
 def emit(value):
@@ -62,6 +65,51 @@ def strip_thinking(text):
     return mlx_text.strip_thinking(text, getattr(tokenizer, "think_start", None), getattr(tokenizer, "think_end", None))
 
 
+# Images (mlx_vision.py): a model whose weights have a vision tower switches to mlx-vlm on the first
+# request with images, after freeing the text model, and stays there. Not with a LoRA adapter on top.
+MODEL_DIR = sys.argv[1]
+HAS_VISION = mlx_vision.model_has_vision(MODEL_DIR) and not adapter_path
+BACKEND = "text"
+VLM = None
+
+
+def vlm_available():
+    return importlib.util.find_spec("mlx_vlm") is not None
+
+
+def switch_to_vision():
+    global model, VLM, BACKEND
+    import mlx.core as mx
+    from mlx_vlm import load as vlm_load
+    model = None
+    gc.collect()
+    mx.clear_cache()
+    VLM = vlm_load(MODEL_DIR)
+    BACKEND = "vision"
+
+
+def generate_with_vision(messages, tools, request, paths, index):
+    from mlx_vlm import generate as vlm_generate
+    vlm_model, processor = VLM
+    prompt = processor.apply_chat_template(
+        mlx_vision.with_images(messages, index, len(paths)),
+        tokenize=False,
+        add_generation_prompt=True,
+        tools=tools,
+        enable_thinking=THINKING,
+    )
+    result = vlm_generate(
+        vlm_model,
+        processor,
+        prompt,
+        image=paths or None,
+        max_tokens=int(request.get("max_tokens", 700)),
+        temperature=float(request.get("temperature", 0.0)),
+        verbose=False,
+    )
+    return getattr(result, "text", result)
+
+
 def normalize_tool_calls(text, tools):
     return mlx_text.normalize_tool_calls(text, tools, getattr(tokenizer, "tool_call_start", None), getattr(tokenizer, "tool_call_end", None), getattr(tokenizer, "tool_parser", None))
 
@@ -73,6 +121,17 @@ for line in sys.stdin:
         if NATIVE_FORMAT_DIFFERS:
             messages = mlx_text.native_history(messages)
         tools = request.get("tools") or None
+        paths, image_message = mlx_vision.image_paths(request)
+        backend, problem = mlx_vision.choose_backend(bool(paths), HAS_VISION, vlm_available(), BACKEND)
+        if problem:
+            emit({"type": "result", "error": problem})
+            continue
+        if backend == "vision":
+            if BACKEND != "vision":
+                switch_to_vision()
+            answer = generate_with_vision(messages, tools, request, paths, image_message)
+            emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip()})
+            continue
         prompt = tokenizer.apply_chat_template(
             messages,
             tokenize=False,

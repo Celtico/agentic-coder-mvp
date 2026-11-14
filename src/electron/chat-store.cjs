@@ -13,7 +13,9 @@ function cleanSession(value) {
   const messages = value.messages.slice(-MAX_MESSAGES).flatMap((message) => {
     if (!message || (message.role !== 'user' && message.role !== 'assistant') || typeof message.text !== 'string') return [];
     if (message.text.length > MAX_TEXT) return [];
-    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}), ...(message.notice === true ? { notice: true } : {}) }];
+    // Only small JPEG thumbnails are kept for the images of a message (src/app/image-attachments.ts).
+    const images = Array.isArray(message.images) ? message.images.filter((image) => image && typeof image.name === 'string' && typeof image.thumbnail === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image.thumbnail) && image.thumbnail.length <= 80_000).slice(0, 4).map((image) => ({ name: image.name.slice(0, 120), thumbnail: image.thumbnail })) : [];
+    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}), ...(message.notice === true ? { notice: true } : {}), ...(images.length ? { images } : {}) }];
   });
   return {
     id: value.id,
