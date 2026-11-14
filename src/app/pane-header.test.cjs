@@ -17,7 +17,7 @@ import { Pane, PaneHeader, PaneTitle, PaneToolbar, PaneToneContext, PaneStyleCon
 export const render = (props: any, accent: any = "agentic") => renderToStaticMarkup(<ChakraProvider value={buildSystem(accent)}><PaneHeader {...props}/></ChakraProvider>)
 export const renderInContext = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneHeader {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const renderPane = (variant: any, fromContext = false) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneStyleContext.Provider value={fromContext ? variant : "subtle"}><Pane variant={fromContext ? undefined : variant} label="Git" header={<PaneHeader icon={LuGitBranch} title="Git"/>}>contingut</Pane></PaneStyleContext.Provider></ChakraProvider>)
-export const renderDialog = () => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open><Dialog.Positioner><Dialog.Content>Preferències</Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
+export const renderDialog = (material?: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><Dialog.Root open {...(material ? { material } : {})}><Dialog.Positioner><Dialog.Content>Preferències</Dialog.Content></Dialog.Positioner></Dialog.Root></ChakraProvider>)
 export const renderTitle = (tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneTitle icon={LuGitBranch} title="Historial local" subtitle="src"/></PaneToneContext.Provider></ChakraProvider>)
 export const renderToolbar = (props: any, tone: any) => renderToStaticMarkup(<ChakraProvider value={buildSystem("agentic")}><PaneToneContext.Provider value={tone}><PaneToolbar {...props}/></PaneToneContext.Provider></ChakraProvider>)
 export const icons = { LuGitBranch, LuPlus }
@@ -158,7 +158,7 @@ test('every dialog and the floating Historial local window speak the panes’ la
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /header: \{ \.\.\.chakraDialog\.base\.header, p: "0", display: "block" \}/);
   // Historial local: panel background, the panes' title in its bar, plain labels, the selection in brand.
-  assert.match(app, /<FloatingPanel\.Content [^>]*bg="bg\.panel"/);
+  assert.match(app, /<FloatingPanel\.Content [^>]*\{\.\.\.DIALOG_MATERIALS\[appearance\.dialogs\]\.content\}/);
   assert.match(app, /title=\{<PaneTitle icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath\}\/>\}/);
   assert.doesNotMatch(app, />CARPETA<|>HISTORIAL DELS FITXERS</);
   assert.match(app, /fileHistoryVersionPath === version\.path \? 'agentic' : 'gray'/);
@@ -170,4 +170,27 @@ test('the title of a floating window uses the panes’ header recipe, with its t
   assert.match(html, /data-pane-title/);
   assert.match(html, />Historial local</);
   assert.match(html, />src</);
+});
+
+test('dialogs are solid or frosted (glaçat): the dialog recipe’s material variant, chosen in Preferències', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /solid: \{ content: \{ bg: "bg\.panel", borderColor: "border" \}, backdrop: \{ bg: "blackAlpha\.600" \} \}/);
+  assert.match(recipes, /glass: \{ content: \{ bg: "bg\.panel\/80", backdropFilter: "blur\(16px\) saturate\(1\.2\)", borderColor: "border\.subtle" \}, backdrop: \{ bg: "blackAlpha\.400" \} \}/);
+  assert.match(recipes, /material: \{\s*solid: \{ content: DIALOG_MATERIALS\.solid\.content, backdrop: DIALOG_MATERIALS\.solid\.backdrop \},\s*glass: \{ content: DIALOG_MATERIALS\.glass\.content, backdrop: DIALOG_MATERIALS\.glass\.backdrop \},/);
+  assert.match(recipes, /defaultVariants: \{ \.\.\.chakraDialog\.defaultVariants, material: "glass" \}/);
+  // Both render, and give the dialog different styles.
+  const solid = built.renderDialog('solid');
+  const glass = built.renderDialog('glass');
+  assert.match(solid, /chakra-dialog__content/);
+  assert.match(glass, /chakra-dialog__content/);
+  assert.match(glass, /backdrop-filter:blur\(16px\) saturate\(1\.2\)/);
+  assert.doesNotMatch(solid, /backdrop-filter:blur\(16px\)/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.equal((app.match(/<Dialog\.Root \{\.\.\.dialogMaterial\} /g) || []).length, 6);
+  // The backdrop is the recipe's too: no dialog sets its own.
+  assert.equal((app.match(/<Dialog\.Backdrop\/>/g) || []).length, 6);
+  assert.doesNotMatch(app, /<Dialog\.Backdrop [^/]/);
+  assert.match(app, /const dialogMaterial = \{ material: appearance\.dialogs \} as Record<string, string>;/);
+  assert.match(app, /DIALOG_MATERIAL_OPTIONS\.map\(\(material\) => <Box key=\{material\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, dialogs: material \}\)\)\}>/);
+  assert.match(app, /solid: 'Sòlid', glass: 'Glaçat'/);
 });

@@ -25,8 +25,9 @@ import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
-import { CHAT_FONT_SIZES, EDITOR_FONT_SIZES, PANE_STYLES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
+import { CHAT_FONT_SIZES, DIALOG_MATERIAL_OPTIONS, EDITOR_FONT_SIZES, PANE_STYLES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
+import { DIALOG_MATERIALS, type DialogMaterial } from '../theme/pane-recipes';
 import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, sideColumnsShown, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
 
 loader.config({ paths: { vs: new URL('../node_modules/monaco-editor/min/vs', window.location.href).toString() } });
@@ -178,6 +179,8 @@ const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string
 const PANE_TONE_LABELS: Record<PaneHeaderTone, string> = { brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida' };
 /** Preferències › Aparença › Estil dels panells: Chakra's Card variants. */
 const PANE_STYLE_LABELS: Record<PaneStyle, string> = { subtle: 'Suau (com ara)', outline: 'Amb vora', elevated: 'Amb ombra' };
+/** Preferències › Aparença › Diàlegs. */
+const DIALOG_MATERIAL_LABELS: Record<DialogMaterial, string> = { solid: 'Sòlid', glass: 'Glaçat' };
 const COLOR_MODE_LABELS: Record<ColorMode, string> = { light: 'Clar', dark: 'Fosc', system: 'Com el sistema' };
 const CHAT_FONT_LABELS: Record<(typeof CHAT_FONT_SIZES)[number], string> = { xs: 'Petita', sm: 'Normal', md: 'Gran', lg: 'Molt gran' };
 /** Preferències › Aprenentatge: each value, its name and its step. */
@@ -325,6 +328,8 @@ export function App(): React.JSX.Element {
     return () => query.removeEventListener('change', change);
   }, []);
   const colorMode = resolveColorMode(appearance.colorMode, systemDark);
+  // The dialogs' `material` variant (src/theme/pane-recipes.ts): solid or glass, from Preferències.
+  const dialogMaterial = { material: appearance.dialogs } as Record<string, string>;
   useEffect(() => { applyColorMode(colorMode); }, [colorMode]);
   useEffect(() => { setAccent(appearance.accent); updateViewState(localStorage, (state) => { state.appearance = appearance; }); }, [appearance, setAccent]);
   async function openPreferences() {
@@ -2276,9 +2281,9 @@ export function App(): React.JSX.Element {
           </HStack>
     </Flex>
     </Flex>
-    <Dialog.Root open={createEntryKind !== null} onOpenChange={({ open }) => { if (!open && !createEntryBusy) setCreateEntryKind(null); }}>
+    <Dialog.Root {...dialogMaterial} open={createEntryKind !== null} onOpenChange={({ open }) => { if (!open && !createEntryBusy) setCreateEntryKind(null); }}>
       <Portal>
-        <Dialog.Backdrop bg="black/70"/>
+        <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
             <DialogHeading icon={createEntryKind === 'rename' ? Pencil : createEntryKind === 'directory' ? FolderPlus : FilePlus} title={createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}/>
@@ -2294,9 +2299,9 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root open={verifiedExperienceDraft !== null} onOpenChange={({ open }) => { if (!open && !verifiedExperienceBusy) setVerifiedExperienceDraft(null); }}>
+    <Dialog.Root {...dialogMaterial} open={verifiedExperienceDraft !== null} onOpenChange={({ open }) => { if (!open && !verifiedExperienceBusy) setVerifiedExperienceDraft(null); }}>
       <Portal>
-        <Dialog.Backdrop bg="black/70"/>
+        <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
           <Dialog.Content>
             <DialogHeading icon={Brain} title="Desa com a cas verificat"/>
@@ -2314,7 +2319,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root open={caseEdit !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseEdit(null); }}>
+    <Dialog.Root {...dialogMaterial} open={caseEdit !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseEdit(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2335,7 +2340,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root role="alertdialog" open={caseToDelete !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseToDelete(null); }}>
+    <Dialog.Root {...dialogMaterial} role="alertdialog" open={caseToDelete !== null} onOpenChange={({ open }) => { if (!open && !caseBusy) setCaseToDelete(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2354,7 +2359,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root size="lg" scrollBehavior="inside" open={caseDetail !== null} onOpenChange={({ open }) => { if (!open) setCaseDetail(null); }}>
+    <Dialog.Root {...dialogMaterial} size="lg" scrollBehavior="inside" open={caseDetail !== null} onOpenChange={({ open }) => { if (!open) setCaseDetail(null); }}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2387,7 +2392,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    <Dialog.Root size="lg" scrollBehavior="inside" open={preferencesOpen} onOpenChange={({ open }) => setPreferencesOpen(open)}>
+    <Dialog.Root {...dialogMaterial} size="lg" scrollBehavior="inside" open={preferencesOpen} onOpenChange={({ open }) => setPreferencesOpen(open)}>
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
@@ -2520,6 +2525,18 @@ export function App(): React.JSX.Element {
                       </Box>)}
                     </Grid>
                   </Box>
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Diàlegs</Text>
+                    <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Diàlegs">
+                      {DIALOG_MATERIAL_OPTIONS.map((material) => <Box key={material} as="button" role="radio" aria-checked={appearance.dialogs === material} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.dialogs === material ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, dialogs: material }))}>
+                        <Box position="relative" h="20" borderRadius="md" overflow="hidden" bg="bg" p="2">
+                          <Stack gap="1.5" aria-hidden="true">{[90, 70, 80].map((width) => <Box key={width} h="1.5" w={`${width}%`} rounded="full" bg="agentic.solid"/>)}</Stack>
+                          <Box position="absolute" insetX="5" insetY="4" borderRadius="md" borderWidth="1px" {...DIALOG_MATERIALS[material].content}/>
+                        </Box>
+                        <Text mt="1.5" fontSize="xs" color={appearance.dialogs === material ? 'agentic.fg' : 'fg.muted'}>{DIALOG_MATERIAL_LABELS[material]}</Text>
+                      </Box>)}
+                    </Grid>
+                  </Box>
                   <HStack gap="2" flexWrap="wrap">
                     <Button variant="outline" onClick={() => setAppearance(defaultAppearance())}><RefreshCw size={14}/>Restableix l’aparença</Button>
                     <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
@@ -2539,7 +2556,7 @@ export function App(): React.JSX.Element {
       getBoundaryEl={() => appAreaRef.current} persistRect defaultPosition={{ x: historyStart.x, y: historyStart.y }} defaultSize={{ width: historyStart.width, height: historyStart.height }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
-        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" bg="bg.panel" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
+        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderWidth="1px" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
         <RestoreWindowStage stage={fileHistoryStage}/>
         <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<PaneTitle icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath}/>}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">

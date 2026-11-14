@@ -71,6 +71,15 @@ export const paneCardRecipe = defineSlotRecipe({
   defaultVariants: { ...chakraCard.defaultVariants, variant: "subtle", size: "pane" },
 } as Parameters<typeof defineSlotRecipe>[0])
 
+// What dialogs and floating windows are made of, chosen in Preferències › Aparença › Diàlegs: «solid»
+// (Chakra's panel background) or «glass» (the same background, see-through and blurred). Defined once:
+// the dialog recipe's `material` variant, the Historial local window and the preview use these.
+export type DialogMaterial = "solid" | "glass"
+export const DIALOG_MATERIALS: Record<DialogMaterial, { content: Record<string, string>; backdrop: Record<string, string> }> = {
+  solid: { content: { bg: "bg.panel", borderColor: "border" }, backdrop: { bg: "blackAlpha.600" } },
+  glass: { content: { bg: "bg.panel/80", backdropFilter: "blur(16px) saturate(1.2)", borderColor: "border.subtle" }, backdrop: { bg: "blackAlpha.400" } },
+}
+
 // Every dialog of the app (Preferències, the saved cases, confirmations…) on Chakra's panel background,
 // with the app's line around it: Chakra's dialog recipe, extended.
 const chakraDialog = defaultConfig.theme?.slotRecipes?.dialog as unknown as CardRecipe
@@ -84,4 +93,12 @@ export const dialogRecipe = defineSlotRecipe({
     // The header is the panes' header (src/app/pane-header.tsx), which brings its own padding.
     header: { ...chakraDialog.base.header, p: "0", display: "block" },
   },
-} as Parameters<typeof defineSlotRecipe>[0])
+  variants: {
+    ...chakraDialog.variants,
+    material: {
+      solid: { content: DIALOG_MATERIALS.solid.content, backdrop: DIALOG_MATERIALS.solid.backdrop },
+      glass: { content: DIALOG_MATERIALS.glass.content, backdrop: DIALOG_MATERIALS.glass.backdrop },
+    },
+  },
+  defaultVariants: { ...chakraDialog.defaultVariants, material: "glass" },
+} as unknown as Parameters<typeof defineSlotRecipe>[0])

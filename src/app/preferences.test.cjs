@@ -17,12 +17,12 @@ fs.rmSync(dir, { recursive: true, force: true });
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the default appearance is the app as it was: dark, normal sizes, its own green', () => {
-  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle' });
+  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', dialogs: 'glass' });
 });
 
 test('a saved appearance keeps only valid values', () => {
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated' });
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon', paneStyle: 'glass' }), prefs.defaultAppearance());
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', dialogs: 'solid' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', dialogs: 'solid' });
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon', paneStyle: 'glass', dialogs: 'frosted' }), prefs.defaultAppearance());
   assert.deepEqual(prefs.normalizeAppearance(null), prefs.defaultAppearance());
 });
 
@@ -38,8 +38,8 @@ test('«system» follows the operating system; sizes move one step and stay in t
 
 test('the appearance is kept with the view state', () => {
   const storage = memoryStorage();
-  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline' }; });
-  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline' });
+  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', dialogs: 'solid' }; });
+  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', dialogs: 'solid' });
   assert.deepEqual(view.loadViewState(memoryStorage()).appearance, prefs.defaultAppearance());
 });
 
