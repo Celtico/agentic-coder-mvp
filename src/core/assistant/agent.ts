@@ -941,7 +941,9 @@ export class LocalCodingAgent {
       catch (error) { result = { error: error instanceof Error ? error.message : String(error) }; }
       const bounded = JSON.stringify(result).slice(0, 12000);
       messages.push(
-        { role: 'assistant', content: JSON.stringify({ type: 'tool_call', name: 'list_files' }) },
+        // Written as the model's own calls come back in the history (<tool_call>{json}</tool_call>): a JSON
+        // action here taught the model to answer in that form, which it then broke (15-11-2026).
+        { role: 'assistant', content: `<tool_call>${JSON.stringify({ name: 'list_files', arguments: {} })}</tool_call>` },
         { role: 'user', content: promptText('nudge-after-list-files', { result: bounded }) },
       );
     };
