@@ -7,6 +7,7 @@
   "scripts": {
     "start": "npm run typecheck && npm run build:agent && npm run build:ui && electron .",
     "dist:mac": "npm run check && electron-builder --mac dmg --arm64",
+    "dist:linux": "npm run check && electron-builder --linux AppImage deb --x64",
     "check": "node --check src/electron/main.cjs && node --check src/electron/preload.cjs && node --check src/electron/git-tools.cjs && node --check src/core/assistant/agent-worker.cjs && npm run typecheck && npm run build:agent && node --check src/core/assistant/agent-runtime.cjs && npm run build:ui",
     "test": "npm run build:agent && node --test",
     "evaluate:memory": "npm run build:agent && node scripts/evaluate-memory.cjs",
@@ -55,17 +56,18 @@
       "!src/electron/*.test.cjs",
       "src/core/assistant/agent-runtime.cjs",
       "src/core/assistant/agent-worker.cjs",
-      "src/core/assistant/mlx-worker.py",
-      "src/core/assistant/mlx_text.py",
-      "src/core/assistant/mlx_lock.py",
-      "src/core/assistant/mlx_vision.py",
-      "src/core/assistant/mlx_dictation.py",
-      "src/core/assistant/mlx-locked.py",
+      "src/core/assistant/*.py",
       "scripts/evaluate-agent.cjs",
       "scripts/agent-benchmark/*.cjs",
       "!scripts/agent-benchmark/*.test.cjs",
       "prompts/**"
     ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "icon": "assets/icon.png",
+      "maintainer": "Agentic Coder"
+    },
     "mac": {
       "target": [
         {

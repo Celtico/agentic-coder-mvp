@@ -111,7 +111,9 @@ const WebView = chakra('webview');
 const tokenColor = (token: string) => getComputedStyle(document.documentElement).getPropertyValue(`--chakra-colors-${token.replace(/\./g, '-')}`).trim();
 
 /** On macOS the app draws its own title bar (the main process hides the system one). */
-const ownTitleBar = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) && typeof window !== 'undefined' && 'agentic' in window;
+/** A Mac: its own title bar with the traffic lights, and the translucent background (vibrancy); elsewhere the system's. */
+const isMacPlatform = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
+const ownTitleBar = isMacPlatform && typeof window !== 'undefined' && 'agentic' in window;
 
 /** The name of a control, shown next to it as soon as the pointer rests there. */
 const Tip = ({ label, children }: { label: string; children: React.ReactElement }) => (
@@ -346,7 +348,7 @@ export function App(): React.JSX.Element {
   // Fons general «Translúcid»: the canvas behind the panels becomes Chakra's «transparent» and the window
   // shows the macOS vibrancy through it; the panels keep their own background.
   useEffect(() => {
-    const translucent = appearance.windowBg === 'translucent';
+    const translucent = isMacPlatform && appearance.windowBg === 'translucent';
     const root = document.documentElement;
     if (translucent) { root.style.setProperty('--chakra-colors-canvas', 'transparent'); root.dataset.translucent = ''; }
     else { root.style.removeProperty('--chakra-colors-canvas'); delete root.dataset.translucent; }
@@ -2917,12 +2919,14 @@ export function App(): React.JSX.Element {
                       })}
                     </Grid>
                     <Text mt="1" fontSize="xs" color="fg.muted">Els tokens de fons de Chakra; s’aplica a tots els panells, també al xat i al terminal.</Text>
-                    {/* The window's own background, around the panels, the bar and the title: opaque or see-through. */}
+                    {/* The window's own background, around the panels, the bar and the title: opaque or see-through (macOS only). */}
+                    {isMacPlatform && <>
                     <Text mt="4" mb="1.5" fontSize="sm" fontWeight="medium">Fons general</Text>
                     <SegmentGroup.Root size="sm" value={appearance.windowBg} onValueChange={({ value }) => { if (value === 'opaque' || value === 'translucent') setAppearance((current) => ({ ...current, windowBg: value })); }}>
                       <SegmentGroup.Indicator/><SegmentGroup.Items items={[{ value: 'opaque', label: 'Opac' }, { value: 'translucent', label: 'Translúcid' }]}/>
                     </SegmentGroup.Root>
                     <Text mt="1" fontSize="xs" color="fg.muted">Translúcid: al voltant dels panells es veu l’escriptori difuminat (macOS). Els panells continuen opacs.</Text>
+                    </>}
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="dialogs">
