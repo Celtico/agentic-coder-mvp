@@ -123,3 +123,8 @@ test('Preferències › Aparença: every accordion item has its icon, like the p
     assert.ok(app.includes(`<Accordion.ItemTrigger>{rowHeader('${title}', undefined, ${icon})}</Accordion.ItemTrigger>`), title);
   }
 });
+
+test('the rail: an open panel’s icon in the accent’s main colour (solid, like the send button), a closed one muted', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, /variant="ghost" colorPalette=\{button\.palette\} color=\{button\.palette === 'agentic' \? 'colorPalette\.solid' : 'fg\.muted'\}/);
+});
