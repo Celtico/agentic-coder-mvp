@@ -164,3 +164,10 @@ test('the prompt cache: mlx_lm’s own, in the chat and not in an evaluation, an
   assert.match(fs.readFileSync(path.join(__dirname, 'inference-engine.ts'), 'utf8'), /cachedTokens: trace\.cachedTokens \?\? null/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8'), /\["Ja llegits \(memòria cau\)", metrics\.cachedTokens != null/);
 });
+
+test('the prompt cache keeps a checkpoint where a prompt stops being the previous one (instructions that change at their end)', () => {
+  const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
+  assert.match(worker, /shared = min\(common_prefix\(tokens, LAST_PROMPT\), len\(tokens\) - 1\)/);
+  assert.match(worker, /if shared - self\.reused >= CHECKPOINT_MIN and PROMPT_CACHE\.max_bytes > 0:\n\s*prefill\(cache, tokens\[self\.reused:shared\]\)\n\s*PROMPT_CACHE\.insert_cache\("model", tokens\[:shared\], copy\.deepcopy\(cache\), cache_type="system"\)\n\s*rest = tokens\[shared:\]/);
+  assert.match(worker, /model\(mx\.array\(tokens\[start:start \+ step\]\)\[None\], cache=cache\)\n\s*mx\.eval\(\[c\.state for c in cache\]\)/, 'read in steps, as stream_generate reads a prompt');
+});

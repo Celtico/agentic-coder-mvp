@@ -75,21 +75,58 @@ def prompt_tokens(prompt):
     return tokenizer.encode(prompt, add_special_tokens=bos is None or not prompt.startswith(bos))
 
 
+# The previous prompt's tokens: where the next one stops being the same is a checkpoint (below).
+LAST_PROMPT = []
+# A checkpoint is worth its copy from this many tokens on.
+CHECKPOINT_MIN = 256
+
+
+def common_prefix(a, b):
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def prefill(cache, tokens, step=2048):
+    """Reads `tokens` into the cache as stream_generate reads a prompt (in steps), generating nothing."""
+    import mlx.core as mx
+
+    for start in range(0, len(tokens), step):
+        model(mx.array(tokens[start:start + step])[None], cache=cache)
+        mx.eval([c.state for c in cache])
+
+
 class CachedStream:
     """stream_generate with the prompt cache: the same arguments and responses; `reused` is how many prompt
-    tokens came from the cache. The prompt and what was generated are stored for the next call."""
+    tokens came from the cache. The prompt and what was generated are stored for the next call.
+
+    The app's instructions change in their last part from one message to the next (the verified cases found
+    for each message, before the history), and MiMo's cache cannot be cut back. So, when a prompt shares a
+    long start with the previous one that no stored cache covers, that start is read first and kept as a
+    checkpoint of its own: the next messages reuse it (instructions and tools) and read only the rest."""
 
     def __init__(self):
         self.reused = 0
         self.total = 0
 
     def __call__(self, model, tokenizer, prompt, **options):
+        global LAST_PROMPT
+        import copy
+
         tokens = prompt_tokens(prompt)
         self.total = len(tokens)
         cache, rest = PROMPT_CACHE.fetch_nearest_cache("model", tokens[:])
         if cache is None:
             cache, rest = make_prompt_cache(model), tokens
         self.reused = len(tokens) - len(rest)
+        shared = min(common_prefix(tokens, LAST_PROMPT), len(tokens) - 1)
+        LAST_PROMPT = tokens
+        if shared - self.reused >= CHECKPOINT_MIN and PROMPT_CACHE.max_bytes > 0:
+            prefill(cache, tokens[self.reused:shared])
+            PROMPT_CACHE.insert_cache("model", tokens[:shared], copy.deepcopy(cache), cache_type="system")
+            rest = tokens[shared:]
         key = tokens[:]
         for response in stream_generate(model, tokenizer, prompt=rest, prompt_cache=cache, **options):
             key.append(response.token)
