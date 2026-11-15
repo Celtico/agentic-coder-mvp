@@ -133,7 +133,7 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida'/);
   assert.match(app, /setAppearance\(defaultAppearance\(\)\)\}><RefreshCw size=\{14\}\/>Restableix l’aparença/);
   // The panes with a second row use the shared one; Git's and the browser's refresh go to the header.
-  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 4);
+  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 3);
   assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane, \{ actions: <IconButton icon=\{RefreshCw\} label="Recarrega"/);
   assert.match(app, /case 'git': return frame\(GitBranch, 'Git', gitPane, \{[^\n]*actions: <IconButton icon=\{RefreshCw\} label="Actualitza l’historial de Git"/);
 });
@@ -225,7 +225,7 @@ test('the secondary bar: ghost actions, plain/subtle fields, the same small heig
   assert.match(recipe, /action: \{[^}]*gap: "2"/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const bars = [...app.matchAll(/<PaneToolbar[\s\S]*?(?:<\/PaneToolbar>|\/>)/g)].map((match) => match[0]);
-  assert.equal(bars.length, 4);
+  assert.equal(bars.length, 3);
   for (const bar of bars) {
     for (const button of bar.match(/<Button\b[^>]*>/g) || []) { assert.match(button, /variant="ghost"/, button); assert.match(button, /size="xs"/, button); }
     for (const select of bar.match(/<NativeSelect\.Root\b[^>]*>/g) || []) assert.match(select, /variant="plain"/, select);
