@@ -110,10 +110,12 @@ test('every pane is a Chakra Card with its header and body, in Chakra’s three 
   assert.match(recipes, /elevated: \{ root: \{ bg: "bg", boxShadow: "md" \} \}/);
   assert.match(recipes, /defaultVariants: \{ \.\.\.chakraCard\.defaultVariants, variant: "subtle", size: "pane" \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/<PaneCard[ >]/g) || []).length, 7, 'terminal, the two frames, evaluation, the two columns, and the preview in Preferències');
-  // Only the chat (not one of the panes) still draws its own box.
-  assert.equal((app.match(/borderRadius="panel" overflow="hidden"/g) || []).length, 1, 'no pane draws its own box any more');
-  assert.match(app, /const chatPane = \(\n\s*<Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">/);
+  assert.equal((app.match(/<PaneCard[ >]/g) || []).length, 8, 'terminal, the two frames, evaluation, the two columns, the chat, and the preview in Preferències');
+  // The chat is a pane like the others: the same card and header (the mark, «Agentic Coder», the model).
+  assert.match(app, /<PaneCard label="Agentic Coder" header=\{<PaneHeader icon=\{ChatMark\} title="Agentic Coder" subtitle=\{chatModelLabel\}\/>\}>/);
+  assert.doesNotMatch(app, /<Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder<\/Text>/, 'no loose label on top of the chat');
+  assert.equal((app.match(/borderRadius="panel" overflow="hidden"/g) || []).length, 0, 'no pane draws its own box any more, the chat neither');
+  assert.match(app, /const chatPane = \(\n\s*<PaneCard label="Agentic Coder"/);
   assert.match(app, /<PaneStyleContext\.Provider value=\{appearance\.paneStyle\}>/);
   assert.match(app, /PANE_STYLES\.map\(\(style\) => <Box key=\{style\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, paneStyle: style \}\)\)\}>/);
   assert.match(app, /subtle: 'Suau \(com ara\)', outline: 'Amb vora', elevated: 'Amb ombra'/);

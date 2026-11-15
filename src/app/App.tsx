@@ -129,6 +129,8 @@ const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: strin
  * its first field or its main button), not the ✕ of the header, which then showed highlighted.
  */
 const focusDialogContent = () => document.querySelector<HTMLElement>('[data-scope="dialog"][data-part="content"][data-state="open"] [data-initial-focus]');
+/** The app's mark as a pane header's icon (the chat's), the size of the other icons. */
+const ChatMark: IconType = ({ size }) => <Mark size={typeof size === 'number' ? size : 16} color="currentColor"/>;
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -1582,13 +1584,11 @@ export function App(): React.JSX.Element {
   }, [draft]);
   const chatFilePickerRef = useRef<HTMLInputElement | null>(null);
 
+  // The chat is a pane like the others: the same card and header (the app's mark, «Agentic Coder» and the
+  // model in use), with the messages and the message box in its body. It is the flexible pane of its row.
+  const chatModelLabel = modelOptions.find((model) => model.id === selectedModel)?.label;
   const chatPane = (
-    <Flex h="full" minW="0" minH="0" direction="column" bg="bg" borderRadius="panel" overflow="hidden">
-      <Flex h="32px" flex="none" px="3" align="center" justify="space-between" gap="3">
-        <HStack minW="0" gap="3">
-          <Text flex="none" fontSize="xs" fontWeight="semibold">Agentic Coder</Text>
-        </HStack>
-      </Flex>
+    <PaneCard label="Agentic Coder" header={<PaneHeader icon={ChatMark} title="Agentic Coder" subtitle={chatModelLabel}/>}>
       <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" scrollbarGutter="stable">
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
@@ -1629,7 +1629,7 @@ export function App(): React.JSX.Element {
           <Button flex="none" size="xs" variant="ghost" px="2" color={permissionMode === 'auto' ? 'fg' : 'fg.muted'} title={permissionMode === 'auto' ? 'Automàtic: l’agent instal·la paquets sense preguntar. Fes clic perquè torni a demanar permís.' : 'Demana permís abans d’instal·lar paquets (un cop per projecte). Fes clic per deixar-lo anar sol.'} onClick={() => { const next = permissionMode === 'auto' ? 'ask' : 'auto'; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(permissionMode)); }}>{permissionMode === 'auto' ? 'Automàtic' : 'Pregunta'}</Button>
         </Flex>
       </Box>
-    </Flex>
+    </PaneCard>
   );
 
   const browserPane = (
