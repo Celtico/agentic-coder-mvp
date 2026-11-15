@@ -2347,9 +2347,9 @@ export function App(): React.JSX.Element {
               onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
               onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
               {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="1" right="1" h="0.5" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
-              {/* Plain ghost, no background: open, only the icon's colour changes to the accent's main colour
-                  (the «agentic» palette's solid, like the send button); closed, muted. Hover is Chakra's ghost. */}
-              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'colorPalette.solid' : 'fg.muted'} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
+              {/* Plain ghost, no background: open, only the icon's colour changes to the accent
+                  (the «agentic» palette's fg, the paler tone); closed, muted. Hover is Chakra's ghost. */}
+              <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'colorPalette.fg' : 'fg.muted'} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
               {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="1" right="1" h="0.5" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>
