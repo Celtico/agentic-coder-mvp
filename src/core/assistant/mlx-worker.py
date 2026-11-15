@@ -27,6 +27,7 @@ except RuntimeError as error:
 
 try:
     from mlx_lm import load, generate, stream_generate
+    from mlx_lm.models.cache import LRUPromptCache, make_prompt_cache
     from mlx_lm.sample_utils import make_sampler
 
     # An optional LoRA adapter goes on top of the base weights, which are never modified.
@@ -68,6 +69,34 @@ if not THINKING and _think_tokens:
     LOGITS_PROCESSORS.append(_no_reasoning)
 
 
+def prompt_tokens(prompt):
+    # The same tokens stream_generate makes of a text prompt.
+    bos = getattr(tokenizer, "bos_token", None)
+    return tokenizer.encode(prompt, add_special_tokens=bos is None or not prompt.startswith(bos))
+
+
+class CachedStream:
+    """stream_generate with the prompt cache: the same arguments and responses; `reused` is how many prompt
+    tokens came from the cache. The prompt and what was generated are stored for the next call."""
+
+    def __init__(self):
+        self.reused = 0
+        self.total = 0
+
+    def __call__(self, model, tokenizer, prompt, **options):
+        tokens = prompt_tokens(prompt)
+        self.total = len(tokens)
+        cache, rest = PROMPT_CACHE.fetch_nearest_cache("model", tokens[:])
+        if cache is None:
+            cache, rest = make_prompt_cache(model), tokens
+        self.reused = len(tokens) - len(rest)
+        key = tokens[:]
+        for response in stream_generate(model, tokenizer, prompt=rest, prompt_cache=cache, **options):
+            key.append(response.token)
+            yield response
+        PROMPT_CACHE.insert_cache("model", key, cache)
+
+
 def strip_thinking(text):
     return mlx_text.strip_thinking(text, getattr(tokenizer, "think_start", None), getattr(tokenizer, "think_end", None))
 
@@ -75,6 +104,13 @@ def strip_thinking(text):
 # Images (mlx_vision.py): a model whose weights have a vision tower switches to mlx-vlm on the first
 # request with images, after freeing the text model, and stays there. Not with a LoRA adapter on top.
 MODEL_DIR = sys.argv[1]
+# Prompt cache: what the model already read of the last prompts (the instructions, the tools, the history)
+# stays in memory, and the next call only reads what is new when its prompt starts the same way (MiMo's
+# linear-attention layers cannot be rewound, so it is the longest stored prefix). mlx_lm's own cache, as its
+# server uses it. Measured on 15-11-2026 with MiMo 9B at temperature 0: the same tokens with and without it,
+# 2.607 of 2.630 prompt tokens reused on a chat's second message, first token in 0,26 s instead of 12,8 s.
+# It lives and dies with this process (one model, one cache); a few entries, bounded in bytes.
+PROMPT_CACHE = LRUPromptCache(max_size=4, max_bytes=int(float(os.environ.get("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"))))
 CONTEXT_LIMIT = mlx_trace.context_limit(MODEL_DIR)
 HAS_VISION = mlx_vision.model_has_vision(MODEL_DIR) and not adapter_path
 BACKEND = "text"
@@ -157,24 +193,27 @@ for line in sys.stdin:
             tools=tools,
             enable_thinking=THINKING,
         )
+        stream = CachedStream()
         if request.get("trace"):
             # Log del model (the panel is open): the same generation, streamed and measured.
             answer, trace = mlx_trace.traced_generate(
-                stream_generate, model, tokenizer, prompt, int(request.get("max_tokens", 700)),
+                stream, model, tokenizer, prompt, int(request.get("max_tokens", 700)),
                 make_sampler(temp=float(request.get("temperature", 0.0))), LOGITS_PROCESSORS or None, emit,
                 logprobs=bool(request.get("logprobs")),
             )
-            trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")))
+            trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")),
+                         promptTokens=stream.total, cachedTokens=stream.reused)
             emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "trace": trace})
             continue
-        answer = generate(
+        # generate() is stream_generate's text joined: the same, here through the prompt cache.
+        answer = "".join(response.text for response in stream(
             model,
             tokenizer,
-            prompt=prompt,
+            prompt,
             max_tokens=int(request.get("max_tokens", 700)),
             sampler=make_sampler(temp=float(request.get("temperature", 0.0))),
             logits_processors=LOGITS_PROCESSORS or None,
-        )
+        ))
         emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip()})
     except Exception as error:
         emit({"type": "result", "error": f"Error generant amb MLX: {error}"})

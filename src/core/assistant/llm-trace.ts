@@ -15,7 +15,7 @@ export type LlmCallRecord = {
   params: { temperature: number; topP: number | null; maxTokens: number; stop: string[]; seed: number | null; logprobs: boolean };
   input: { messages: { role: string; content: string; tokens: number | null }[]; parts: (TracePart & { tokens: number | null })[]; tools: string[]; toolTokens: number | null; images: { path: string; bytes: number | null }[]; prompt: string | null; promptTokens: number | null; context: number | null };
   output: { raw: string | null; text: string | null; toolCalls: TraceToolCall[]; answer: string; parseErrors: string[]; finishReason: string | null; error: string | null; tokens?: { t: string; p: number; top: [string, number][] }[] };
-  metrics: { loadSeconds: number | null; firstTokenSeconds: number | null; promptTokens: number | null; promptTps: number | null; generationTokens: number | null; generationTps: number | null; peakMemoryGb: number | null; seconds: number | null };
+  metrics: { loadSeconds: number | null; firstTokenSeconds: number | null; promptTokens: number | null; cachedTokens?: number | null; promptTps: number | null; generationTokens: number | null; generationTps: number | null; peakMemoryGb: number | null; seconds: number | null };
   backend: string | null;
 };
 export type LlmToolRecord = { type: 'tool'; callId: string; at: string; name: string; arguments: unknown; ok: boolean; ms: number; result: string };

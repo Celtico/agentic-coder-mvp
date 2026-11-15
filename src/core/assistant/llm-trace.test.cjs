@@ -83,7 +83,8 @@ test('with the panel closed the request to the model and its generation are the 
   assert.match(engine, /readonly tracer = new LlmTracer\(\{ enabled: process\.env\.AGENT_LLM_TRACE === '1'/);
   const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
   // Without "trace", the worker goes on to the same generate() call as before.
-  assert.match(worker, /if request\.get\("trace"\):[\s\S]*?continue\n        answer = generate\(\n            model,\n            tokenizer,\n            prompt=prompt,\n            max_tokens=int\(request\.get\("max_tokens", 700\)\),\n            sampler=make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\),\n            logits_processors=LOGITS_PROCESSORS or None,\n        \)/);
+  // Without "trace", the same generation as with it (stream_generate through the prompt cache, joined).
+  assert.match(worker, /if request\.get\("trace"\):[\s\S]*?continue\n[^\n]*\n        answer = ""\.join\(response\.text for response in stream\(\n            model,\n            tokenizer,\n            prompt,\n            max_tokens=int\(request\.get\("max_tokens", 700\)\),\n            sampler=make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\),\n            logits_processors=LOGITS_PROCESSORS or None,\n        \)\)/);
   // Traced, the same sampler and logits processors, through stream_generate (which generate() is built on).
   assert.match(worker, /make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\), LOGITS_PROCESSORS or None, emit,/);
   // The agent only labels the call; the messages and options it passes are untouched.
@@ -151,4 +152,15 @@ test('the toolbar’s buttons: only their icons, their names in a tooltip and as
   for (const label of ['Actualitza', 'Mostra el fitxer al Finder', 'Esborra el log', 'Segur? Torna-hi a fer clic per esborrar el log']) assert.ok(panel.includes(`<ToolButton label="${label}"`), label);
   assert.doesNotMatch(panel, /<\/(?:RefreshCw|FolderOpen|Trash)[^>]*>|size=\{14\}\/>(?:Actualitza|Fitxer|Esborra)/);
   assert.match(panel, /setConfirmClear\(true\); setTimeout\(\(\) => setConfirmClear\(false\), 4000\)/);
+});
+
+test('the prompt cache: mlx_lm’s own, in the chat and not in an evaluation, and its reuse in Mètriques', () => {
+  const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
+  assert.match(worker, /PROMPT_CACHE = LRUPromptCache\(max_size=4, max_bytes=int\(float\(os\.environ\.get\("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"\)\)\)\)/);
+  assert.match(worker, /cache, rest = PROMPT_CACHE\.fetch_nearest_cache\("model", tokens\[:\]\)/);
+  assert.match(worker, /PROMPT_CACHE\.insert_cache\("model", key, cache\)/);
+  assert.match(worker, /return tokenizer\.encode\(prompt, add_special_tokens=bos is None or not prompt\.startswith\(bos\)\)/, 'the tokens stream_generate makes of a text');
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'scripts', 'evaluate-agent.cjs'), 'utf8'), /AGENT_MLX_PROMPT_CACHE_BYTES: '0',/);
+  assert.match(fs.readFileSync(path.join(__dirname, 'inference-engine.ts'), 'utf8'), /cachedTokens: trace\.cachedTokens \?\? null/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8'), /\["Ja llegits \(memòria cau\)", metrics\.cachedTokens != null/);
 });

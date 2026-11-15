@@ -54,6 +54,9 @@ async function main() {
     AGENT_MODEL_RUNTIME: model.runtime,
     AGENT_MODEL: model.modelId,
     AGENT_MLX_PYTHON: process.env.AGENT_MLX_PYTHON || mlxModels.enginePython(modelsRoot),
+    // No prompt cache in an evaluation (src/core/assistant/mlx-worker.py): its answers are not always
+    // letter for letter the ones without it, and evaluations must stay comparable with the earlier ones.
+    AGENT_MLX_PROMPT_CACHE_BYTES: '0',
     AGENT_MLX_MODEL_PATH: modelDirectory,
     AGENT_TURN_LOG: process.env.AGENT_TURN_LOG || path.join(outDir, `turns-${model.id}-${stamp}.jsonl`),
   });

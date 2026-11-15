@@ -146,7 +146,7 @@ export class MlxInferenceEngine implements InferenceEngine {
         prompt: typeof trace.prompt === 'string' ? trace.prompt : null, promptTokens: trace.promptTokens ?? null, context: trace.context ?? null,
       },
       output: { raw: typeof trace.raw === 'string' ? trace.raw : null, text, ...parsed, finishReason: trace.finishReason ?? null, error: typeof message.error === 'string' ? message.error : null, ...(Array.isArray(trace.tokens) ? { tokens: trace.tokens } : {}) },
-      metrics: { loadSeconds: this.loadSeconds, firstTokenSeconds: trace.firstTokenSeconds ?? null, promptTokens: trace.promptTokens ?? null, promptTps: trace.promptTps ?? null, generationTokens: trace.generationTokens ?? null, generationTps: trace.generationTps ?? null, peakMemoryGb: trace.peakMemoryGb ?? null, seconds: trace.seconds ?? (Date.now() - traced.started) / 1000 },
+      metrics: { loadSeconds: this.loadSeconds, firstTokenSeconds: trace.firstTokenSeconds ?? null, promptTokens: trace.promptTokens ?? null, cachedTokens: trace.cachedTokens ?? null, promptTps: trace.promptTps ?? null, generationTokens: trace.generationTokens ?? null, generationTps: trace.generationTps ?? null, peakMemoryGb: trace.peakMemoryGb ?? null, seconds: trace.seconds ?? (Date.now() - traced.started) / 1000 },
       backend: trace.backend ?? null,
     };
     // The load time goes with the first call after the model was loaded.
