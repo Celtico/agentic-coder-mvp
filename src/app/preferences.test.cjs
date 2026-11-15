@@ -104,6 +104,10 @@ test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s
   assert.match(pane, /bg=\{paneBg === "auto" \? undefined : paneBg\} color=\{paneBg === "bg\.inverted" \? "fg\.inverted" : undefined\}/);
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<PaneBgContext\.Provider value=\{appearance\.paneBg\}>/);
-  assert.match(app, /aria-label="Fons de les finestres"/);
+  // Swatch cards like Chakra's token docs: each option as a mini panel in light and dark (Chakra's Theme).
+  assert.match(app, /role="radiogroup" aria-label="Fons de les finestres"/);
+  assert.match(app, /PANE_BACKGROUNDS\.map\(\(value\) => \{/);
+  assert.match(app, /<Theme key=\{mode\} appearance=\{mode\}[^>]*bg=\{token\} color=\{text\}/);
+  assert.doesNotMatch(app, /<NativeSelect\.Field aria-label="Fons de les finestres"/);
   assert.match(app, /theme: \{ background: tokenColor\(paneSurface\)/, 'the terminal follows it');
 });
