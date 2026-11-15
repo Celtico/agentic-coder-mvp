@@ -6,7 +6,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
-  Accordion, useChakraContext, Badge, Field, Theme, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
+  Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
@@ -2688,18 +2688,13 @@ export function App(): React.JSX.Element {
                   </Box>
                   <Box>
                     <Text fontSize="sm" fontWeight="medium" mb="1.5">Fons de les finestres</Text>
-                    {/* One card per option, like Chakra's token docs: the token as a mini panel, in light and in dark. */}
+                    {/* One card per option, like Chakra's token docs: the colour, its name and its values. */}
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Fons de les finestres">
                       {PANE_BACKGROUNDS.map((value) => {
                         const token = value === 'auto' ? (appearance.paneStyle === 'elevated' ? 'bg.panel' : 'bg') : value;
-                        const text = value === 'bg.inverted' ? 'fg.inverted' : 'fg';
                         return <Box key={value} as="button" role="radio" aria-checked={appearance.paneBg === value} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneBg === value ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneBg: value }))} data-pane-bg-option={value}>
-                          <HStack gap="0" h="14" borderRadius="md" overflow="hidden" borderWidth="1px" borderColor="border">
-                            {(['light', 'dark'] as const).map((mode) => <Theme key={mode} appearance={mode} flex="1" h="full" bg={token} color={text} display="flex" flexDirection="column" hasBackground={false}>
-                              <Box h="3" borderBottomWidth="1px" borderColor="border" px="1.5" fontSize="2xs" lineHeight="3" color={text}>Aa</Box>
-                              <Text px="1.5" pt="1" fontSize="2xs" color={text}>{mode === 'light' ? 'clar' : 'fosc'}</Text>
-                            </Theme>)}
-                          </HStack>
+                          {/* Only the colour, in the mode in use, like Chakra's token docs. */}
+                          <Box h="14" borderRadius="md" borderWidth="1px" borderColor="border" bg={token} data-swatch/>
                           <Text mt="1.5" fontSize="xs" fontFamily={value === 'auto' ? undefined : 'mono'} color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value === 'auto' ? 'Segons l’estil del panell' : value}</Text>
                           {value === 'auto' && <Text fontSize="2xs" color="fg.muted" fontFamily="mono">{token}</Text>}
                           {/* Its values, as Chakra's token docs show them: «light: {gray.100} · dark: {gray.900}». */}
