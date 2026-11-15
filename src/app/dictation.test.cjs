@@ -69,5 +69,12 @@ test('silence never goes to Whisper: the level of the WAV, and each partial deco
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /partials\.push\(new Blob\(chunks, \{ type: recorder\.mimeType \}\)\)/, 'all the chunks from the first (with the header)');
   assert.match(app, /if \(isSilent\(wavLevel\(wav\)\)\) return;/);
-  assert.match(app, /No arriba so del micròfon/);
+  assert.match(app, /setStatus\(silentNotice\(\{ device: microphoneLabelRef\.current, status: microphone\?\.status, launcher: microphone\?\.launcher \}\)\);/);
+  assert.match(app, /microphoneLabelRef\.current = stream\.getAudioTracks\(\)\[0\]\?\.label \|\| null;/);
+});
+
+test('a silent recording names the microphone used, says the closed lid first, then the permission of the app macOS counts', () => {
+  const granted = dictation.silentNotice({ device: 'Micròfon del MacBook Pro', status: 'granted', launcher: 'Terminal' });
+  assert.equal(granted, 'No arriba so de «Micròfon del MacBook Pro»: si el portàtil té la tapa tancada, obre-la o tria un altre micròfon a Configuració del Sistema › So › Entrada; comprova també el permís de micròfon de «Terminal» (Privadesa i seguretat › Micròfon).');
+  assert.match(dictation.silentNotice({ status: 'denied', launcher: null }), /^No arriba so del micròfon: [^;]*; macOS no dona el micròfon a «Electron»: activa-ho a Configuració del Sistema › Privadesa i seguretat › Micròfon\.$/);
 });

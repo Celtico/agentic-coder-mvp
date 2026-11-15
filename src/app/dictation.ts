@@ -112,3 +112,17 @@ export function wavLevel(wav: ArrayBuffer): { peak: number; rms: number; seconds
 /** Below this the recording is silence (about −46 dB of peak): nothing is sent to Whisper. */
 export const SILENCE_PEAK = 0.005
 export const isSilent = (level: { peak: number }) => level.peak < SILENCE_PEAK
+
+/**
+ * The notice for a silent recording: the microphone that was used (its name, as macOS gives it) and what
+ * usually silences it — a laptop with its lid closed turns its built-in microphone off — and, after that,
+ * the permission, for the app macOS counts (from a terminal, the terminal: `launcher`).
+ */
+export function silentNotice({ device, status, launcher }: { device?: string | null; status?: string | null; launcher?: string | null }): string {
+  const app = launcher || "Electron"
+  const microphone = device ? `de «${device}»` : "del micròfon"
+  const permission = status && status !== "granted"
+    ? `macOS no dona el micròfon a «${app}»: activa-ho a Configuració del Sistema › Privadesa i seguretat › Micròfon`
+    : `comprova també el permís de micròfon de «${app}» (Privadesa i seguretat › Micròfon)`
+  return `No arriba so ${microphone}: si el portàtil té la tapa tancada, obre-la o tria un altre micròfon a Configuració del Sistema › So › Entrada; ${permission}.`
+}
