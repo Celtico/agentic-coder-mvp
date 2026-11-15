@@ -13,12 +13,12 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
       commit: ${{ steps.version.outputs.commit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -39,7 +39,12 @@ jobs:
           range="${previous:+${previous}..}HEAD"
           { echo "Versió ${VERSION} (commit $(git rev-parse --short HEAD))."; echo; echo "## Canvis${previous:+ des de ${previous}}"; echo;
             git log --no-merges --format='- %s' "$range"; } > release-notes.md
-          gh release create "v${VERSION}" --target "$GITHUB_SHA" --title "v${VERSION}" --notes-file release-notes.md
+          # Run again (a build that failed): the Release vN of this same commit is reused, not made twice.
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "La Release v${VERSION} ja existeix: s'hi tornen a pujar els fitxers."
+          else
+            gh release create "v${VERSION}" --target "$GITHUB_SHA" --title "v${VERSION}" --notes-file release-notes.md
+          fi
 
   build:
     needs: release
@@ -47,17 +52,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             dist: dist:mac
             files: dist/*.dmg
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             dist: dist:linux
             files: dist/*.AppImage dist/*.deb
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: npm

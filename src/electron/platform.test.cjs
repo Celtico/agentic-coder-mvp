@@ -126,6 +126,12 @@ test('versions as in GesProd: the count of commits, the commit on hover; a relea
   assert.match(run, /-c\.extraMetadata\.version=0\.0\.\$\{\{ needs\.release\.outputs\.version \}\} -c\.extraMetadata\.appCommit=/);
   assert.match(run, /gh release upload "v\$\{\{ needs\.release\.outputs\.version \}\}" \$\{\{ matrix\.files \}\} --clobber/);
   assert.equal(workflow.jobs.release.steps[0].with['fetch-depth'], 0, 'the whole history, to count it');
+  assert.match(run, /if gh release view "v\$\{VERSION\}" >\/dev\/null 2>&1; then/, 'a rerun reuses the Release');
+  // Current runners and actions on Node 24 (macos-14 was retired; checkout@v4 ran on Node 20).
+  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => item.os), ['macos-15', 'ubuntu-24.04']);
+  const uses = [...workflow.jobs.release.steps, ...workflow.jobs.build.steps].map((step) => step.uses).filter(Boolean);
+  assert.ok(uses.every((action) => /@v\d+\.\d+\.\d+$/.test(action)), 'every action pinned to a full version');
+  assert.ok(uses.includes('actions/checkout@v7.0.1') && uses.includes('actions/setup-node@v7.1.0'));
   const app = read('src/app/App.tsx');
   assert.match(app, /<Tip label=\{appVersion\.commit \? `commit \$\{appVersion\.commit\}` : 'dev'\}><Text [^>]*fontSize="2xs" color="fg\.subtle"[^>]*data-app-version>v\{appVersion\.version\}<\/Text><\/Tip>/);
   const pkg = JSON.parse(read('package.json'));
