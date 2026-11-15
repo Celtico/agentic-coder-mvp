@@ -57,5 +57,22 @@ test('Comparativa: each complete run apart, newest first; the newest is shown by
   assert.deepEqual([other.model, other.latest, other.runs.length, other.all], ['other', null, 0, null]);
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /const chosen = comparisonChoice\[model\.model\] \?\? model\.latest \?\? 'all';/);
-  assert.match(app, /<option key=\{item\.id\} value=\{item\.id\} disabled>[^\n]*incompleta<\/option>/);
+  assert.match(app, /<option key=\{item\.id\} value=\{item\.id\} disabled>[^\n]*incompleta\{item\.done \? ` \$\{item\.done\}\/\$\{item\.total \?\? '\?'\} \(\$\{item\.passed\} superades\)` : ''\}<\/option>/);
+});
+
+test('a stopped run keeps what it finished: shown as «incompleta N/total», never the newest complete nor in «Totes»', () => {
+  const { comparisonByModel } = require('./benchmark-summary.cjs');
+  const reports = [{ id: 'done', at: '2026-11-15T10:00:00.000Z', model: 'vl', results: [{ task: 'add-function', pass: true, seconds: 1 }] }];
+  const [vl] = comparisonByModel(reports, { incomplete: [{ id: 'cut', at: '2026-11-15T18:22:01.470Z', model: 'vl', done: 8, total: 9, passed: 5 }] });
+  assert.equal(vl.latest, 'done', 'the newest complete one, not the newer cut one');
+  assert.deepEqual(vl.incomplete, [{ id: 'cut', at: '2026-11-15T18:22:01.470Z', done: 8, total: 9, passed: 5 }]);
+  assert.deepEqual(vl.all.open, { runs: 1, passed: 1 });
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const script = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'evaluate-agent.cjs'), 'utf8');
+  assert.match(script, /fs\.writeFileSync\(temporary, [^\n]*incomplete: true, total, summary: summarize\(finished\), results: finished[^\n]*\);\n\s*fs\.renameSync\(temporary, partial\);/, 'written whole, then renamed');
+  assert.match(script, /finished\.push\(result\);\n\s*try \{ savePartial\(total\); \}/, 'after each task');
+  assert.match(script, /fs\.renameSync\(`\$\{out\}\.tmp`, out\);\n\s*fs\.rmSync\(partial, \{ force: true \}\);/, 'the finished report replaces it');
+  const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /item\.endsWith\('\.json'\) && !item\.endsWith\('\.partial\.json'\)/, 'a partial is never read as a report');
 });

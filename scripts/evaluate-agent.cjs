@@ -59,27 +59,45 @@ async function main() {
   });
 
   const { LocalCodingAgent, createEngine } = require('../src/core/assistant/agent-runtime.cjs');
-  const { runBenchmark } = require('./agent-benchmark/run.cjs');
+  const { runBenchmark, summarize } = require('./agent-benchmark/run.cjs');
   const engine = createEngine(model.runtime);
   console.error(`Model: ${model.modelId} (${model.runtime}). Carregant…`);
   const loadStarted = Date.now();
   await engine.loadModel((message) => console.error(message));
   const loadSeconds = Number(((Date.now() - loadStarted) / 1000).toFixed(1));
 
+  const out = options.out || path.join(outDir, `agent-${model.id}-${stamp}.json`);
+  // Each finished task is saved at once in <report>.partial.json (written whole and renamed, never half
+  // written): a run stopped before its end (the app closed, a crash) keeps the tasks it finished, and the
+  // evaluation panel shows it as incomplete. The finished report replaces it.
+  const partial = out.replace(/\.json$/, '.partial.json');
+  const header = { at: new Date().toISOString(), model: model.modelId, runtime: model.runtime, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null, loadSeconds, repeat: options.repeat };
+  const finished = [];
+  const savePartial = (total) => {
+    const temporary = `${partial}.tmp`;
+    fs.writeFileSync(temporary, `${JSON.stringify({ ...header, incomplete: true, total, summary: summarize(finished), results: finished }, null, 2)}\n`);
+    fs.renameSync(temporary, partial);
+  };
+  let total = 0;
   let report;
   try {
     report = await runBenchmark({
       LocalCodingAgent, engine, taskIds: options.tasks, repeat: options.repeat, keep: options.keep, timeoutMs: options.timeoutMinutes * 60000,
       // «TASCA n/total id #run» as each task starts: the app's evaluation panel shows it live.
-      onStart: ({ task, run, index, total }) => console.error(`TASCA ${index}/${total} ${task} #${run}`),
-      onResult: (result) => console.error(`${result.pass ? 'PASSA' : 'FALLA'}  ${result.task} #${result.run}  ${result.seconds}s  eines:${result.toolCalls}  ${result.detail}`),
+      onStart: ({ task, run, index, total: count }) => { total = count; console.error(`TASCA ${index}/${count} ${task} #${run}`); },
+      onResult: (result) => {
+        console.error(`${result.pass ? 'PASSA' : 'FALLA'}  ${result.task} #${result.run}  ${result.seconds}s  eines:${result.toolCalls}  ${result.detail}`);
+        finished.push(result);
+        try { savePartial(total); } catch (error) { console.error(`No s’ha pogut desar el resultat parcial: ${error.message}`); }
+      },
     });
   } finally {
     await engine.unloadModel().catch(() => {});
   }
-  const out = options.out || path.join(outDir, `agent-${model.id}-${stamp}.json`);
-  const full = { at: new Date().toISOString(), model: model.modelId, runtime: model.runtime, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null, loadSeconds, repeat: options.repeat, ...report };
-  fs.writeFileSync(out, `${JSON.stringify(full, null, 2)}\n`);
+  const full = { ...header, ...report };
+  fs.writeFileSync(`${out}.tmp`, `${JSON.stringify(full, null, 2)}\n`);
+  fs.renameSync(`${out}.tmp`, out);
+  fs.rmSync(partial, { force: true });
   console.log(JSON.stringify({ model: model.modelId, ...report.summary }, null, 2));
   console.error(`Informe complet: ${path.relative(process.cwd(), out)}`);
 }

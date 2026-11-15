@@ -1510,7 +1510,8 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
 
 async function readBenchmarkReports() {
   const reports = [];
-  for (const name of (await fs.readdir(benchmarksDirectory()).catch(() => [])).filter((item) => item.endsWith('.json')).sort()) {
+  // A run's finished report; not the partial one an unfinished run keeps (<id>.partial.json).
+  for (const name of (await fs.readdir(benchmarksDirectory()).catch(() => [])).filter((item) => item.endsWith('.json') && !item.endsWith('.partial.json')).sort()) {
     try { reports.push({ id: name.replace(/\.json$/, ''), ...JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), name), 'utf8')) }); } catch { /* an unreadable report is skipped */ }
   }
   return reports;
@@ -1528,7 +1529,10 @@ ipcMain.handle('benchmark:list', async () => {
     if (names.includes(`${id}.json`) || (benchmarkRun && benchmarkRun.id === id)) continue;
     const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-(.+)$/.exec(id);
     const known = match && (await allModels()).find((model) => model.id === match[6]);
-    if (known) incomplete.push({ id, at: `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`, model: known.modelId });
+    // The tasks it finished, if it saved them (scripts/evaluate-agent.cjs, <id>.partial.json).
+    let partial = null;
+    try { partial = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.partial.json`), 'utf8')); } catch {}
+    if (known) incomplete.push({ id, at: `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`, model: known.modelId, ...(partial && Array.isArray(partial.results) ? { done: partial.results.length, total: partial.total || null, passed: partial.results.filter((result) => result.pass).length } : {}) });
   }
   return {
     comparison: comparisonByModel(reports, { labels, incomplete }),

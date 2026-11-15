@@ -120,7 +120,7 @@ function comparisonByModel(reports, { labels = {}, incomplete = [] } = {}) {
     return {
       model, label: labels[model] || model, latest: runs[0]?.id || null, runs,
       all: all ? { open: all.open, apps: all.apps, reference: all.reference } : null,
-      incomplete: incomplete.filter((run) => run.model === model).map(({ id, at }) => ({ id, at })),
+      incomplete: incomplete.filter((run) => run.model === model).map(({ id, at, done, total, passed }) => ({ id, at, ...(done !== undefined ? { done, total, passed } : {}) })),
     };
   }).filter((entry) => entry.runs.length || entry.incomplete.length);
 }

@@ -2188,7 +2188,7 @@ export function App(): React.JSX.Element {
                     <NativeSelect.Field aria-label={`Avaluació de ${model.label} a la comparativa`} value={chosen} onChange={(event) => setComparisonChoice((current) => ({ ...current, [model.model]: event.target.value }))}>
                       {model.runs.map((item, index) => <option key={item.id} value={item.id}>{new Date(item.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })} · {item.passed}/{item.total}{index === 0 ? ' · darrera' : ''}</option>)}
                       {model.runs.length > 1 && <option value="all">Totes ({model.runs.length})</option>}
-                      {model.incomplete.map((item) => <option key={item.id} value={item.id} disabled>{new Date(item.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })} · incompleta</option>)}
+                      {model.incomplete.map((item) => <option key={item.id} value={item.id} disabled>{new Date(item.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })} · incompleta{item.done ? ` ${item.done}/${item.total ?? '?'} (${item.passed} superades)` : ''}</option>)}
                     </NativeSelect.Field>
                     <NativeSelect.Indicator/>
                   </NativeSelect.Root>
