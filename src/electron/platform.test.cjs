@@ -121,7 +121,8 @@ test('versions as in GesProd: the count of commits, the commit on hover; a relea
   assert.deepEqual(workflow.permissions, { contents: 'write' });
   const run = [...workflow.jobs.release.steps, ...workflow.jobs.build.steps].map((step) => step.run || '').join('\n');
   assert.match(run, /git rev-list --count HEAD/);
-  assert.match(run, /git log --no-merges --format='- %s' "\$range"/, 'the notes are the commits since the previous version');
+  assert.match(run, /git log --no-merges --format='- %s' "\$\{previous\}\.\.HEAD"/, 'the notes are the commits since the previous version');
+  assert.match(run, /git log --no-merges --format='- %s' -n 30 HEAD/, 'the first version: the latest 30, not the whole history');
   assert.match(run, /gh release create "v\$\{VERSION\}"/);
   assert.match(run, /-c\.extraMetadata\.version=0\.0\.\$\{\{ needs\.release\.outputs\.version \}\} -c\.extraMetadata\.appCommit=/);
   assert.match(run, /gh release upload "v\$\{\{ needs\.release\.outputs\.version \}\}" \$\{\{ matrix\.files \}\} --clobber/);

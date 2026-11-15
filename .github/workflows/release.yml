@@ -36,9 +36,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           previous="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
-          range="${previous:+${previous}..}HEAD"
-          { echo "Versió ${VERSION} (commit $(git rev-parse --short HEAD))."; echo; echo "## Canvis${previous:+ des de ${previous}}"; echo;
-            git log --no-merges --format='- %s' "$range"; } > release-notes.md
+          { echo "Versió ${VERSION} (commit $(git rev-parse --short HEAD))."; echo
+            if [ -n "$previous" ]; then
+              echo "## Canvis des de ${previous}"; echo; git log --no-merges --format='- %s' "${previous}..HEAD"
+            else
+              # The first version: not the whole history, the latest changes.
+              echo "## Primera versió publicada: els darrers canvis"; echo; git log --no-merges --format='- %s' -n 30 HEAD
+            fi; } > release-notes.md
           # Run again (a build that failed): the Release vN of this same commit is reused, not made twice.
           if gh release view "v${VERSION}" >/dev/null 2>&1; then
             echo "La Release v${VERSION} ja existeix: s'hi tornen a pujar els fitxers."
