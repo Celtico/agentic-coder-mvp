@@ -13,7 +13,7 @@ import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
-  LuBrain as Brain, LuBoxes as Boxes, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuBoxes as Boxes, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
@@ -2789,7 +2789,7 @@ export function App(): React.JSX.Element {
                   {/* In sections that open and close, so the tab does not scroll so much (the theme open). */}
                   <Accordion.Root multiple collapsible defaultValue={['theme']} size="sm" variant={PANE_ACCORDION}>
                   <Accordion.Item value="theme">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Tema</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Tema', undefined, SunMoon)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     <SegmentGroup.Root size="sm" value={appearance.colorMode} onValueChange={({ value }) => { if (value === 'light' || value === 'dark' || value === 'system') setAppearance((current) => ({ ...current, colorMode: value })); }}>
                       <SegmentGroup.Indicator/><SegmentGroup.Items items={(['light', 'dark', 'system'] as const).map((value) => ({ value, label: COLOR_MODE_LABELS[value] }))}/>
@@ -2797,7 +2797,7 @@ export function App(): React.JSX.Element {
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="fonts">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Mida de lletra</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Mida de lletra', undefined, TextSize)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody><HStack gap="6" flexWrap="wrap" align="flex-start">
                     <Box>
                       <Text fontSize="sm" fontWeight="medium" mb="1.5">Mida de lletra del xat</Text>
@@ -2818,7 +2818,7 @@ export function App(): React.JSX.Element {
                     </HStack>                    </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="accent">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Color d’accent</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Color d’accent', undefined, Palette)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="1.5" role="radiogroup" aria-label="Color d’accent">
                       {ACCENTS.map((accent) => <Button key={accent} role="radio" aria-checked={appearance.accent === accent} justifyContent="flex-start" variant={appearance.accent === accent ? 'subtle' : 'ghost'} colorPalette={appearance.accent === accent ? 'agentic' : 'gray'} onClick={() => setAppearance((current) => ({ ...current, accent }))}>
@@ -2829,7 +2829,7 @@ export function App(): React.JSX.Element {
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="tone">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Capçaleres dels panells</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Capçaleres dels panells', undefined, PanelTop)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(190px, 1fr))" gap="2" role="radiogroup" aria-label="Capçaleres dels panells">
                       {PANE_TONES.map((tone) => <Box key={tone} as="button" role="radio" aria-checked={appearance.paneTone === tone} textAlign="left" borderWidth="1px" borderColor={appearance.paneTone === tone ? 'agentic.solid' : 'border'} borderRadius="md" overflow="hidden" bg="bg" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneTone: tone }))}>
@@ -2840,7 +2840,7 @@ export function App(): React.JSX.Element {
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="style">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Estil dels panells</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Estil dels panells', undefined, LayoutGrid)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Estil dels panells">
                       {PANE_STYLES.map((style) => <Box key={style} as="button" role="radio" aria-checked={appearance.paneStyle === style} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneStyle === style ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneStyle: style }))}>
@@ -2851,7 +2851,7 @@ export function App(): React.JSX.Element {
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="background">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Fons de les finestres</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Fons de les finestres', undefined, PaintBucket)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     {/* One card per option, like Chakra's token docs: the colour, its name and its values. */}
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Fons de les finestres">
@@ -2872,7 +2872,7 @@ export function App(): React.JSX.Element {
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="dialogs">
-                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Diàlegs</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemTrigger>{rowHeader('Diàlegs', undefined, AppWindow)}</Accordion.ItemTrigger>
                     <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Diàlegs">
                       {DIALOG_MATERIAL_OPTIONS.map((material) => <Box key={material} as="button" role="radio" aria-checked={appearance.dialogs === material} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.dialogs === material ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, dialogs: material }))}>

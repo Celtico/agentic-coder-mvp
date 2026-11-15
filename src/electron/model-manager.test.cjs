@@ -116,3 +116,10 @@ test('the wiring: the selector reads only the switched-on models; removing goes 
   assert.match(app, /rowHeader\('Gestiona els models'/);
   assert.ok(app.indexOf('<Accordion.Item value="training">') < app.indexOf('<Accordion.Item value="models">'), 'after Entrenament');
 });
+
+test('Preferències › Aparença: every accordion item has its icon, like the panels’ accordions', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  for (const [title, icon] of [['Tema', 'SunMoon'], ['Mida de lletra', 'TextSize'], ['Color d’accent', 'Palette'], ['Capçaleres dels panells', 'PanelTop'], ['Estil dels panells', 'LayoutGrid'], ['Fons de les finestres', 'PaintBucket'], ['Diàlegs', 'AppWindow']]) {
+    assert.ok(app.includes(`<Accordion.ItemTrigger>{rowHeader('${title}', undefined, ${icon})}</Accordion.ItemTrigger>`), title);
+  }
+});
