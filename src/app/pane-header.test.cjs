@@ -106,10 +106,9 @@ test('every pane is a Chakra Card with its header and body, in Chakra’s three 
     }
   }
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
-  assert.match(recipes, /subtle: \{ root: \{ bg: "bg" \} \}/);
-  assert.match(recipes, /outline: \{ root: \{ bg: "bg", borderWidth: "1px", borderColor: "border" \} \}/);
-  // «Amb ombra» is Chakra's own elevated card (bg.panel and the md shadow), as in its docs.
-  assert.match(recipes, /elevated: \{ root: \{ bg: "bg\.panel", boxShadow: "md" \} \}/);
+  // Chakra's three card variants exactly as they are: the recipe does not redefine any of them.
+  const card = recipes.slice(recipes.indexOf('export const paneCardRecipe'), recipes.indexOf('export type DialogMaterial'));
+  assert.doesNotMatch(card, /variant: \{|borderRadius|boxShadow|borderColor/);
   assert.deepEqual(chakraCardElevated(), { root: { bg: 'bg.panel', boxShadow: 'md' } });
   assert.match(recipes, /defaultVariants: \{ \.\.\.chakraCard\.defaultVariants, variant: "subtle", size: "pane" \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
@@ -140,7 +139,7 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
 
 test('every dialog has Chakra’s panel background, from the theme’s dialog recipe', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
-  assert.match(recipes, /content: \{ \.\.\.chakraDialog\.base\.content, bg: "bg\.panel", color: "fg", borderWidth: "1px", borderColor: "border"/);
+  assert.match(recipes, /content: \{ \.\.\.chakraDialog\.base\.content, overflow: "hidden" \}/, 'Chakra’s dialog content: its colours, radius and shadow');
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe, floatingPanel: floatingPanelRecipe, accordion: accordionRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
@@ -183,8 +182,8 @@ test('the title of a floating window uses the panes’ header recipe, with its t
 
 test('dialogs are solid or frosted (glaçat): the dialog recipe’s material variant, chosen in Preferències', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
-  assert.match(recipes, /solid: \{ content: \{ bg: "bg\.panel", borderColor: "border" \}, backdrop: \{ bg: "blackAlpha\.600" \} \}/);
-  assert.match(recipes, /glass: \{ content: \{ bg: "bg\.panel\/80", backdropFilter: "blur\(16px\) saturate\(1\.2\)", borderColor: "border\.subtle" \}, backdrop: \{ bg: "blackAlpha\.400" \} \}/);
+  assert.match(recipes, /solid: \{ content: \{\}, backdrop: \{\} \}/, 'solid is Chakra’s dialog as it is');
+  assert.match(recipes, /glass: \{ content: \{ bg: "bg\.panel\/80", backdropFilter: "blur\(16px\) saturate\(1\.2\)" \}, backdrop: \{\} \}/);
   assert.match(recipes, /material: \{\s*solid: \{ content: DIALOG_MATERIALS\.solid\.content, backdrop: DIALOG_MATERIALS\.solid\.backdrop \},\s*glass: \{ content: DIALOG_MATERIALS\.glass\.content, backdrop: DIALOG_MATERIALS\.glass\.backdrop \},/);
   assert.match(recipes, /defaultVariants: \{ \.\.\.chakraDialog\.defaultVariants, material: "glass" \}/);
   // Both render, and give the dialog different styles.

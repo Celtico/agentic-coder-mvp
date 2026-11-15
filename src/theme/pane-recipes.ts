@@ -49,9 +49,9 @@ export const paneToolbarRecipe = defineSlotRecipe({
 
 // Every pane is a Chakra Card (src/app/pane-header.tsx, Pane), with Chakra's own variants chosen in
 // Preferències › Aparença › Estil dels panells: «subtle» (as the panes have always looked: the panel
-// colour, no line), «outline» (a thin line around) and «elevated» (a shadow). Chakra's card recipe is
-// extended, not replaced: the panes' radius, the app's panel colour, and no inner padding (header and
-// body bring their own).
+// colour, no line), «outline» (a thin line around) and «elevated» (a shadow). Chakra's card recipe as it
+// is (its variants, borders, radius and colours); only what a pane needs to fill its place in a row, and
+// no inner padding (header and body bring their own).
 type CardRecipe = { slots: string[]; base: Record<string, Record<string, unknown>>; variants: Record<string, Record<string, unknown>>; defaultVariants?: Record<string, string> }
 const chakraCard = defaultConfig.theme?.slotRecipes?.card as unknown as CardRecipe
 
@@ -60,18 +60,11 @@ export const paneCardRecipe = defineSlotRecipe({
   slots: [...chakraCard.slots],
   base: {
     ...chakraCard.base,
-    root: { ...chakraCard.base.root, borderRadius: "panel", overflow: "hidden", minH: "0", h: "full", flex: "1" },
+    root: { ...chakraCard.base.root, overflow: "hidden", minH: "0", h: "full", flex: "1" },
     body: { ...chakraCard.base.body, minH: "0", overflow: "hidden" },
   },
   variants: {
     ...chakraCard.variants,
-    variant: {
-      subtle: { root: { bg: "bg" } },
-      outline: { root: { bg: "bg", borderWidth: "1px", borderColor: "border" } },
-      // Chakra's own elevated card, as its docs show it: the panel colour and its «md» shadow (in dark mode
-      // a soft shadow and a faint light inset edge), nothing of our own on top.
-      elevated: { root: { bg: "bg.panel", boxShadow: "md" } },
-    },
     size: { ...(chakraCard.variants.size as Record<string, unknown>), pane: { root: { "--card-padding": "0" } } },
   },
   defaultVariants: { ...chakraCard.defaultVariants, variant: "subtle", size: "pane" },
@@ -82,8 +75,10 @@ export const paneCardRecipe = defineSlotRecipe({
 // the dialog recipe's `material` variant, the Historial local window and the preview use these.
 export type DialogMaterial = "solid" | "glass"
 export const DIALOG_MATERIALS: Record<DialogMaterial, { content: Record<string, string>; backdrop: Record<string, string> }> = {
-  solid: { content: { bg: "bg.panel", borderColor: "border" }, backdrop: { bg: "blackAlpha.600" } },
-  glass: { content: { bg: "bg.panel/80", backdropFilter: "blur(16px) saturate(1.2)", borderColor: "border.subtle" }, backdrop: { bg: "blackAlpha.400" } },
+  // Chakra's dialog as it is.
+  solid: { content: {}, backdrop: {} },
+  // The same, see-through and blurred.
+  glass: { content: { bg: "bg.panel/80", backdropFilter: "blur(16px) saturate(1.2)" }, backdrop: {} },
 }
 
 // Every dialog of the app (Preferències, the saved cases, confirmations…) on Chakra's panel background,
@@ -95,7 +90,8 @@ export const dialogRecipe = defineSlotRecipe({
   slots: [...chakraDialog.slots],
   base: {
     ...chakraDialog.base,
-    content: { ...chakraDialog.base.content, bg: "bg.panel", color: "fg", borderWidth: "1px", borderColor: "border", borderRadius: "lg", boxShadow: "2xl", overflow: "hidden" },
+    // Chakra's dialog content (its colours, radius and shadow); only the overflow, for the panes' header.
+    content: { ...chakraDialog.base.content, overflow: "hidden" },
     // The header is the panes' header (src/app/pane-header.tsx), which brings its own padding.
     header: { ...chakraDialog.base.header, p: "0", display: "block" },
     // The close button is one of the header's actions (src/app/App.tsx, DialogHeading), in its flow:

@@ -81,5 +81,6 @@ test('the floating window’s corners and header are set on the elements too, so
   const controls = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
   assert.match(controls, /<FloatingPanel\.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0" display="block">/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /<FloatingPanel\.Content [^>]*borderRadius="xl" boxShadow="2xl"[^>]*overflow="hidden"/);
+  assert.match(app, /<FloatingPanel\.Content [^>]*borderRadius="xl"[^>]*overflow="hidden"/);
+  assert.doesNotMatch(app, /<FloatingPanel\.Content [^>]*(boxShadow|borderWidth)=/, 'Chakra’s own shadow and frame');
 });

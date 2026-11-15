@@ -2784,7 +2784,7 @@ export function App(): React.JSX.Element {
       getBoundaryEl={() => appAreaRef.current} persistRect defaultPosition={{ x: historyStart.x, y: historyStart.y }} defaultSize={{ width: historyStart.width, height: historyStart.height }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
-        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderWidth="1px" borderRadius="xl" boxShadow="2xl" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
+        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderRadius="xl" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
         <RestoreWindowStage stage={fileHistoryStage}/>
         <WindowTitleBar name="l’historial" stage={fileHistoryStage} icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath || undefined}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
