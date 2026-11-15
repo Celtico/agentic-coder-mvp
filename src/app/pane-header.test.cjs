@@ -133,7 +133,9 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /setAppearance\(defaultAppearance\(\)\)\}><RefreshCw size=\{14\}\/>Restableix l’aparença/);
   // The panes with a second row use the shared one; Git's and the browser's refresh go to the header.
   assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 3);
-  assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane, \{ actions: <IconButton icon=\{RefreshCw\} label="Recarrega"/);
+  // Reload is in the browser's toolbar, after back and forward; the header has no action.
+  assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane\);/);
+  assert.match(app, /label="Enrere"[^\n]*\n[^\n]*label="Endavant"[^\n]*\n[^\n]*\n\s*<IconButton icon=\{RefreshCw\} label="Recarrega" onClick=\{\(\) => webviewRef\.current\?\.reload\(\)\}\/>/);
   assert.match(app, /case 'git': return frame\(GitBranch, 'Git', gitPane, \{[^\n]*actions: <IconButton icon=\{RefreshCw\} label="Actualitza l’historial de Git"/);
 });
 

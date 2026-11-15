@@ -1801,6 +1801,8 @@ export function App(): React.JSX.Element {
       <PaneToolbar>
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
+        {/* Reload beside the arrows, like a browser's toolbar. */}
+        <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
         <Input flex="1" minW="0" variant="subtle" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="xs"/>
         <IconButton icon={ExternalLink} label="Ves a l’adreça" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
@@ -2338,7 +2340,7 @@ export function App(): React.JSX.Element {
       case 'conversations': return conversationsColumn;
       case 'files': return filesColumn;
       case 'editor': return frame(FileCode, 'Editor', editorPane, { badge: <Badge size="xs" colorPalette={editorStatus || editorContent !== editorOriginal ? 'yellow' : 'gray'} maxW="full" display="block" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{editorStatus ? 'No s’ha desat' : editorBusy ? 'Desant…' : editorDiskChanged ? 'Canviat al disc: si deses, el trepitges' : editorContent !== editorOriginal ? 'Sense desar' : 'Desat'}</Badge> });
-      case 'browser': return frame(Globe2, 'Navegador web', browserPane, { actions: <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/> });
+      case 'browser': return frame(Globe2, 'Navegador web', browserPane);
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
       case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>}>
