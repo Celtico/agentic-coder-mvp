@@ -126,3 +126,23 @@ export const floatingPanelRecipe = defineSlotRecipe({
     header: { ...chakraFloatingPanel.base.header, bg: "transparent", borderBottomWidth: "0" },
   },
 } as Parameters<typeof defineSlotRecipe>[0])
+
+// Chakra's accordion with one more variant, «pane»: full bleed inside a pane (no frame, no radius), a line
+// between items and under the last one, and the triggers and contents inset like the pane's second row.
+const chakraAccordion = defaultConfig.theme?.slotRecipes?.accordion as unknown as CardRecipe
+
+export const accordionRecipe = defineSlotRecipe({
+  ...chakraAccordion,
+  slots: [...chakraAccordion.slots],
+  variants: {
+    ...chakraAccordion.variants,
+    variant: {
+      ...(chakraAccordion.variants.variant as Record<string, unknown>),
+      pane: {
+        item: { borderBottomWidth: "1px", borderColor: "border" },
+        itemTrigger: { px: "var(--accordion-padding-x)", borderRadius: "0" },
+        itemContent: { px: "var(--accordion-padding-x)" },
+      },
+    },
+  },
+} as Parameters<typeof defineSlotRecipe>[0])

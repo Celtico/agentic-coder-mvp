@@ -50,7 +50,7 @@ test('a header with a subtitle (truncated, with its full text on hover), a badge
 test('the look is the theme’s slot recipes, with the three tones; the component has no colour of its own', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   const system = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe, floatingPanel: floatingPanelRecipe \}/);
+  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe, floatingPanel: floatingPanelRecipe, accordion: accordionRecipe \}/);
   assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
   assert.match(recipes, /slots: \["root", "field", "action"\]/);
   assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "colorPalette\.solid" \}, title: \{ color: "fg" \} \}/);
@@ -141,7 +141,7 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
 test('every dialog has Chakra’s panel background, from the theme’s dialog recipe', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /content: \{ \.\.\.chakraDialog\.base\.content, bg: "bg\.panel", color: "fg", borderWidth: "1px", borderColor: "border"/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe, floatingPanel: floatingPanelRecipe \}/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe, floatingPanel: floatingPanelRecipe, accordion: accordionRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
   assert.equal(contents.length, 10);
@@ -288,4 +288,14 @@ test('the second row of a pane is the pane’s own surface in every tone, so it 
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   const toolbar = recipes.slice(recipes.indexOf('export const paneToolbarRecipe'), recipes.indexOf('defaultVariants', recipes.indexOf('export const paneToolbarRecipe')));
   for (const tone of ['brand', 'mono', 'tinted']) assert.match(toolbar, new RegExp(`${tone}: \\{ root: \\{ bg: "transparent" \\} \\}`), tone);
+});
+
+test('the accordions of Avaluació and Aprenentatge local go edge to edge: the theme’s «pane» variant', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /pane: \{\n\s*item: \{ borderBottomWidth: "1px", borderColor: "border" \},\n\s*itemTrigger: \{ px: "var\(--accordion-padding-x\)", borderRadius: "0" \},\n\s*itemContent: \{ px: "var\(--accordion-padding-x\)" \},/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /accordion: accordionRecipe/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 2);
+  assert.match(app, /<Box flex="1" minH="0" \{\.\.\.scrollArea\} scrollbarGutter="stable">\{evaluationPane\}<\/Box>/);
+  assert.match(app, /<Box h="full" minH="0" \{\.\.\.scrollArea\} scrollbarGutter="stable"><Stack gap="3">/);
 });

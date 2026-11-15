@@ -169,6 +169,8 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
 const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot trigar fins a mig minut…';
 /** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
 const STOP_CONFIRM_MS = 3000;
+/** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
+const PANE_ACCORDION = 'pane' as unknown as 'plain';
 /** Dades preparades › Mostra: the splits and why a case was left out. */
 const DATASET_SPLITS = [['train', 'Entrenament'], ['validation', 'Validació'], ['test', 'Prova']] as const;
 const DISCARD_REASONS: Record<DatasetView['discarded'][number]['reason'], string> = { duplicate: 'Duplicat', secret: 'Possible credencial', invalid: 'Invàlid', unverified: 'Sense verificar' };
@@ -1850,11 +1852,12 @@ export function App(): React.JSX.Element {
                 </HStack>
               </HStack>;
   const learningPane = (
-    <Box h="full" minH="0" p="3" {...scrollArea} scrollbarGutter="stable"><Stack gap="3">
-      {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
-      {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
-        : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
-        : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant="enclosed" bg="bg">
+    // The accordions go edge to edge (variant «pane», src/theme/pane-recipes.ts); the notices keep the inset.
+    <Box h="full" minH="0" {...scrollArea} scrollbarGutter="stable"><Stack gap="3">
+      {learningStatus && <Box px="3" pt="3"><Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice></Box>}
+      {learningBusy && !datasetPreview ? <HStack color="fg.muted" p="3"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
+        : !datasetPreview ? <Box p="3"><Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice></Box>
+        : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant={PANE_ACCORDION}>
           <Accordion.Item value="cases">
             <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0">
@@ -2008,7 +2011,7 @@ export function App(): React.JSX.Element {
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
     // shrinking flex column the accordions, which clip their content, were squeezed to nothing).
     <Stack gap="3">
-      <Stack gap="3">
+      <Stack gap="3" px="3" pt="3" _empty={{ display: 'none' }}>
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
       {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.emphasized" borderRadius="sm" p="2">
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
@@ -2019,7 +2022,7 @@ export function App(): React.JSX.Element {
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       </Stack>
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
-      <Accordion.Root multiple collapsible defaultValue={initialView.evaluationSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.evaluationSections = value; })} size="sm" variant="enclosed" bg="bg">
+      <Accordion.Root multiple collapsible defaultValue={initialView.evaluationSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.evaluationSections = value; })} size="sm" variant={PANE_ACCORDION}>
         <Accordion.Item value="tasks">
           <Accordion.ItemTrigger>{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody pt="0">
@@ -2200,7 +2203,7 @@ export function App(): React.JSX.Element {
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
       case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>} toolbar={evaluationToolbar}>
-        <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable" pt="1" px="3" pb="3">{evaluationPane}</Box>
+        <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable">{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
