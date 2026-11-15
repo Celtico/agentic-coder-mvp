@@ -1255,6 +1255,18 @@ export function App(): React.JSX.Element {
     } catch (error) { learningError(error); }
   }
 
+  // Case detail: a turn or a step in or out of the training; saved at once on the case, and the counters follow.
+  async function toggleExclusion(target: { turn?: number; step?: string }, excluded: boolean) {
+    if (!caseDetail) return;
+    const turns = caseDetail.requests.flatMap((turn, index) => (target.turn === index ? excluded : turn.excluded) ? [index] : []);
+    const steps = caseDetail.requests.flatMap((turn, index) => turn.steps.flatMap((step) => { const key = `${index}:${step.index}`; return (target.step === key ? excluded : step.excluded) ? [key] : []; }));
+    try {
+      await window.agentic.setCaseExclusions(caseDetail.id, { turns, steps });
+      setCaseDetail(await window.agentic.learningCaseDetail(caseDetail.id));
+      void refreshLearningCounts();
+    } catch (error) { learningError(error); }
+  }
+
   async function saveManualCase() {
     if (!manualCase || manualCaseBusy) return;
     if (!project) { setManualCaseErrors({ form: 'Selecciona primer un projecte.' }); return; }
@@ -1874,7 +1886,7 @@ export function App(): React.JSX.Element {
               <Box>
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Dataset</Text>
                 <HStack gap="2" flexWrap="wrap">
-                  <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas vàlid' : 'casos vàlids'} · {datasetPreview.counts.input - datasetPreview.counts.included} descartats</Text>
+                  <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas' : 'casos'} · {datasetPreview.examples ?? datasetPreview.counts.included} exemples ({datasetPreview.counts.input - datasetPreview.counts.included + (datasetPreview.droppedExamples ?? 0)} descartats)</Text>
                   <ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
                   <ChakraButton size="xs" variant="ghost" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
                   {datasetExport && <ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.revealLearningExport()}><FolderOpen size={14}/>Mostra al Finder</ChakraButton>}
@@ -2396,8 +2408,16 @@ export function App(): React.JSX.Element {
                 {DATASET_SPLITS.map(([value]) => <Tabs.Content key={value} value={value}>
                   {datasetView.splits[value].length === 0 ? <Text fontSize="sm" color="fg.muted">Cap cas en aquesta part.</Text>
                     : <Accordion.Root multiple variant="outline" size="sm">{datasetView.splits[value].map((item) => <Accordion.Item key={item.id} value={item.id}>
-                      <Accordion.ItemTrigger><Text flex="1" fontSize="sm" truncate textAlign="start">{item.task}</Text>{item.steps > 0 && <Badge size="sm" variant="subtle">{item.steps} passos</Badge>}<Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                      <Accordion.ItemTrigger><Text flex="1" fontSize="sm" truncate textAlign="start">{item.task}</Text><Badge size="sm" variant="subtle">{item.examples.filter((example) => example.fits).length} {item.examples.filter((example) => example.fits).length === 1 ? 'exemple' : 'exemples'}</Badge><Accordion.ItemIndicator/></Accordion.ItemTrigger>
                       <Accordion.ItemContent><Accordion.ItemBody><Stack gap="2" fontSize="xs">
+                        {/* One example per turn: what it asks, its steps and tokens; whether it fits in the limit. */}
+                        {item.examples.map((example) => <HStack key={`t${example.turn}`} gap="2" minW="0" align="flex-start" data-dataset-example>
+                          <Badge size="sm" variant="subtle" flex="none">Torn {example.turn + 1}</Badge>
+                          <Text flex="1" minW="0" lineClamp={2} overflowWrap="anywhere">{example.request}</Text>
+                          <Badge size="sm" variant="outline" flex="none">{example.steps} passos · ~{example.tokens} tokens</Badge>
+                          {!example.fits ? <Badge size="sm" variant="subtle" colorPalette="red" flex="none">No hi cap</Badge> : example.truncated && <Badge size="sm" variant="subtle" colorPalette="yellow" flex="none">Retallat</Badge>}
+                        </HStack>)}
+                        {item.skipped.map((skipped) => <HStack key={`s${skipped.turn}`} gap="2" color="fg.muted"><Badge size="sm" variant="subtle" flex="none">Torn {skipped.turn + 1}</Badge><Text>{skipped.reason === 'excluded' ? 'Exclòs de l’entrenament' : 'Omès: cap pas d’eina'}</Text></HStack>)}
                         {([['Què es demana', item.task], ['El missatge de l’usuari', item.prompt], ['La resposta bona', item.answer], ['Per què és bona', item.evidence]] as const).map(([label, text]) => <Box key={label}>
                           <Text color="fg.muted" mb="1">{label}</Text>
                           <Box as="pre" whiteSpace="pre-wrap" overflowWrap="anywhere" fontFamily={label === 'La resposta bona' ? 'mono' : 'body'} bg="bg.subtle" borderRadius="md" p="2" maxH="48" {...scrollArea}>{text}</Box>
@@ -2504,11 +2524,16 @@ export function App(): React.JSX.Element {
                   <Text fontSize="sm" fontWeight="medium" overflowWrap="anywhere">{caseDetail.task}</Text>
                   <Text mt="1" fontSize="xs" color="fg.muted">Comprovació: {caseDetail.evidence} · {caseDetail.at && !Number.isNaN(Date.parse(caseDetail.at)) ? new Date(caseDetail.at).toLocaleString() : 'Sense data'}{caseDetail.model ? ` · ${caseDetail.model}` : ''}</Text>
                 </Box>
-                {caseDetail.requests.map((turn, index) => <Box key={index} borderLeftWidth="2px" borderColor="border" pl="3">
-                  <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em">Petició {index + 1}</Text>
+                {caseDetail.requests.map((turn, index) => <Box key={index} borderLeftWidth="2px" borderColor="border" pl="3" opacity={turn.excluded ? 0.5 : 1}>
+                  <HStack justify="space-between" gap="2">
+                    <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em">Petició {index + 1}</Text>
+                    {/* Leave this turn out of the training (src/electron/learning-cases.cjs, setExclusions). */}
+                    <Checkbox.Root size="sm" checked={Boolean(turn.excluded)} onCheckedChange={({ checked }) => void toggleExclusion({ turn: index }, checked === true)}><Checkbox.HiddenInput/><Checkbox.Control/><Checkbox.Label fontSize="xs" color="fg.muted">Exclou de l’entrenament</Checkbox.Label></Checkbox.Root>
+                  </HStack>
                   <Text mt="1" fontSize="sm" whiteSpace="pre-wrap" overflowWrap="anywhere" lineClamp={8}>{turn.request || '—'}</Text>
                   {turn.steps.length > 0 && <Stack mt="2" gap="1">{turn.steps.map((step, stepIndex) => <Box key={stepIndex} px="2" py="1" borderRadius="md" bg="surface.subtle" fontFamily="mono" fontSize="2xs" overflowWrap="anywhere">
-                    <HStack gap="1.5"><Badge size="sm" variant="subtle" colorPalette={step.ok ? 'green' : 'red'}>{step.ok ? 'ok' : 'error'}</Badge><Text fontWeight="semibold">{step.name}</Text></HStack>
+                    <HStack gap="1.5"><Badge size="sm" variant="subtle" colorPalette={step.ok ? 'green' : 'red'}>{step.ok ? 'ok' : 'error'}</Badge><Text fontWeight="semibold" flex="1" textDecoration={step.excluded ? 'line-through' : undefined}>{step.name}</Text>
+                      {step.ok && <Checkbox.Root size="xs" checked={Boolean(step.excluded)} disabled={Boolean(turn.excluded)} onCheckedChange={({ checked }) => void toggleExclusion({ step: `${index}:${step.index}` }, checked === true)} aria-label={`Exclou el pas ${step.name} de l’entrenament`}><Checkbox.HiddenInput/><Checkbox.Control/><Checkbox.Label fontFamily="body" color="fg.muted">Exclou</Checkbox.Label></Checkbox.Root>}</HStack>
                     {Object.entries(step.arguments).map(([key, value]) => <Text key={key} color="fg.muted">{key}: {value}</Text>)}
                     {step.result && <Text mt="0.5" color="fg.muted" lineClamp={3}>→ {step.result}</Text>}
                   </Box>)}</Stack>}

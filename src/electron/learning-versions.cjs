@@ -10,7 +10,7 @@
 // an injected `run(command, args, { onLine, signal })`, so all of this is tested without a model.
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { toChatExample } = require('./learning-trajectory.cjs');
+const { toTurnExamples } = require('./learning-trajectory.cjs');
 const { slugify } = require('./learning-training.cjs');
 
 const BETA_MIN_CASES = 1;
@@ -63,20 +63,17 @@ const estimateTokens = (text) => Math.ceil(String(text || '').length / 3.5);
 const tokensOf = (messages) => messages.reduce((sum, message) => sum + estimateTokens(message.content) + 4, 0);
 
 /**
- * One case as a training example in the chat form the agent uses: the agent's system text (from the
- * case), the general request, the tool calls with what they returned, and the final answer. When it is
- * longer than `maxTokens`, the system text is cut from its end first (files' contents come last in it),
- * then the tool results; the request and the answer are never cut. Returns null when even then it does
- * not fit.
+ * One training example (a turn of a case) fitted to `maxTokens`: the agent's system text if there is room,
+ * the request, the tool calls with what they returned, and the answer. When it is longer, the system text
+ * is cut from its end first (files' contents come last in it), then the tool results, each to an equal
+ * share; the request and the answer are never cut. Returns null messages when even then it does not fit.
  */
-function toTrainingExample(example, maxTokens) {
-  const chat = toChatExample(example).messages.map((message) => ({ ...message }));
-  const system = (example.trajectory?.turns || []).find((turn) => typeof turn.system === 'string' && turn.system)?.system || '';
+function fitExample({ messages, system = '' }, maxTokens) {
+  const chat = messages.map((message) => ({ ...message }));
   let truncated = false;
   const fixedIndexes = new Set([0, chat.length - 1]);
   let size = tokensOf(chat);
   if (size > maxTokens) {
-    // Tool results (the user turns between the request and the answer), each cut to an equal share.
     const results = chat.map((message, index) => ({ message, index })).filter(({ message, index }) => message.role === 'user' && !fixedIndexes.has(index));
     const fixed = tokensOf(chat.filter((_message, index) => !results.some((result) => result.index === index)));
     const share = results.length ? Math.floor((maxTokens - fixed) / results.length) - 4 : 0;
@@ -96,19 +93,30 @@ function toTrainingExample(example, maxTokens) {
   return { messages: systemText ? [{ role: 'system', content: systemText }, ...chat] : chat, truncated };
 }
 
-/** Every valid case (all partitions of a prepared dataset) as training examples. */
+/** The examples of one case, one per turn (src/electron/learning-trajectory.cjs), each fitted to `maxTokens`. */
+function toTrainingExamples(example, maxTokens) {
+  const { examples, skipped } = toTurnExamples(example);
+  const built = examples.map((turn) => ({ turn: turn.turn, ...fitExample(turn, maxTokens), tokens: tokensOf(turn.messages) }));
+  return { built, skipped };
+}
+
+/** Every valid case (all partitions of a prepared dataset) as training examples, one per turn. */
 function buildTrainingExamples(prepared, maxTokens) {
   const all = [...prepared.partitions.train, ...prepared.partitions.validation, ...prepared.partitions.test];
   const examples = [];
   let truncated = 0;
   let dropped = 0;
+  let skippedTurns = 0;
   for (const item of all) {
-    const built = toTrainingExample(item, maxTokens);
-    if (!built.messages) { dropped += 1; continue; }
-    if (built.truncated) truncated += 1;
-    examples.push({ id: item.sourceId, messages: built.messages });
+    const { built, skipped } = toTrainingExamples(item, maxTokens);
+    skippedTurns += skipped.length;
+    for (const turn of built) {
+      if (!turn.messages) { dropped += 1; continue; }
+      if (turn.truncated) truncated += 1;
+      examples.push({ id: `${item.sourceId}:${turn.turn}`, caseId: item.sourceId, turn: turn.turn, messages: turn.messages });
+    }
   }
-  return { examples, caseIds: examples.map((example) => example.id), truncated, dropped };
+  return { examples, caseIds: [...new Set(examples.map((example) => example.caseId))], truncated, dropped, skippedTurns };
 }
 
 /** The data folder mlx_lm reads: train.jsonl with every example; valid.jsonl only to watch the loss. */
@@ -185,7 +193,7 @@ async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, pyt
   if (kind !== 'beta' && kind !== 'candidata') throw new Error('Tipus d’entrenament desconegut.');
   const built = buildTrainingExamples(prepared, preferences.maxTokens);
   const needed = kind === 'beta' ? BETA_MIN_CASES : STABLE_MIN_CASES;
-  if (built.examples.length < needed) throw new Error(`Calen ${needed} casos vàlids que hi càpiguen; n’hi ha ${built.examples.length}${built.dropped ? ` (${built.dropped} no hi caben ni retallats)` : ''}.`);
+  if (built.caseIds.length < needed) throw new Error(`Calen ${needed} casos vàlids que hi càpiguen; n’hi ha ${built.caseIds.length}${built.dropped ? ` (${built.dropped} exemples no hi caben ni retallats)` : ''}.`);
   const number = await nextNumber(modelsRoot, base.id, kind);
   const started = now();
   const folder = `${kind}-${number}-${started.toISOString().replace(/[:.]/g, '-')}`;
@@ -213,8 +221,8 @@ async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, pyt
     if (signal?.aborted) throw new Error('Entrenament aturat.');
     if (result.code !== 0) throw new Error(`L’entrenament ha fallat (codi ${result.code}): ${String(result.output).slice(-600)}`);
     const manifest = {
-      kind, number, base: { id: base.id, modelId: base.modelId, label: base.label }, cases: built.examples.length, caseIds: built.caseIds,
-      truncated: built.truncated, dropped: built.dropped, createdAt: started.toISOString(), durationSeconds: Math.round((now() - started) / 1000),
+      kind, number, base: { id: base.id, modelId: base.modelId, label: base.label }, cases: built.caseIds.length, examples: built.examples.length, caseIds: built.caseIds,
+      truncated: built.truncated, dropped: built.dropped, skippedTurns: built.skippedTurns, createdAt: started.toISOString(), durationSeconds: Math.round((now() - started) / 1000),
       parameters, finalLoss: last ? last.loss : null,
     };
     await fs.writeFile(path.join(adapterPath, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -267,6 +275,6 @@ async function promoteStable({ candidate, name, base, modelsRoot, python, launch
 
 module.exports = {
   BETA_MIN_CASES, STABLE_MIN_CASES, FEW_CASES, TRAINING_LIMITS, defaultTrainingPreferences, normalizeTrainingPreferences, itersFor,
-  learningButtons, estimateTokens, toTrainingExample, buildTrainingExamples, writeTrainingData, parseTrainingLine,
+  learningButtons, estimateTokens, fitExample, toTrainingExamples, buildTrainingExamples, writeTrainingData, parseTrainingLine,
   listBetas, latestCandidate, betaModels, deleteBeta, trainAdapter, recordComparison, promoteStable,
 };

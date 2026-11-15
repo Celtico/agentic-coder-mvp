@@ -53,7 +53,8 @@ test('an example is the chat the agent had: its system text, the request, the to
   assert.equal(built.examples.length, 2);
   assert.deepEqual(built.examples[0].messages.map((message) => message.role), ['system', 'user', 'assistant', 'user', 'assistant']);
   assert.match(built.examples[0].messages[0].content, /^Ets Agentic Coder/);
-  assert.match(built.examples[0].messages[1].content, /^Tasca general/);
+  // One example per turn: its own request (not the case's general task).
+  assert.match(built.examples[0].messages[1].content, /^Petició/);
   assert.equal(JSON.parse(built.examples[0].messages[2].content).name, 'read_file');
   assert.match(JSON.parse(built.examples[0].messages[4].content).content, /^Fet/);
   assert.equal(built.truncated, 0);
@@ -69,7 +70,7 @@ test('a long example is cut: the system text first, then tool results; never the
   const results = versions.buildTrainingExamples(prepare(1, { system: '', result: 'r'.repeat(20000) }), 1024);
   assert.equal(results.truncated, 1);
   const example = results.examples[0].messages;
-  assert.equal(example[0].content, 'Tasca general 1');
+  assert.equal(example[0].content, 'Petició 1');
   assert.match(example[2].content, /\[retallat\]$/);
   assert.match(JSON.parse(example.at(-1).content).content, /^Fet 1\.$/);
   // An answer that alone does not fit: the case is left out and counted.
@@ -178,4 +179,30 @@ test('the stable version: a candidate from 30 cases, compared, and promoted only
   candidate = await versions.latestCandidate(root, 'mimo-9b-mlx');
   assert.equal(candidate.promoted.folder, meta.id);
   await assert.rejects(versions.promoteStable({ candidate, name: 'El nostre model', base: base(root), modelsRoot: root, python: 'py', run: fakeRun(calls) }), /ja s’ha promocionat/);
+});
+
+test('one example per turn, without the turns and steps the user excluded, and without the app’s framing of the results', () => {
+  const { bareToolResult } = require('./learning-trajectory.cjs');
+  const fsSync = require('node:fs');
+  const read = (name) => fsSync.readFileSync(path.join(__dirname, '..', '..', 'prompts', `${name}.md`), 'utf8').trim();
+  const framed = (tool, result) => read('tool-result').replace('{{tool}}', tool).replace('{{result}}', result).replace('{{page}}', '').replace('{{next}}', read('tool-result-continue'));
+  assert.equal(bareToolResult(framed('read_file', '{"path":"a","content":"x"}'), 'read_file'), '{"path":"a","content":"x"}');
+  assert.equal(bareToolResult('un resultat sense marc', 'read_file'), 'un resultat sense marc', 'nothing else is touched');
+  const step = (name, ok = true) => ({ name, arguments: {}, result: framed(name, `ok ${name}`), ok });
+  const record = { ...caseRecord(1), trajectory: { turns: [
+    { request: 'crea el projecte', steps: [step('list_files'), step('write_file'), step('run_tests', false)], answer: 'Creat.' },
+    { request: 'una pregunta', steps: [], answer: 'Resposta sense eines.' },
+    { request: 'afegeix snippets', steps: [step('run_npx'), step('run_npx')], answer: 'Afegits.' },
+    { request: 'compila', steps: [step('run_project_script')], answer: 'Compila.' },
+  ] }, excludedTurns: [3], excludedSteps: ['2:1'] };
+  const built = versions.buildTrainingExamples(prepareTrainingDataset([record]), 4096);
+  assert.deepEqual(built.examples.map((example) => [example.turn, example.messages[0].content]), [[0, 'crea el projecte'], [2, 'afegeix snippets']]);
+  assert.equal(built.skippedTurns, 2, 'the turn without steps and the excluded one');
+  const first = built.examples[0].messages.filter((message) => message.role !== 'system');
+  assert.deepEqual(first.filter((message) => message.role === 'assistant').slice(0, -1).map((message) => JSON.parse(message.content).name), ['list_files', 'write_file'], 'the failed step is left out');
+  assert.equal(first[2].content, 'ok list_files', 'the bare result');
+  assert.ok(!built.examples.some((example) => example.messages.some((message) => /continua amb una sola crida/.test(message.content))));
+  const third = built.examples[1].messages.filter((message) => message.role === 'assistant');
+  assert.equal(third.length, 2, 'one run_npx left (the other excluded) and the answer');
+  assert.deepEqual(built.caseIds, [hex(1)]);
 });

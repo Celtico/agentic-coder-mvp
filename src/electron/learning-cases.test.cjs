@@ -162,3 +162,22 @@ test('a manual case is saved as a verified case marked «manual», and listed as
   assert.match(main, /if \(value\.source === 'manual'\) \{\n\s*const \{ errors \} = learningCases\.validateManualCase\(value\);/);
   assert.match(main, /verification: 'user-confirmed', \.\.\.\(value\.source === 'manual' \? \{ source: 'manual' \} : \{\}\) \};/);
 });
+
+test('turns and steps left out of the training are saved on the case, only those that exist, and shown in its detail', async (t) => {
+  const cases = require('./learning-cases.cjs');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-exclusions-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'verified-experiences.jsonl');
+  const id = 'c'.repeat(64);
+  const step = (name) => ({ name, arguments: {}, result: 'r', ok: true });
+  await fs.writeFile(file, JSON.stringify({ id, prompt: 'p', answer: 'a', evidence: 'e', verification: 'user-confirmed', trajectory: { turns: [{ request: 'u1', steps: [step('list_files'), step('write_file')], answer: 'a1' }, { request: 'u2', steps: [step('run_npx')], answer: 'a2' }] } }) + '\n');
+  const saved = await cases.setExclusions(file, id, { turns: [1, 7, -1], steps: ['0:1', '0:9', '5:0', 'x'] });
+  assert.deepEqual(saved, { excludedTurns: [1], excludedSteps: ['0:1'] });
+  const detail = await cases.readCase(file, id);
+  assert.deepEqual(detail.requests.map((turn) => turn.excluded), [false, true]);
+  assert.deepEqual(detail.requests[0].steps.map((step) => [step.index, step.name, step.excluded]), [[0, 'list_files', false], [1, 'write_file', true]]);
+  // Clearing them removes the fields.
+  await cases.setExclusions(file, id, { turns: [], steps: [] });
+  const record = JSON.parse((await fs.readFile(file, 'utf8')).trim());
+  assert.equal('excludedTurns' in record || 'excludedSteps' in record, false);
+});

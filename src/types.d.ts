@@ -23,8 +23,9 @@ export type BenchmarkTurn = { input: { role: string; content: string } | null; o
 export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
 export type TrainingProgress = { step: string; message: string; progress?: number; published?: boolean; modelId?: string };
 /** The prepared data, as Dades preparades › Mostra shows it (src/electron/learning-dataset.cjs). */
-export type DatasetItem = { id: string; task: string; prompt: string; answer: string; evidence: string; steps: number };
-export type DatasetView = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splits: { train: DatasetItem[]; validation: DatasetItem[]; test: DatasetItem[] }; discarded: { id: string | null; task: string; reason: 'invalid' | 'unverified' | 'secret' | 'duplicate' }[] };
+export type DatasetExample = { turn: number; request: string; steps: number; tokens: number; fits: boolean; truncated: boolean; messages: { role: string; content: string }[] };
+export type DatasetItem = { id: string; task: string; prompt: string; answer: string; evidence: string; examples: DatasetExample[]; skipped: { turn: number; reason: 'excluded' | 'no-steps' }[] };
+export type DatasetView = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number; examples: number; droppedExamples: number; skippedTurns: number }; splits: { train: DatasetItem[]; validation: DatasetItem[]; test: DatasetItem[] }; discarded: { id: string | null; task: string; reason: 'invalid' | 'unverified' | 'secret' | 'duplicate' }[] };
 /** A verified case written by hand in Aprenentatge local › Dades preparades. */
 export type ManualCase = { task: string; prompt: string; answer: string; evidence: string };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string; task?: string; sessionTurns?: { role: 'user' | 'assistant'; content: string }[]; source?: 'manual' };
@@ -35,9 +36,9 @@ export type GitHistory = { available: boolean; reason?: string; branch?: string;
 export type GitCommitDetails = GitCommit & { files: { status: string; path: string }[]; truncated?: boolean };
 export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
 export type ProjectFileHistoryVersion = { id: string; path: string; bytes: number; savedAt: string; label: string; sha256: string; content?: string; mode?: number };
-export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
+export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean; examples?: number; droppedExamples?: number; skippedTurns?: number };
 export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string; source?: 'manual' };
-export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
+export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; excluded?: boolean; steps: { index: number; name: string; ok: boolean; excluded?: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
 export type DictationPreferences = { model: string; language: 'auto' | 'ca' | 'es' | 'en' };
 export type TrainingPreferences = { maxTokens: number; numLayers: number; learningRate: number; itersPerCase: number; minIters: number; maxIters: number; seed: number };
@@ -104,6 +105,7 @@ export interface AgenticBridge {
   learningDatasetView(): Promise<DatasetView>;
   exportLearningDataset(): Promise<{ saved: boolean; path?: string; examples?: number }>;
   revealLearningExport(): Promise<boolean>;
+  setCaseExclusions(id: string, exclusions: { turns: number[]; steps: string[] }): Promise<{ excludedTurns: number[]; excludedSteps: string[] }>;
   startBenchmark(request: { repeat: 1 | 2; tasks?: string[] }): Promise<{ started: boolean; id: string }>;
   cancelBenchmark(): Promise<{ cancelled: boolean }>;
   benchmarkStatus(): Promise<{ running: boolean; model?: string; current?: BenchmarkCurrent | null }>;

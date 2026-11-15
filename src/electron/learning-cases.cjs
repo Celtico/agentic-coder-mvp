@@ -122,10 +122,14 @@ async function readCase(filePath, id) {
   if (!found) throw new Error('Aquest cas ja no és al registre.');
   const record = found.record;
   const turns = turnsOf(record);
+  const excludedTurns = new Set(Array.isArray(record.excludedTurns) ? record.excludedTurns : []);
+  const excludedSteps = new Set(Array.isArray(record.excludedSteps) ? record.excludedSteps : []);
   const requests = turns.length
-    ? turns.map((turn) => ({
+    ? turns.map((turn, turnIndex) => ({
       request: str(turn.request),
-      steps: stepsOf(turn).map((step) => ({ name: step.name, ok: step.ok === true, arguments: summarizeArguments(step.arguments), result: shortValue(str(step.result), 300) })),
+      excluded: excludedTurns.has(turnIndex),
+      // Indexes as in the trajectory (src/electron/learning-trajectory.cjs, stepKey), so an exclusion names the right step.
+      steps: (Array.isArray(turn.steps) ? turn.steps : []).map((step, stepIndex) => step && typeof step === 'object' && typeof step.name === 'string' ? { index: stepIndex, name: step.name, ok: step.ok === true, excluded: excludedSteps.has(`${turnIndex}:${stepIndex}`), arguments: summarizeArguments(step.arguments), result: shortValue(str(step.result), 300) } : null).filter(Boolean),
       answer: str(turn.answer),
     }))
     : [{ request: str(record.prompt), steps: [], answer: str(record.answer) }];
@@ -154,6 +158,33 @@ async function updateCase(filePath, id, changes) {
   });
 }
 
+/**
+ * What of a case is left out of the training: whole turns (by index) and steps («turn:step»), as chosen
+ * in the case's detail. Only indexes that exist in the case are kept.
+ */
+async function setExclusions(filePath, id, { turns = [], steps = [] } = {}) {
+  validCaseId(id);
+  return withCasesLock(filePath, async () => {
+    const lines = await readLines(filePath);
+    const index = lines.findIndex(({ record }) => record && record.id === id);
+    if (index < 0) throw new Error('Aquest cas ja no és al registre.');
+    const record = { ...lines[index].record };
+    const caseTurns = turnsOf(record);
+    const validTurn = (value) => Number.isInteger(value) && value >= 0 && value < caseTurns.length;
+    const excludedTurns = [...new Set((Array.isArray(turns) ? turns : []).filter(validTurn))].sort((a, b) => a - b);
+    const excludedSteps = [...new Set((Array.isArray(steps) ? steps : []).filter((key) => {
+      const match = typeof key === 'string' && /^(\d+):(\d+)$/.exec(key);
+      return match && validTurn(Number(match[1])) && Number(match[2]) < (Array.isArray(caseTurns[Number(match[1])].steps) ? caseTurns[Number(match[1])].steps.length : 0);
+    }))].sort();
+    if (excludedTurns.length) record.excludedTurns = excludedTurns; else delete record.excludedTurns;
+    if (excludedSteps.length) record.excludedSteps = excludedSteps; else delete record.excludedSteps;
+    record.editedAt = new Date().toISOString();
+    lines[index] = { line: JSON.stringify(record), record };
+    await writeAtomically(filePath, lines.map((item) => item.line));
+    return { excludedTurns, excludedSteps };
+  });
+}
+
 /** Moves one case to the deleted file (first) and then rewrites the register without it. */
 async function deleteCase(filePath, deletedPath, id) {
   validCaseId(id);
@@ -170,4 +201,4 @@ async function deleteCase(filePath, deletedPath, id) {
   });
 }
 
-module.exports = { validCaseId, withCasesLock, listCases, readCase, updateCase, deleteCase, summarizeCase, validateManualCase, CASE_LIMITS, SECRET_PATTERN };
+module.exports = { validCaseId, withCasesLock, listCases, readCase, updateCase, setExclusions, deleteCase, summarizeCase, validateManualCase, CASE_LIMITS, SECRET_PATTERN };

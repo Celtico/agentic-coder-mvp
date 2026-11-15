@@ -1288,6 +1288,7 @@ function verifiedExperiencesPath() { return path.join(app.getPath('userData'), '
 ipcMain.handle('learning:cases-list', () => learningCases.listCases(verifiedExperiencesPath()));
 ipcMain.handle('learning:case-detail', (_e, id) => learningCases.readCase(verifiedExperiencesPath(), learningCases.validCaseId(id)));
 ipcMain.handle('learning:case-update', (_e, id, changes) => learningCases.updateCase(verifiedExperiencesPath(), learningCases.validCaseId(id), changes));
+ipcMain.handle('learning:case-exclusions', (_e, id, exclusions) => learningCases.setExclusions(verifiedExperiencesPath(), learningCases.validCaseId(id), exclusions));
 ipcMain.handle('learning:case-delete', (_e, id) => learningCases.deleteCase(verifiedExperiencesPath(), path.join(app.getPath('userData'), 'learning', 'verified-experiences.deleted.jsonl'), learningCases.validCaseId(id)));
 
 async function readPreparedExperienceDataset() {
@@ -1301,11 +1302,14 @@ async function readPreparedExperienceDataset() {
 
 ipcMain.handle('learning:dataset-preview', async () => {
   const prepared = await readPreparedExperienceDataset();
-  return { counts: prepared.counts, splitCounts: prepared.splitCounts, trainingReady: prepared.trainingReady };
+  // The examples a beta would be trained with (one per turn), and those that do not fit in the limit.
+  const built = versions.buildTrainingExamples(prepared, trainingPreferences.maxTokens);
+  return { counts: prepared.counts, splitCounts: prepared.splitCounts, trainingReady: prepared.trainingReady, examples: built.examples.length, droppedExamples: built.dropped, skippedTurns: built.skippedTurns };
 });
 
 // Dades preparades › Mostra: the prepared data, to look at in the window; nothing is written.
-ipcMain.handle('learning:dataset-view', async () => datasetView(await readPreparedExperienceDataset()));
+const examplesFor = (item) => versions.toTrainingExamples(item, trainingPreferences.maxTokens);
+ipcMain.handle('learning:dataset-view', async () => datasetView(await readPreparedExperienceDataset(), examplesFor));
 // Dades preparades › Descarrega: one .jsonl where the user chooses (and the usual copy in learning/candidates).
 let lastDatasetExport = null;
 ipcMain.handle('learning:export-dataset', async () => {
@@ -1313,7 +1317,7 @@ ipcMain.handle('learning:export-dataset', async () => {
   if (prepared.counts.included === 0) throw new Error('No hi ha casos confirmats aptes per descarregar.');
   const result = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), `dataset-${new Date().toISOString().slice(0, 10)}.jsonl`), filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }] });
   if (result.canceled || !result.filePath) return { saved: false };
-  await fs.writeFile(result.filePath, datasetJsonl(prepared), { encoding: 'utf8', mode: 0o600 });
+  await fs.writeFile(result.filePath, datasetJsonl(prepared, examplesFor), { encoding: 'utf8', mode: 0o600 });
   await writeTrainingCandidate(prepared, path.join(app.getPath('userData'), 'learning', 'candidates'));
   lastDatasetExport = result.filePath;
   return { saved: true, path: result.filePath, examples: prepared.counts.included };

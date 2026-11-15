@@ -77,8 +77,10 @@ test('candidate partitions are deterministic, provenance-preserving and immutabl
   assert.match(manifest.datasetHash, /^[0-9a-f]{64}$/);
 });
 
-test('the prepared data as the window shows it, and as one .jsonl: every split, and what is left out with why', () => {
+test('the prepared data as the window shows it, and as one .jsonl: every case with its examples, and what is left out with why', () => {
   const { prepareTrainingDataset, datasetView, datasetJsonl } = require('./learning-dataset.cjs');
+  const versions = require('./learning-versions.cjs');
+  const examplesFor = (item) => versions.toTrainingExamples(item, 4096);
   const base = { projectPath: '/tmp/p', verification: 'user-confirmed', evidence: 'build ok' };
   const records = [
     { ...base, id: 'a', prompt: 'posa un botó', answer: 'fet', task: 'Botó' },
@@ -87,10 +89,12 @@ test('the prepared data as the window shows it, and as one .jsonl: every split, 
     { id: 'd', prompt: 'x', answer: 'y', evidence: 'z', projectPath: '/tmp/p' },
   ];
   const prepared = prepareTrainingDataset(records);
-  const view = datasetView(prepared);
+  const view = datasetView(prepared, examplesFor);
   assert.equal(view.counts.included, 1);
-  assert.deepEqual(view.splits.train.map((item) => [item.id, item.task, item.prompt, item.answer, item.evidence]), [['a', 'Botó', 'posa un botó', 'fet', 'build ok']]);
+  assert.equal(view.counts.examples, 1);
+  assert.deepEqual(view.splits.train.map((item) => [item.id, item.task, item.examples.length, item.examples[0].fits]), [['a', 'Botó', 1, true]]);
   assert.deepEqual(view.discarded.map((item) => [item.id, item.reason]).sort(), [['b', 'duplicate'], ['c', 'secret'], ['d', 'unverified']]);
-  const lines = datasetJsonl(prepared).trim().split('\n').map((line) => JSON.parse(line));
-  assert.deepEqual(lines.map((line) => [line.split, line.sourceId]), [['train', 'a']]);
+  const lines = datasetJsonl(prepared, examplesFor).trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(lines.map((line) => [line.split, line.caseId, line.turn]), [['train', 'a', 0]]);
+  assert.deepEqual(lines[0].messages.map((message) => message.role), ['user', 'assistant']);
 });

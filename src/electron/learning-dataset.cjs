@@ -1,7 +1,7 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { createHash, randomUUID } = require('node:crypto');
-const { toChatExample } = require('./learning-trajectory.cjs');
+const { toTurnExamples } = require('./learning-trajectory.cjs');
 
 const MAX_RECORDS = 10_000;
 const MAX_INPUT_BYTES = 20_000_000;
@@ -66,6 +66,9 @@ function prepareTrainingDataset(records) {
       evidence: record.evidence.trim(),
       ...(task ? { task } : {}),
       ...(trajectory ? { trajectory } : {}),
+      // What the user left out of the training in the case's detail (turns, and steps as «turn:step»).
+      ...(Array.isArray(record.excludedTurns) && record.excludedTurns.length ? { excludedTurns: record.excludedTurns.filter(Number.isInteger) } : {}),
+      ...(Array.isArray(record.excludedSteps) && record.excludedSteps.length ? { excludedSteps: record.excludedSteps.filter((key) => typeof key === 'string' && /^\d+:\d+$/.test(key)) } : {}),
     });
   }
 
@@ -93,21 +96,32 @@ function prepareTrainingDataset(records) {
 }
 
 /**
- * The prepared data as the window shows it: each split's cases (task, message, answer, check) and the
- * cases left out with their reason. Nothing is written.
+ * The prepared data as the window shows it: each split's cases with their examples (one per turn: the
+ * request, the steps, the tokens, and whether it fits) and the turns left out, then the cases left out
+ * with their reason. `examplesFor(item)` builds a case's examples (learning-versions.toTrainingExamples).
  */
-function datasetView(prepared) {
-  const item = (example) => ({ id: example.sourceId, task: example.task || example.prompt.slice(0, 300), prompt: example.prompt, answer: example.answer, evidence: example.evidence, steps: example.trajectory ? example.trajectory.turns.reduce((n, turn) => n + (Array.isArray(turn?.steps) ? turn.steps.length : 0), 0) : 0 });
+function datasetView(prepared, examplesFor) {
+  const view = (example) => {
+    const { built, skipped } = examplesFor(example);
+    const turns = example.trajectory?.turns || [];
+    return {
+      id: example.sourceId, task: example.task || example.prompt.slice(0, 300), prompt: example.prompt, answer: example.answer, evidence: example.evidence,
+      examples: built.map((item) => ({ turn: item.turn, request: String(turns[item.turn]?.request || example.prompt).slice(0, 400), steps: item.messages ? item.messages.filter((message) => message.role === 'assistant').length - 1 : 0, tokens: item.tokens, fits: Boolean(item.messages), truncated: Boolean(item.truncated), messages: item.messages || [] })),
+      skipped,
+    };
+  };
+  const splits = { train: prepared.partitions.train.map(view), validation: prepared.partitions.validation.map(view), test: prepared.partitions.test.map(view) };
+  const all = [...splits.train, ...splits.validation, ...splits.test];
   return {
-    counts: prepared.counts,
-    splits: { train: prepared.partitions.train.map(item), validation: prepared.partitions.validation.map(item), test: prepared.partitions.test.map(item) },
+    counts: { ...prepared.counts, examples: all.reduce((n, item) => n + item.examples.filter((example) => example.fits).length, 0), droppedExamples: all.reduce((n, item) => n + item.examples.filter((example) => !example.fits).length, 0), skippedTurns: all.reduce((n, item) => n + item.skipped.length, 0) },
+    splits,
     discarded: prepared.discarded || [],
   };
 }
 
-/** The prepared data as one JSONL file: one example per line, with the split it belongs to. */
-function datasetJsonl(prepared) {
-  return ['train', 'validation', 'test'].flatMap((split) => prepared.partitions[split].map((example) => JSON.stringify({ split, ...example }))).join('\n') + '\n';
+/** The prepared data as one JSONL file: one example per line (a turn of a case), with its case, turn and split. */
+function datasetJsonl(prepared, examplesFor) {
+  return ['train', 'validation', 'test'].flatMap((split) => prepared.partitions[split].flatMap((example) => examplesFor(example).built.filter((item) => item.messages).map((item) => JSON.stringify({ split, caseId: example.sourceId, turn: item.turn, messages: item.messages })))).join('\n') + '\n';
 }
 
 async function writeTrainingCandidate(prepared, candidatesDirectory) {
@@ -132,7 +146,7 @@ async function writeTrainingCandidate(prepared, candidatesDirectory) {
     const mlxDirectory = path.join(candidateDirectory, 'mlx');
     await fs.mkdir(mlxDirectory, { mode: 0o700 });
     for (const [name, file] of [['train', 'train.jsonl'], ['validation', 'valid.jsonl'], ['test', 'test.jsonl']]) {
-      const content = prepared.partitions[name].map((item) => JSON.stringify(toChatExample(item))).join('\n') + (prepared.partitions[name].length ? '\n' : '');
+      const content = prepared.partitions[name].flatMap((item) => toTurnExamples(item).examples.map((example) => JSON.stringify({ messages: example.messages }))).join('\n') + (prepared.partitions[name].length ? '\n' : '');
       const filePath = path.join(mlxDirectory, file);
       await fs.writeFile(filePath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
       await fs.chmod(filePath, 0o400);

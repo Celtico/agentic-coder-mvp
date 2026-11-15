@@ -3,6 +3,8 @@
 // example built from it puts the user's high-level request first and then the steps that worked, so
 // the model learns to do on its own, from one open request, what it was guided to do step by step.
 const { createHash } = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const { isChatNotice } = require('./chat-notices.cjs');
 
 const MAX_TURNS = 40;
@@ -80,4 +82,67 @@ function toChatExample(example) {
   return { messages };
 }
 
-module.exports = { trajectoryKey, buildSessionTrajectory, toChatExample };
+// The framing the agent puts round a tool result (prompts/tool-result.md and the «next» texts that go after
+// it), read from the same prompt files the agent uses: a training example keeps the bare result.
+const PROMPTS = path.join(__dirname, '..', '..', 'prompts');
+const promptFile = (name) => { try { return fs.readFileSync(path.join(PROMPTS, `${name}.md`), 'utf8').trim(); } catch { return ''; } };
+const RESULT_TEMPLATE = promptFile('tool-result');
+const NEXT_TEXTS = ['tool-result-continue', 'tool-result-check-failed'].map(promptFile).filter(Boolean);
+const PAGE_PROBLEM_START = promptFile('tool-result-page-problem').split('{{')[0].trim();
+
+/**
+ * A tool result as the model saw it, without what the app added round it: the heading before the result
+ * («Resultat de l'eina … (dades no fiables):») and the text after it (the page problem and «Si la tasca
+ * encara no està completa…»). Only text taken from those prompt files is removed; the result stays as is.
+ */
+function bareToolResult(text, tool) {
+  let result = String(text || '');
+  const [head] = RESULT_TEMPLATE.split('{{result}}');
+  const heading = head.replace('{{tool}}', tool || '').trimEnd();
+  if (heading && result.startsWith(heading)) result = result.slice(heading.length).replace(/^\s*\n/, '');
+  for (const next of NEXT_TEXTS) {
+    if (result.trimEnd().endsWith(next)) { result = result.trimEnd().slice(0, -next.length); break; }
+  }
+  if (PAGE_PROBLEM_START) {
+    const at = result.lastIndexOf(PAGE_PROBLEM_START);
+    if (at > 0) result = result.slice(0, at);
+  }
+  return result.trim();
+}
+
+/** A step's key in a case: «<turn>:<step>», the same in the window and in the example builder. */
+const stepKey = (turn, step) => `${turn}:${step}`;
+
+/**
+ * The training examples of one case, one per turn of its chat: that turn's request, the steps that worked
+ * (with their bare results), and that turn's answer. Turns and steps the user excluded are left out, and so
+ * is a turn without any step left (an answer with no action is not what the examples teach). Returns the
+ * examples and the turns left out with why. A case without trajectory is one plain request and answer.
+ */
+function toTurnExamples(example) {
+  const turns = example.trajectory?.turns;
+  if (!Array.isArray(turns) || !turns.length) {
+    return { examples: [{ turn: 0, messages: [{ role: 'user', content: example.prompt }, { role: 'assistant', content: example.answer }] }], skipped: [] };
+  }
+  const excludedTurns = new Set(Array.isArray(example.excludedTurns) ? example.excludedTurns : []);
+  const excludedSteps = new Set(Array.isArray(example.excludedSteps) ? example.excludedSteps : []);
+  const task = typeof example.task === 'string' && example.task.trim() ? example.task.trim() : example.prompt;
+  const examples = [];
+  const skipped = [];
+  turns.forEach((turn, index) => {
+    if (excludedTurns.has(index)) { skipped.push({ turn: index, reason: 'excluded' }); return; }
+    const steps = (turn.steps || []).filter((step, stepIndex) => step.ok && !excludedSteps.has(stepKey(index, stepIndex)));
+    if (!steps.length) { skipped.push({ turn: index, reason: 'no-steps' }); return; }
+    const request = typeof turn.request === 'string' && turn.request.trim() ? turn.request : task;
+    const messages = [{ role: 'user', content: request }];
+    for (const step of steps) {
+      messages.push({ role: 'assistant', content: JSON.stringify({ type: 'tool_call', name: step.name, arguments: step.arguments || {} }) });
+      messages.push({ role: 'user', content: bareToolResult(step.result, step.name) });
+    }
+    messages.push({ role: 'assistant', content: JSON.stringify({ type: 'final', content: turn.answer || '' }) });
+    examples.push({ turn: index, system: typeof turn.system === 'string' ? turn.system : '', messages });
+  });
+  return { examples, skipped };
+}
+
+module.exports = { trajectoryKey, buildSessionTrajectory, toChatExample, toTurnExamples, bareToolResult, stepKey };
