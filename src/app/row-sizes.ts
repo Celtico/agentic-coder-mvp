@@ -62,8 +62,10 @@ export function withPaneWidths(widths: Record<string, number>, changes: Record<s
  * The widths the panes `ids` take in a row `rowWidth` pixels wide that must also hold the flexible pane
  * (`flexMin`) and `handles` dividers of `handleWidth`: their own widths when they fit; when they do not
  * (a smaller window or screen), each gives up a share of the excess in proportion to what it has above
- * its minimum, so every pane stays in the window and none goes under its minimum. The saved widths are not
- * changed: with room again, the panes go back to them.
+ * its minimum, so every pane stays in the window and none goes under its minimum. If not even the
+ * minimums fit (a narrow window with many panes), every pane of the row, the flexible one too, gets an
+ * equal share of the width (`narrowShare`): all of them stay visible, narrower than their minimum. The
+ * saved widths are not changed: with room again, the panes go back to them.
  */
 export function fitPaneWidths(ids: string[], widths: Record<string, number>, { rowWidth, flexMin, handles, handleWidth = 6 }: { rowWidth: number; flexMin: number; handles: number; handleWidth?: number }): Record<string, number> {
   const own = Object.fromEntries(ids.map((id) => [id, paneWidth(id, widths)]))
@@ -72,11 +74,20 @@ export function fitPaneWidths(ids: string[], widths: Record<string, number>, { r
   const total = ids.reduce((sum, id) => sum + own[id], 0)
   if (total <= room) return own
   const spare = ids.reduce((sum, id) => sum + (own[id] - paneMinWidth(id)), 0)
-  const cut = Math.min(total - room, spare)
+  if (total - room > spare) {
+    const share = narrowShare({ rowWidth, panes: ids.length + 1, handles, handleWidth })
+    return Object.fromEntries(ids.map((id) => [id, share]))
+  }
+  const cut = total - room
   return Object.fromEntries(ids.map((id) => {
     const above = own[id] - paneMinWidth(id)
     return [id, Math.floor(own[id] - (spare > 0 ? (cut * above) / spare : 0))]
   }))
+}
+
+/** Each pane's width when not even the minimums fit: the row split evenly (never under 96 px). */
+export function narrowShare({ rowWidth, panes, handles, handleWidth = 6 }: { rowWidth: number; panes: number; handles: number; handleWidth?: number }): number {
+  return Math.max(96, Math.floor((rowWidth - handles * handleWidth) / Math.max(1, panes)))
 }
 
 /** Saved widths made safe: only pane ids, only widths between their minimum and 4000 px. */

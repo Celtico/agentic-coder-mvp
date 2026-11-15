@@ -11,8 +11,10 @@ export const paneHeaderRecipe = defineSlotRecipe({
   base: {
     root: { colorPalette: "agentic", display: "flex", flex: "none", h: "10", alignItems: "center", gap: "2", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" },
     icon: { flex: "none", display: "inline-flex" },
-    title: { flex: "none", fontSize: "sm", fontWeight: "semibold", whiteSpace: "nowrap" },
-    subtitle: { minW: "0", fontSize: "xs", color: "fg.muted", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+    // In a narrow pane the subtitle gives way first (it shrinks a hundred times faster), then the title is
+    // cut with an ellipsis; the icon and the actions keep their size.
+    title: { flex: "0 1 auto", minW: "0", fontSize: "sm", fontWeight: "semibold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+    subtitle: { flex: "0 100 auto", minW: "0", fontSize: "xs", color: "fg.muted", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
     actions: { flex: "none", display: "flex", alignItems: "center", gap: "0.5", ms: "auto" },
   },
   variants: {
