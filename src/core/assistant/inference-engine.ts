@@ -79,7 +79,11 @@ export class MlxInferenceEngine implements InferenceEngine {
         if (!wasReady) reject(error);
         this.pending?.reject(error); this.pending = null;
       });
-      onStatus(`Carregant ${this.modelId} a la memòria unificada; la primera vegada pot trigar fins a mig minut…`);
+      // «The first time» only the first time in this app session; a model that was unloaded (for the
+      // dictation, a training…) is loaded again (src/electron/main.cjs, AGENT_MODEL_RELOAD).
+      onStatus(process.env.AGENT_MODEL_RELOAD === '1'
+        ? `Carregant ${this.modelId}…`
+        : `Carregant ${this.modelId} a la memòria unificada; la primera vegada pot trigar fins a mig minut…`);
     }).catch((error) => { this.state = 'unloaded'; throw error; }).finally(() => { this.ready = null; });
     return this.ready;
   }

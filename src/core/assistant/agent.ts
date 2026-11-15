@@ -777,9 +777,13 @@ export class LocalCodingAgent {
         break;
       } catch { /* no skills file */ }
     }
-    const system = compact ? tidyBlankLines(promptText('system-compact', { folder: path.resolve(projectRoot), projectState, projectInstructions, projectSkills, requestedPages, files: context.manifest || '(la carpeta és buida)', contents: context.contents ? promptText('context-compact-contents', { contents: context.contents }) : '' })) : tidyBlankLines(promptText('system', { model: this.engine.getModelStatus().modelId, runtime: process.env.AGENT_MODEL_RUNTIME === 'transformers' ? 'Transformers.js' : 'MLX d’Apple', folder: path.resolve(projectRoot), projectState, delegation: options.allowDelegation === false
+    const baseSystem = compact ? tidyBlankLines(promptText('system-compact', { folder: path.resolve(projectRoot), projectState, projectInstructions, projectSkills, requestedPages, files: context.manifest || '(la carpeta és buida)', contents: context.contents ? promptText('context-compact-contents', { contents: context.contents }) : '' })) : tidyBlankLines(promptText('system', { model: this.engine.getModelStatus().modelId, runtime: process.env.AGENT_MODEL_RUNTIME === 'transformers' ? 'Transformers.js' : 'MLX d’Apple', folder: path.resolve(projectRoot), projectState, delegation: options.allowDelegation === false
         ? promptText('system-delegated-agent')
         : promptText('system-delegation'), web: this.webSearch ? promptText('system-web-search') : promptText('system-web-pages'), delegationTools: options.allowDelegation === false ? promptText('system-tools-no-delegation') : promptText('system-tools-delegation'), projectInstructions, projectSkills, mcpTools, requestedPages, files: context.manifest || '(no s’han trobat fitxers visibles)', contents: context.contents || '(no hi ha fitxers de text compatibles dins del límit)', experiences: verifiedExperiences || '(no n’hi ha cap de prou similar)' }));
+    // With a model that sees images, the text of prompts/vision.md (if there is any) follows the instructions.
+    // Its HTML comments are notes for whoever edits it, not text for the model.
+    const visionText = process.env.AGENT_MODEL_VISION === '1' ? promptText('vision').replace(/<!--[\s\S]*?-->/g, '').trim() : '';
+    const system = visionText ? `${baseSystem}\n\n${visionText}` : baseSystem;
 
     await this.engine.loadModel((message) => this.onStatus({ type: 'status', message }));
     const recentHistory = conversationHistory.slice(-100).flatMap((turn) => {

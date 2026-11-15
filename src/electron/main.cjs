@@ -506,6 +506,8 @@ function stopProjectProcess() {
   });
 }
 
+/** The chat models loaded in this app session (their workers may have been stopped since). */
+const loadedModels = new Set();
 async function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
   const nodeExecutable = findNodeExecutable();
@@ -524,6 +526,10 @@ async function startModelWorker() {
       AGENT_MLX_PYTHON: mlxPythonPath(),
       AGENT_MLX_LOCK_LABEL: 'el xat d’Agentic Coder',
       AGENT_MLX_MODEL_PATH: await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory()) || '',
+      // A model already loaded once in this session is «loaded again», not «the first time»; one that sees
+      // images gets the text of prompts/vision.md.
+      ...(loadedModels.has((await currentModel()).id) ? { AGENT_MODEL_RELOAD: '1' } : {}),
+      ...(await mlxModels.hasVision(await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory())) ? { AGENT_MODEL_VISION: '1' } : {}),
       // A beta is the base with its adapter (src/electron/learning-versions.cjs); any other model, none.
       AGENT_MLX_ADAPTER_PATH: (await currentModel()).adapterPath || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),
@@ -532,6 +538,7 @@ async function startModelWorker() {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   });
   modelWorker = child;
+  loadedModels.add((await currentModel()).id);
   child.on('message', (message) => {
     if (message?.type === 'status') { activeTurns.status(message.value); win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
