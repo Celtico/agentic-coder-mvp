@@ -68,11 +68,12 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflow="hidden" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
       {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer/>}
       {items.map((item) => {
-        if (item.id === flexId) return <Flex key={item.id} flex="1" minW={`${flexMin}px`} minH="0" h="full" overflow="hidden" data-pane-flex data-pane-id={item.id}>{item.node}</Flex>
+        // The panes clip their own content (their Card); these boxes do not, so a pane's shadow («amb ombra») shows round its corners.
+        if (item.id === flexId) return <Flex key={item.id} flex="1" minW={`${flexMin}px`} minH="0" h="full" data-pane-flex data-pane-id={item.id}>{item.node}</Flex>
         const width = paneWidth(item.id, widths)
         return (
           <Fragment key={item.id}>
-            <Flex flex="none" w={`${width}px`} minW={`${paneMinWidth(item.id)}px`} minH="0" h="full" overflow="hidden" data-pane-id={item.id}>{item.node}</Flex>
+            <Flex flex="none" w={`${width}px`} minW={`${paneMinWidth(item.id)}px`} minH="0" h="full" data-pane-id={item.id}>{item.node}</Flex>
             <Box role="separator" aria-orientation="vertical" aria-label="Arrossega per ajustar l’amplada d’aquest panell" title="Arrossega per ajustar l’amplada d’aquest panell"
               aria-valuenow={width} aria-valuemin={paneMinWidth(item.id)} tabIndex={0} data-pane-handle={item.id} data-group
               flex="none" w="6px" h="full" display="flex" alignItems="center" justifyContent="center" cursor="col-resize" touchAction="none"

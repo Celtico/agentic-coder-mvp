@@ -102,3 +102,10 @@ test('while a divider is dragged nothing gets selected: the row stops selecting 
   // Not dragging: no layer, text can be selected.
   assert.doesNotMatch(ui.render({}), /data-pane-drag-layer/);
 });
+
+test('the boxes of a row do not clip their pane, so a pane’s shadow shows round its corners; the terminal takes its pane’s colour', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  for (const box of source.match(/<Flex key=\{item\.id\}[^\n]*|<Flex flex="none" w=[^\n]*/g)) assert.doesNotMatch(box, /overflow="hidden"/, box);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /allowTransparency: true, theme: \{ background: 'rgba\(0, 0, 0, 0\)'/);
+});

@@ -1496,7 +1496,8 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainer) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor('bg'), foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, allowTransparency: true, theme: { background: 'rgba(0, 0, 0, 0)', foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
+    // Transparent: the terminal takes its panel's own colour, whatever the panel style (in dark mode «amb ombra» is lighter).
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainer);
