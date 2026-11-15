@@ -7,11 +7,11 @@
 /** A pane's id in a row: «nav-…» the side columns, «side-…» the panes of the top group, «dock-…» the bottom row, «chat». */
 export const ROW_PANE_ID = /^(?:(?:nav|side|dock)-[a-z]{1,40}|chat)$/
 
-/** Narrowest a pane may be, in pixels: the side columns 160, the chat 320, any other pane 220. */
+/** Narrowest a pane may be, in pixels: the side columns 120, the chat 260, any other pane 140. */
 export function paneMinWidth(id: string): number {
-  if (id.startsWith("nav-")) return 160
-  if (id === "chat") return 320
-  return 220
+  if (id.startsWith("nav-")) return 120
+  if (id === "chat") return 260
+  return 140
 }
 
 /** The width a pane has the first time it is shown, before it has one of its own. */

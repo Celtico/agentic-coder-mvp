@@ -26,12 +26,12 @@ export const render = (widths: Record<string, number>) => renderToStaticMarkup(<
 const ui = build('entry', entry);
 fs.rmSync(dir, { recursive: true, force: true });
 
-test('minimums: the side columns 160 px, the chat 320 px, any other pane 220 px', () => {
-  assert.equal(rows.paneMinWidth('nav-conversations'), 160);
-  assert.equal(rows.paneMinWidth('chat'), 320);
-  assert.equal(rows.paneMinWidth('side-browser'), 220);
-  assert.equal(rows.paneMinWidth('dock-terminal'), 220);
-  assert.equal(rows.paneWidth('nav-files', { 'nav-files': 50 }), 160, 'never under its minimum');
+test('minimums: the side columns 120 px, the chat 260 px, any other pane 140 px', () => {
+  assert.equal(rows.paneMinWidth('nav-conversations'), 120);
+  assert.equal(rows.paneMinWidth('chat'), 260);
+  assert.equal(rows.paneMinWidth('side-browser'), 140);
+  assert.equal(rows.paneMinWidth('dock-terminal'), 140);
+  assert.equal(rows.paneWidth('nav-files', { 'nav-files': 50 }), 120, 'never under its minimum');
 });
 
 test('dragging a divider changes only its pane; the others keep their widths', () => {
@@ -44,7 +44,7 @@ test('dragging a divider changes only its pane; the others keep their widths', (
 });
 
 test('the divider stops at the pane’s minimum and where the flexible pane would go under its own', () => {
-  assert.equal(rows.draggedPaneWidth({ id: 'side-browser', start: 400, delta: -900, flexWidth: 700, flexMin: 320 }), 220);
+  assert.equal(rows.draggedPaneWidth({ id: 'side-browser', start: 400, delta: -900, flexWidth: 700, flexMin: 320 }), 140);
   // 700 − 320 = 380 px to give: 400 + 380 at most.
   assert.equal(rows.draggedPaneWidth({ id: 'side-browser', start: 400, delta: 2000, flexWidth: 700, flexMin: 320 }), 780);
   // The flexible pane already at its minimum: the divider does not go right at all.
@@ -82,9 +82,9 @@ test('the window: both rows are PaneRows (no proportional splitter); the chat is
 test('a divider changes only the two panes beside it: one wider, the other narrower by as much', () => {
   // Fitxers | Navegador: Fitxers +60, Navegador −60; nothing else is given a width.
   assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: 60, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 300, 'side-browser': 440 });
-  // Stopped by the right one's minimum (220) and by the left one's (160).
-  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: 900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 520, 'side-browser': 220 });
-  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: -900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 160, 'side-browser': 580 });
+  // Stopped by the right one's minimum (140) and by the left one's (120).
+  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: 900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 600, 'side-browser': 140 });
+  assert.deepEqual(rows.draggedPair({ left: 'nav-files', right: 'side-browser', startLeft: 240, startRight: 500, delta: -900, rightIsFlex: false, flexMin: 320 }), { 'nav-files': 120, 'side-browser': 620 });
   // Beside the chat: only the left one gets a width; the chat takes the rest, down to 320.
   assert.deepEqual(rows.draggedPair({ left: 'side-evaluation', right: 'chat', startLeft: 400, startRight: 700, delta: 1000, rightIsFlex: true, flexMin: 320 }), { 'side-evaluation': 780 });
   const widths = { 'nav-conversations': 200, 'nav-files': 240, 'side-browser': 500, 'side-evaluation': 400 };
