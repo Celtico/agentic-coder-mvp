@@ -72,17 +72,14 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         agentic: accentSemantic(accent),
         // The window is a canvas; every pane is a rounded panel resting on it (dark by default; light
         // when chosen in Preferències).
-        canvas: { value: { _light: "#f2f2f2", _dark: "#171717" } },
-        // bg, fg and border are groups: DEFAULT is the app's own value, and Chakra's own members
-        // (bg.muted, fg.error, border.subtle…) are kept. Written as single values they hid the whole group,
-        // and bg.panel (dialogs), fg.error or fg.warning had no colour at all.
-        bg: {
-          DEFAULT: { value: { _light: "#ffffff", _dark: "#212121" } },
-          // Dialogs and floating windows: the panes' own dark (white in light mode); they stand out by
-          // their line and shadow, not by being lighter.
-          panel: { value: { _light: "#ffffff", _dark: "#212121" } },
-          subtle: { value: { _light: "#f7f7f7", _dark: "#262626" } },
-        },
+        // Chakra's own bg values (white / black), as in its docs: the panels (bg.panel: white / gray.950) rest
+        // on it. Written as the colours, not as {colors.bg}, so «Fons de les finestres» (which re-points bg)
+        // never changes the window itself.
+        canvas: { value: { _light: "{colors.white}", _dark: "{colors.black}" } },
+        // bg (bg, bg.subtle, bg.muted, bg.emphasized, bg.panel…) is Chakra's own, untouched: Preferències ›
+        // Aparença › Fons de les finestres chooses among them. fg and border are groups: DEFAULT is the app's
+        // own value and Chakra's own members (fg.error, border.subtle…) are kept (written as single values
+        // they hid the whole group).
         fg: {
           DEFAULT: { value: { _light: "#1f1f1f", _dark: "#ececec" } },
           muted: { value: { _light: "#5e5e5e", _dark: "#a1a1a1" } },

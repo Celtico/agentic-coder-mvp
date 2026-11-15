@@ -137,7 +137,7 @@ const ChatMark: IconType = ({ size }) => <Mark size={typeof size === 'number' ? 
  * says «No handler registered», and an older preload has no such function at all.
  */
 const missingInMain = (error: unknown) => error instanceof TypeError && /is not a function/.test(error.message) || /No handler registered/i.test(String((error as Error)?.message ?? error));
-/** A bg token's value in one mode, as the theme defines it («{gray.100}», «#212121»), for Preferències. */
+/** A bg token's value in one mode, as the theme defines it («{gray.100}», «{white}»), for Preferències. */
 const tokenValue = (system: ReturnType<typeof useChakraContext>, token: string, mode: '_light' | '_dark') => {
   const group = (system as unknown as { _config?: { theme?: { semanticTokens?: { colors?: Record<string, Record<string, { value?: Record<string, string> }>> } } } })._config?.theme?.semanticTokens?.colors?.bg;
   const value = group?.[token === 'bg' ? 'DEFAULT' : token.replace('bg.', '')]?.value?.[mode];
@@ -2700,7 +2700,7 @@ export function App(): React.JSX.Element {
                         const token = value;
                         return <Box key={value} as="button" role="radio" aria-checked={appearance.paneBg === value} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneBg === value ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneBg: value }))} data-pane-bg-option={value}>
                           {/* How the inside of a panel looks with it: an empty panel (the panel style chosen) on the window. */}
-                          <Box h="14" borderRadius="md" bg="canvas" p="2" display="flex" data-swatch>
+                          <Box h="14" borderRadius="md" bg="canvas" borderWidth="1px" borderColor="border" p="2" display="flex" data-swatch>
                             <Card.Root variant={appearance.paneStyle} bg={token} flex="1" minH="0"/>
                           </Box>
                           <Text mt="1.5" fontSize="xs" truncate fontFamily="mono" color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value}</Text>
