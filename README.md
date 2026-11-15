@@ -74,7 +74,12 @@ Els models i el motor de Python no van dins de l'app. La primera vegada cal prep
 - **Linux:** fes servir `scripts/setup-linux.sh`. Ho explica [docs/linux.md](docs/linux.md).
 - **Windows:** fes servir `scripts\setup-windows.ps1`. Ho explica [docs/windows.md](docs/windows.md).
 
-Després, afegeix els models des de Gestiona els models.
+Els models es baixen des de la mateixa app, sense terminal. Ves a Aprenentatge local › **Gestiona els
+models**:
+
+- per baixar un model que l'app ja coneix (MiMo, Gemma, Qwen, Whisper), fes servir la fletxa;
+- per afegir-ne un altre de Hugging Face, fes «Afegeix un model»: l'app comprova que es pot carregar i
+  quant ocupa abans de baixar-lo.
 
 > Les versions de Linux i Windows encara no s'han provat en un PC amb GPU NVIDIA real. Si alguna cosa
 > falla, l'error surt a la finestra.
