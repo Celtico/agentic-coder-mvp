@@ -1496,8 +1496,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainer) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, allowTransparency: true, theme: { background: 'rgba(0, 0, 0, 0)', foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
-    // Transparent: the terminal takes its panel's own colour, whatever the panel style (in dark mode «amb ombra» is lighter).
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor('bg'), foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainer);
@@ -1657,7 +1656,9 @@ export function App(): React.JSX.Element {
 
   const terminalDock = (
     <PaneCard header={<PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>}>
-      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte"/>
+      {/* The margin round the text has the terminal's own colour (bg, as xterm's theme), so it shows no frame of
+          the panel's colour whatever the panel style. */}
+      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" bg="bg" aria-label="Terminal del projecte" data-terminal/>
     </PaneCard>
   );
 

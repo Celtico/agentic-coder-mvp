@@ -109,11 +109,14 @@ test('while a divider is dragged nothing gets selected: the row stops selecting 
   assert.doesNotMatch(ui.render({}), /data-pane-drag-layer/);
 });
 
-test('the boxes of a row do not clip their pane, so a pane’s shadow shows round its corners; the terminal takes its pane’s colour', () => {
+test('the boxes of a row do not clip their pane, so a pane’s shadow shows round its corners; the terminal’s margin has its own colour', () => {
   const source = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
   for (const box of source.match(/<Flex key=\{item\.id\}[^\n]*|<Flex flex="none" w=[^\n]*/g)) assert.doesNotMatch(box, /overflow="hidden"/, box);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /allowTransparency: true, theme: \{ background: 'rgba\(0, 0, 0, 0\)'/);
+  // The terminal keeps its own colour (bg), and its margin has that same colour: no frame of another shade.
+  assert.match(app, /theme: \{ background: tokenColor\('bg'\)/);
+  assert.doesNotMatch(app, /allowTransparency/);
+  assert.match(app, /<Box ref=\{setTerminalContainer\} flex="1" minH="0" minW="0" px="2" py="1" bg="bg"/);
 });
 
 test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing stays blocked', () => {
