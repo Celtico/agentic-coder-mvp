@@ -28,7 +28,7 @@ import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneIcon, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
-import { appendDictation, silentNotice, createLatestQueue, isSilent, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64, wavLevel } from './dictation';
+import { appendDictation, createLatestQueue, isSilent, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64, wavLevel } from './dictation';
 import { imageProblem, isImageFile, prepareImage, withoutImageNote, type ChatImage } from './image-attachments';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
@@ -430,7 +430,6 @@ export function App(): React.JSX.Element {
   // Aprenentatge local › Gestiona els models: the list, the model being removed, the add dialog and the download.
   // Avaluació › Comparativa: the run shown per model (its id, or «all»); unset, the newest complete one.
   const [comparisonChoice, setComparisonChoice] = useState<Record<string, string>>({});
-  const microphoneLabelRef = useRef<string | null>(null);
   const [managed, setManaged] = useState<ManagedModels | null>(null);
   const [modelToRemove, setModelToRemove] = useState<ManagedModel | null>(null);
   const [modelAdd, setModelAdd] = useState<{ repo: string; label: string; check?: Awaited<ReturnType<typeof window.agentic.checkModelRepository>>; busy?: boolean } | null>(null);
@@ -969,8 +968,6 @@ export function App(): React.JSX.Element {
       // Live when it can be (a warm Whisper, text while you speak); otherwise the text comes when you stop.
       const live = await window.agentic.startLiveDictation?.().catch(() => ({ live: false, reason: '' })) ?? { live: false, reason: '' };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // The microphone in use, by name, for the notice if the recording comes out silent.
-      microphoneLabelRef.current = stream.getAudioTracks()[0]?.label || null;
       const recorder = new MediaRecorder(stream);
       const chunks: Blob[] = [];
       // Partial passes over the audio so far, one at a time; the newest replaces one that waits.
@@ -1016,7 +1013,7 @@ export function App(): React.JSX.Element {
         if (live) void window.agentic.stopLiveDictation?.();
         // Which setting to change: macOS's answer for the microphone and the app it counts (src/electron/dictation.cjs).
         const microphone = await window.agentic.microphoneStatus?.().catch(() => null);
-        setStatus(silentNotice({ device: microphoneLabelRef.current, status: microphone?.status, launcher: microphone?.launcher }));
+        setStatus(microphone?.notice || 'No arriba so del micròfon: comprova el dispositiu d’entrada i el permís del micròfon (Configuració del Sistema › Privadesa i seguretat › Micròfon).');
         return;
       }
       const audio = { data: toBase64(wav) };

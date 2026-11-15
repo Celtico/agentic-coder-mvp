@@ -94,8 +94,8 @@ export interface AgenticBridge {
   dictationInfo(): Promise<{ preferences: DictationPreferences; languages: DictationPreferences['language'][]; models: { id: string; label: string; repo: string; bytes: number; installed: boolean }[] }>;
   setDictationPreferences(change: Partial<DictationPreferences>): Promise<DictationPreferences>;
   askMicrophone(): Promise<boolean>;
-  /** Why a recording came out silent: macOS's answer for the microphone and the app it belongs to. */
-  microphoneStatus(): Promise<{ status: string; launcher: string | null }>;
+  /** Why a recording came out silent: macOS's answer for the microphone, the app it belongs to, and the notice. */
+  microphoneStatus(): Promise<{ status: string; launcher: string | null; notice: string }>;
   transcribe(audio: { data: string }): Promise<{ text: string }>;
   /** Live dictation (a warm Whisper while the user speaks); not live when the chat is answering, with the reason. */
   startLiveDictation?(): Promise<{ live: boolean; reason?: string }>;

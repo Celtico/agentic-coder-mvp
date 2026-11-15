@@ -1747,7 +1747,7 @@ ipcMain.handle('dictation:microphone-status', async () => {
     status: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
     launcher: app.isPackaged ? null : dictation.launcherName(process.env.TERM_PROGRAM, process.env.__CFBundleIdentifier),
   };
-  return state;
+  return { ...state, notice: dictation.silentRecordingNotice(state) };
 });
 // macOS asks the user once for the microphone; the answer is the system's.
 ipcMain.handle('dictation:microphone', async () => process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true);
