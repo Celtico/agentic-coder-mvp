@@ -22,7 +22,9 @@ export type BenchmarkList = { runs: { id: string; at: string; model: string; ada
 export type BenchmarkTurn = { input: { role: string; content: string } | null; output: string; seconds: number };
 export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
 export type TrainingProgress = { step: string; message: string; progress?: number; published?: boolean; modelId?: string };
-export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string; task?: string; sessionTurns?: { role: 'user' | 'assistant'; content: string }[] };
+/** A verified case written by hand in Aprenentatge local › Dades preparades. */
+export type ManualCase = { task: string; prompt: string; answer: string; evidence: string };
+export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string; task?: string; sessionTurns?: { role: 'user' | 'assistant'; content: string }[]; source?: 'manual' };
 export type GitSnapshot = { available: boolean; reason?: string; branch?: string; localBranches?: string[]; remotes?: string[]; status?: string; stagedDiff?: string; unstagedDiff?: string; truncated?: boolean };
 export type GitCommit = { hash: string; shortHash: string; subject: string; author: string; email: string; date: string; decorations: string };
 export type GitBranch = { name: string; hash: string; current: boolean; remote: boolean };
@@ -31,7 +33,7 @@ export type GitCommitDetails = GitCommit & { files: { status: string; path: stri
 export type DeletedBackup = { id: string; path: string; bytes: number; deletedAt: string; mode: number };
 export type ProjectFileHistoryVersion = { id: string; path: string; bytes: number; savedAt: string; label: string; sha256: string; content?: string; mode?: number };
 export type TrainingDatasetPreview = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splitCounts: { train: number; validation: number; test: number }; trainingReady: boolean };
-export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string };
+export type LearningCase = { id: string; at: string | null; model: string | null; task: string; evidence: string; turns: number; steps: number; withoutToolSteps: boolean; editedAt?: string; source?: 'manual' };
 export type LearningCaseDetail = LearningCase & { prompt: string; answer: string; requests: { request: string; answer: string; steps: { name: string; ok: boolean; arguments: Record<string, string>; result: string }[] }[] };
 export type AgentPreferences = { answerTokens: number; maxIterations: number; historyMessages: number; review: boolean; webSearch: boolean };
 export type DictationPreferences = { model: string; language: 'auto' | 'ca' | 'es' | 'en' };
@@ -94,6 +96,8 @@ export interface AgenticBridge {
   restoreChatSession(id: string): Promise<ChatSession | null>;
   emptyChatTrash(): Promise<number>;
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
+  /** What is wrong with each field of a case written by hand; empty when it can be saved. */
+  validateManualCase(value: ManualCase): Promise<Partial<Record<keyof ManualCase, string>>>;
   startBenchmark(request: { repeat: 1 | 2; tasks?: string[] }): Promise<{ started: boolean; id: string }>;
   cancelBenchmark(): Promise<{ cancelled: boolean }>;
   benchmarkStatus(): Promise<{ running: boolean; model?: string; current?: BenchmarkCurrent | null }>;

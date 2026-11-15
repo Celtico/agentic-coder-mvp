@@ -1242,9 +1242,16 @@ ipcMain.handle('chat-store:deleted', () => getChatStore().listDeleted());
 ipcMain.handle('chat-store:restore', (_event, id) => getChatStore().restore(id));
 ipcMain.handle('chat-store:empty-trash', () => getChatStore().emptyTrash());
 
+ipcMain.handle('learning:validate-manual-case', (_e, value) => learningCases.validateManualCase(value).errors);
 ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
   if (!selectedProject) throw new Error('Primer obre un projecte.');
   if (!value || typeof value !== 'object') throw new Error('El cas d’aprenentatge no és vàlid.');
+  // A case written by hand: every field is required and checked (src/electron/learning-cases.cjs).
+  if (value.source === 'manual') {
+    const { errors } = learningCases.validateManualCase(value);
+    const first = Object.values(errors)[0];
+    if (first) throw new Error(first);
+  }
   const { prompt, answer, projectPath, evidence } = value;
   const task = typeof value.task === 'string' && value.task.trim() ? value.task.trim().slice(0, 4000) : prompt;
   if ([prompt, answer, projectPath, evidence].some((item) => typeof item !== 'string') || !prompt.trim() || !answer.trim() || !evidence.trim()) {
@@ -1268,7 +1275,8 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
 
     // The whole chat up to this answer, with the tool steps of every answer the app still remembers.
     const session = buildSessionTrajectory(Array.isArray(value.sessionTurns) ? value.sessionTurns : [{ role: 'user', content: prompt }, { role: 'assistant', content: answer }], (text) => recentTrajectories.get(trajectoryKey(text)));
-    const record = { id, at: new Date().toISOString(), projectPath: root, model: (await currentModel()).modelId, prompt, answer, evidence, task, ...(session ? { trajectory: session } : {}), verification: 'user-confirmed' };
+    // `source: 'manual'`: written by hand in Aprenentatge local (no chat behind it); it trains like any other.
+    const record = { id, at: new Date().toISOString(), projectPath: root, model: (await currentModel()).modelId, prompt, answer, evidence, task, ...(session ? { trajectory: session } : {}), verification: 'user-confirmed', ...(value.source === 'manual' ? { source: 'manual' } : {}) };
     await fs.appendFile(filePath, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 });
     await fs.chmod(filePath, 0o600);
     return { id, saved: true };

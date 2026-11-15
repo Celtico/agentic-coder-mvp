@@ -74,7 +74,27 @@ function summarizeCase(record) {
     steps,
     withoutToolSteps: steps === 0,
     ...(typeof record.editedAt === 'string' ? { editedAt: record.editedAt } : {}),
+    ...(record.source === 'manual' ? { source: 'manual' } : {}),
   };
+}
+
+/** The limits of a case, the same for one saved from the chat and one written by hand. */
+const CASE_LIMITS = { task: 4000, prompt: 12000, answer: 30000, evidence: 4000 };
+const SECRET_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b/i;
+
+/**
+ * A case written by hand in Aprenentatge local › Dades preparades › Crea: each field checked, with what is
+ * wrong with it in the window's words (empty, too long, a credential in it). No errors: `errors` is empty.
+ */
+function validateManualCase(value) {
+  const fields = { task: str(value?.task).trim(), prompt: str(value?.prompt).trim(), answer: str(value?.answer).trim(), evidence: str(value?.evidence).trim() };
+  const errors = {};
+  for (const [name, text] of Object.entries(fields)) {
+    if (!text) errors[name] = 'Cal omplir aquest camp.';
+    else if (text.length > CASE_LIMITS[name]) errors[name] = `Massa llarg: com a màxim ${CASE_LIMITS[name]} caràcters.`;
+    else if (SECRET_PATTERN.test(text)) errors[name] = 'Sembla que conté una credencial: treu-la abans de desar.';
+  }
+  return { fields, errors };
 }
 
 /** The saved cases, newest first. Lines that are not a readable case are counted, not shown. */
@@ -150,4 +170,4 @@ async function deleteCase(filePath, deletedPath, id) {
   });
 }
 
-module.exports = { validCaseId, withCasesLock, listCases, readCase, updateCase, deleteCase, summarizeCase };
+module.exports = { validCaseId, withCasesLock, listCases, readCase, updateCase, deleteCase, summarizeCase, validateManualCase, CASE_LIMITS, SECRET_PATTERN };

@@ -4,9 +4,9 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
-  Accordion, useChakraContext, Badge, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
+  Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
@@ -432,6 +432,10 @@ export function App(): React.JSX.Element {
   // The saved verified cases, as the learning panel lists them, and the case being edited, deleted or read.
   const [learningCases, setLearningCases] = useState<{ cases: LearningCase[]; unreadable: number } | null>(null);
   const [caseEdit, setCaseEdit] = useState<{ id: string; task: string; evidence: string } | null>(null);
+  // A case written by hand (Dades preparades › Crea): its fields, what is wrong with each, and saving.
+  const [manualCase, setManualCase] = useState<ManualCase | null>(null);
+  const [manualCaseErrors, setManualCaseErrors] = useState<Partial<Record<keyof ManualCase | 'form', string>>>({});
+  const [manualCaseBusy, setManualCaseBusy] = useState(false);
   const [caseToDelete, setCaseToDelete] = useState<LearningCase | null>(null);
   const [caseDetail, setCaseDetail] = useState<LearningCaseDetail | null>(null);
   const [caseBusy, setCaseBusy] = useState<string | null>(null);
@@ -1208,6 +1212,24 @@ export function App(): React.JSX.Element {
     finally { setTestsBusy(false); }
   }
 
+  async function saveManualCase() {
+    if (!manualCase || manualCaseBusy) return;
+    if (!project) { setManualCaseErrors({ form: 'Selecciona primer un projecte.' }); return; }
+    setManualCaseBusy(true);
+    try {
+      const errors = await window.agentic.validateManualCase(manualCase);
+      setManualCaseErrors(errors);
+      if (Object.keys(errors).length) return;
+      const result = await window.agentic.recordVerifiedExperience({ ...manualCase, projectPath: project.path, source: 'manual', sessionTurns: [{ role: 'user', content: manualCase.prompt }, { role: 'assistant', content: manualCase.answer }] });
+      if (!result.saved) { setManualCaseErrors({ form: 'Aquest cas ja hi és: no s’ha desat dues vegades.' }); return; }
+      setManualCase(null);
+      setStatus('Cas desat: comptarà per a la propera beta.');
+      void refreshLearningCounts();
+    } catch (error) {
+      setManualCaseErrors({ form: errorText(error) });
+    } finally { setManualCaseBusy(false); }
+  }
+
   async function saveVerifiedExperience() {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
     if (!verifiedExperienceDraft || !verifiedEvidence.trim() || verifiedExperienceBusy) return;
@@ -1772,7 +1794,8 @@ export function App(): React.JSX.Element {
                   <HStack gap="1.5" flexWrap="wrap">
                     <Text fontSize="2xs" color="fg.muted">{item.at && !Number.isNaN(Date.parse(item.at)) ? new Date(item.at).toLocaleString() : 'Sense data'}{item.model ? ` · ${item.model}` : ''}</Text>
                     <Badge size="sm" variant="subtle">{item.turns} {item.turns === 1 ? 'petició' : 'peticions'} · {item.steps} {item.steps === 1 ? 'pas' : 'passos'}</Badge>
-                    {item.withoutToolSteps && <Badge size="sm" variant="subtle" colorPalette="yellow" title="No té cap pas d’eina: només hi ha la petició i la resposta.">Sense passos d’eina</Badge>}
+                    {item.source === 'manual' && <Badge size="sm" variant="subtle" colorPalette="blue" title="Escrit a mà a Dades preparades › Crea un cas.">manual</Badge>}
+                    {item.withoutToolSteps && item.source !== 'manual' && <Badge size="sm" variant="subtle" colorPalette="yellow" title="No té cap pas d’eina: només hi ha la petició i la resposta.">Sense passos d’eina</Badge>}
                     {item.editedAt && <Badge size="sm" variant="outline">Editat</Badge>}
                   </HStack>
                 </Stack>
@@ -1791,6 +1814,8 @@ export function App(): React.JSX.Element {
           <Accordion.Item value="data">
             <Accordion.ItemTrigger>{rowHeader('Dades preparades', datasetPreview.counts.included, FileText)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="3">
+              {/* A case written by hand, with the four fields of a verified case. */}
+              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
               <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
                 <Stat label="Examinats" value={datasetPreview.counts.input}/>
                 <Stat label="Preparats" value={datasetPreview.counts.included}/>
@@ -2313,6 +2338,39 @@ export function App(): React.JSX.Element {
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</ChakraButton>
               <ChakraButton size="sm" colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</ChakraButton>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    {/* Dades preparades › Crea un cas: a verified case written by hand, with the four fields of one. */}
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={manualCase !== null} onOpenChange={({ open }) => { if (!open && !manualCaseBusy) setManualCase(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content maxW="xl">
+            <DialogHeading icon={Plus} title="Crea un cas" subtitle="Compta per a la propera beta com qualsevol cas desat"/>
+            <Dialog.Body>
+              <Stack gap="4">
+                {([
+                  ['task', 'Què es demana', 'Per exemple: afegir un botó de Chakra a App.tsx', 2, 4000],
+                  ['prompt', 'El missatge de l’usuari', 'El que l’usuari escriu al xat', 3, 12000],
+                  ['answer', 'La resposta bona', 'La resposta que hauria de donar el model', 8, 30000],
+                  ['evidence', 'Per què és bona', 'build ok, prova…', 2, 4000],
+                ] as const).map(([name, label, placeholder, rows, max], index) => (
+                  <Field.Root key={name} required invalid={Boolean(manualCaseErrors[name])}>
+                    <Field.Label>{label}<Field.RequiredIndicator/></Field.Label>
+                    <Textarea {...(index === 0 ? { 'data-initial-focus': true } : {})} rows={rows} maxLength={max} placeholder={placeholder} fontFamily={name === 'answer' ? 'mono' : undefined} fontSize={name === 'answer' ? 'xs' : undefined}
+                      value={manualCase?.[name] ?? ''} onChange={(event) => { const text = event.target.value; setManualCase((current) => current && { ...current, [name]: text }); setManualCaseErrors((current) => ({ ...current, [name]: undefined, form: undefined })); }}/>
+                    {manualCaseErrors[name] && <Field.ErrorText>{manualCaseErrors[name]}</Field.ErrorText>}
+                  </Field.Root>
+                ))}
+                {manualCaseErrors.form && <Notice tone="warning">{manualCaseErrors.form}</Notice>}
+              </Stack>
+            </Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" disabled={manualCaseBusy} onClick={() => setManualCase(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="agentic" disabled={manualCaseBusy} onClick={() => void saveManualCase()}>{manualCaseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>

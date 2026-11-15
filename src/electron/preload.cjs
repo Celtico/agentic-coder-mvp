@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('agentic', {
   restoreChatSession: (id) => ipcRenderer.invoke('chat-store:restore', id),
   emptyChatTrash: () => ipcRenderer.invoke('chat-store:empty-trash'),
   recordVerifiedExperience: (experience) => ipcRenderer.invoke('learning:record-verified-experience', experience),
+  validateManualCase: (value) => ipcRenderer.invoke('learning:validate-manual-case', value),
   learningDatasetPreview: () => ipcRenderer.invoke('learning:dataset-preview'),
   prepareLearningDataset: () => ipcRenderer.invoke('learning:prepare-dataset'),
   listLearningCases: () => ipcRenderer.invoke('learning:cases-list'),

@@ -136,3 +136,29 @@ test('changes and appends on the same file run one after another, so none is los
   const { cases } = await listCases(filePath);
   assert.deepEqual(cases.map((item) => item.task).sort(), ['Tasca five', 'Tasca four', 'primer', 'tercer']);
 });
+
+test('a case written by hand: every field required, the same limits and the same credential check as a saved one', () => {
+  const cases = require('./learning-cases.cjs');
+  const good = { task: 'Afegir un botó de Chakra', prompt: 'posa un Button a App.tsx', answer: 'import { Button } from "@chakra-ui/react"', evidence: 'build ok' };
+  assert.deepEqual(cases.validateManualCase(good).errors, {});
+  assert.deepEqual(cases.validateManualCase(good).fields, good);
+  assert.deepEqual(Object.keys(cases.validateManualCase({ ...good, prompt: '  ', evidence: '' }).errors).sort(), ['evidence', 'prompt']);
+  assert.match(cases.validateManualCase({ ...good, answer: 'x'.repeat(30001) }).errors.answer, /Massa llarg: com a màxim 30000/);
+  assert.match(cases.validateManualCase({ ...good, answer: 'clau ghp_abcdefghijklmnopqrstuvwxyz0123' }).errors.answer, /credencial/);
+  assert.equal(Object.keys(cases.validateManualCase(null).errors).length, 4);
+});
+
+test('a manual case is saved as a verified case marked «manual», and listed as such', async (t) => {
+  const cases = require('./learning-cases.cjs');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-manual-case-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'verified-experiences.jsonl');
+  const record = { id: 'b'.repeat(64), at: '2026-11-15T09:40:00Z', prompt: 'posa un Button', answer: 'fet', evidence: 'build ok', task: 'Botó', verification: 'user-confirmed', source: 'manual' };
+  await fs.writeFile(file, JSON.stringify(record) + '\n');
+  const listed = await cases.listCases(file);
+  assert.equal(listed.cases[0].source, 'manual');
+  // The main process accepts it through the same handler as «Desa com a cas verificat», with the checks first.
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /if \(value\.source === 'manual'\) \{\n\s*const \{ errors \} = learningCases\.validateManualCase\(value\);/);
+  assert.match(main, /verification: 'user-confirmed', \.\.\.\(value\.source === 'manual' \? \{ source: 'manual' \} : \{\}\) \};/);
+});
