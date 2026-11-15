@@ -516,6 +516,14 @@ function stopProjectProcess() {
 const llmTrace = { open: false, logprobs: false };
 const llmCallsLog = () => path.join(app.getPath('userData'), 'logs', 'llm-calls.jsonl');
 const sendLlmTrace = () => { if (modelWorker?.connected) modelWorker.send({ type: 'llm-trace', on: llmTrace.open, logprobs: llmTrace.logprobs, file: llmCallsLog() }); };
+// Preferències › Aparença › Fons general: «Translúcid» shows the desktop through the window behind the
+// panels (macOS vibrancy, like the Finder's sidebar); «Opac» is the window as it always was. Live, no restart.
+ipcMain.handle('window:set-translucent', async (_event, on) => {
+  if (process.platform !== 'darwin' || !win || win.isDestroyed()) return false;
+  win.setVibrancy(on === true ? 'sidebar' : null);
+  win.setBackgroundColor(on === true ? '#00000000' : '#171717');
+  return on === true;
+});
 ipcMain.handle('llm:set', async (_event, change) => {
   if (typeof change?.open === 'boolean') llmTrace.open = change.open;
   if (typeof change?.logprobs === 'boolean') llmTrace.logprobs = change.logprobs;
@@ -726,6 +734,9 @@ function createWindow() {
     // On macOS the app draws its own title bar; the three window buttons stay where they are.
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 11 } } : {}),
     backgroundColor: '#171717',
+    // Preferències › Aparença › Fons general «Translúcid» turns on the vibrancy (window:set-translucent);
+    // «active» keeps it when the window is not in front.
+    ...(process.platform === 'darwin' ? { visualEffectState: 'active' } : {}),
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true }
   });

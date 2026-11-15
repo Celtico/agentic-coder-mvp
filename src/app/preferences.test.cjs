@@ -17,12 +17,12 @@ fs.rmSync(dir, { recursive: true, force: true });
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the default appearance is the app as it was: dark, normal sizes, its own green', () => {
-  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', paneBg: 'bg.panel', dialogs: 'glass' });
+  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', paneBg: 'bg.panel', dialogs: 'glass', windowBg: 'opaque' });
 });
 
 test('a saved appearance keeps only valid values', () => {
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid' });
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon', paneStyle: 'glass', dialogs: 'frosted' }), prefs.defaultAppearance());
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid', windowBg: 'translucent' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid', windowBg: 'translucent' });
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon', paneStyle: 'glass', dialogs: 'frosted', windowBg: 'glass' }), prefs.defaultAppearance());
   assert.deepEqual(prefs.normalizeAppearance(null), prefs.defaultAppearance());
 });
 
@@ -39,7 +39,7 @@ test('«system» follows the operating system; sizes move one step and stay in t
 test('the appearance is kept with the view state', () => {
   const storage = memoryStorage();
   view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', paneBg: 'bg.subtle', dialogs: 'solid' }; });
-  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', paneBg: 'bg.subtle', dialogs: 'solid' });
+  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', paneBg: 'bg.subtle', dialogs: 'solid', windowBg: 'opaque' });
   assert.deepEqual(view.loadViewState(memoryStorage()).appearance, prefs.defaultAppearance());
 });
 
@@ -142,4 +142,18 @@ test('every colour of the app is Chakra’s: no fg, border or surface of our own
 test('no shadow of our own: the chat’s message box has none, and only Chakra’s recipes bring theirs', () => {
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   assert.doesNotMatch(app, /boxShadow=|shadow="/);
+});
+
+test('Fons general: opaque by default; translucent turns the canvas into Chakra’s transparent and the window’s vibrancy on, live', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /if \(translucent\) \{ root\.style\.setProperty\('--chakra-colors-canvas', 'transparent'\); root\.dataset\.translucent = ''; \}/);
+  assert.match(app, /void window\.agentic\.setTranslucent\?\.\(translucent\)/);
+  assert.match(app, /items=\{\[\{ value: 'opaque', label: 'Opac' \}, \{ value: 'translucent', label: 'Translúcid' \}\]\}/);
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+  assert.match(main, /win\.setVibrancy\(on === true \? 'sidebar' : null\);\n\s*win\.setBackgroundColor\(on === true \? '#00000000' : '#171717'\);/);
+  assert.match(main, /visualEffectState: 'active'/);
+  const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
+  assert.match(theme, /"html\[data-translucent\], html\[data-translucent\] body": \{ bg: "transparent" \}/);
 });

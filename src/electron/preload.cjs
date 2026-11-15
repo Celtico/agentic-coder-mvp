@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('agentic', {
   setPermissionMode: (mode) => ipcRenderer.invoke('permissions:set', mode),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
+  setTranslucent: (on) => ipcRenderer.invoke('window:set-translucent', on),
   setLlmTrace: (change) => ipcRenderer.invoke('llm:set', change),
   listLlmCalls: () => ipcRenderer.invoke('llm:list'),
   clearLlmCalls: () => ipcRenderer.invoke('llm:clear'),

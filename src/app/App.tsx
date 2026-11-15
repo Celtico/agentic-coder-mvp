@@ -342,6 +342,15 @@ export function App(): React.JSX.Element {
     if (appearance.paneBg !== 'bg') root.setProperty('--chakra-colors-bg', ref(appearance.paneBg));
     root.setProperty('--chakra-colors-bg-panel', ref(appearance.paneBg));
   }, [appearance.paneBg]);
+  // Fons general «Translúcid»: the canvas behind the panels becomes Chakra's «transparent» and the window
+  // shows the macOS vibrancy through it; the panels keep their own background.
+  useEffect(() => {
+    const translucent = appearance.windowBg === 'translucent';
+    const root = document.documentElement;
+    if (translucent) { root.style.setProperty('--chakra-colors-canvas', 'transparent'); root.dataset.translucent = ''; }
+    else { root.style.removeProperty('--chakra-colors-canvas'); delete root.dataset.translucent; }
+    void window.agentic.setTranslucent?.(translucent)?.catch(() => {});
+  }, [appearance.windowBg]);
   const paneSurface = appearance.paneBg !== 'bg.panel' ? appearance.paneBg : appearance.paneStyle === 'elevated' ? 'bg.panel' : 'bg';
   const setAccent = useSetAccent();
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true);
@@ -2888,6 +2897,12 @@ export function App(): React.JSX.Element {
                       })}
                     </Grid>
                     <Text mt="1" fontSize="xs" color="fg.muted">Els tokens de fons de Chakra; s’aplica a tots els panells, també al xat i al terminal.</Text>
+                    {/* The window's own background, around the panels, the bar and the title: opaque or see-through. */}
+                    <Text mt="4" mb="1.5" fontSize="sm" fontWeight="medium">Fons general</Text>
+                    <SegmentGroup.Root size="sm" value={appearance.windowBg} onValueChange={({ value }) => { if (value === 'opaque' || value === 'translucent') setAppearance((current) => ({ ...current, windowBg: value })); }}>
+                      <SegmentGroup.Indicator/><SegmentGroup.Items items={[{ value: 'opaque', label: 'Opac' }, { value: 'translucent', label: 'Translúcid' }]}/>
+                    </SegmentGroup.Root>
+                    <Text mt="1" fontSize="xs" color="fg.muted">Translúcid: al voltant dels panells es veu l’escriptori difuminat (macOS). Els panells continuen opacs.</Text>
                     </Accordion.ItemBody></Accordion.ItemContent>
                   </Accordion.Item>
                   <Accordion.Item value="dialogs">

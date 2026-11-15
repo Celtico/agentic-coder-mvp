@@ -103,6 +103,7 @@ export interface AgenticBridge {
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
+  setTranslucent(on: boolean): Promise<boolean>;
   setLlmTrace(change: { open?: boolean; logprobs?: boolean }): Promise<{ open: boolean; logprobs: boolean }>;
   listLlmCalls(): Promise<{ calls: unknown[] }>;
   clearLlmCalls(): Promise<{ calls: [] }>;

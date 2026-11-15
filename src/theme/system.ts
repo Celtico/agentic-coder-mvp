@@ -9,6 +9,8 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
     "html, body, #root": { height: "100%", width: "100%", margin: 0, overflow: "hidden" },
     // Colours, fonts, box sizing… are Chakra's own (its globalCss and preflight); only the app's layout here.
     "webview": { display: "flex" },
+    // Fons general «Translúcid» (src/app/App.tsx): nothing paints over the window's vibrancy.
+    "html[data-translucent], html[data-translucent] body": { bg: "transparent" },
     // The app's own title bar on macOS: the part marked data-drag-region moves the window.
     // (an Electron property, not in Chakra's style types).
     "[data-drag-region]": { WebkitAppRegion: "drag" } as unknown as SystemStyleObject,
