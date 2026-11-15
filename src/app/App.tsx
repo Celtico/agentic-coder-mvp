@@ -1817,7 +1817,7 @@ export function App(): React.JSX.Element {
                 </HStack>
               </HStack>;
   const learningPane = (
-    <Box h="full" minH="0" p="3" bg="bg" overflowY="auto"><Stack gap="3">
+    <Box h="full" minH="0" p="3" overflowY="auto" scrollbarGutter="stable"><Stack gap="3">
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
@@ -2167,7 +2167,7 @@ export function App(): React.JSX.Element {
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
       case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>} toolbar={evaluationToolbar}>
-        <Box flex="1" minH="0" overflowY="auto" pt="1" px="3" pb="3">{evaluationPane}</Box>
+        <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" pt="1" px="3" pb="3">{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
