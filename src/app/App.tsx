@@ -26,7 +26,7 @@ import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneIcon, PaneStyleContext
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, createLatestQueue, isSilent, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64, wavLevel } from './dictation';
-import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image-attachments';
+import { imageProblem, isImageFile, prepareImage, withoutImageNote, type ChatImage } from './image-attachments';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
@@ -1704,10 +1704,13 @@ export function App(): React.JSX.Element {
           return <Box key={`${index}-${message.role}`} textStyle="chatMessage" fontSize={appearance.chatFontSize} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'bg.muted' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
-              : message.text}
+              : <>
+                {/* The images first, as a preview of each, then what was asked about them. */}
+                {message.images && message.images.length > 0 && <Flex wrap="wrap" justify="flex-end" gap="2" mb="2">{message.images.map((image, imageIndex) => <Image key={imageIndex} src={image.thumbnail} alt={image.name} title={image.name} maxH="60" maxW="full" objectFit="contain" borderRadius="lg"/>)}</Flex>}
+                {message.images?.length ? withoutImageNote(message.text) : message.text}
+              </>}
             {/* The reviewer's note: the app's, under the answer, never part of what is sent to the model. */}
             {message.review && <Text mt="2" fontSize="xs" color="fg.muted" data-review-note>{message.review}</Text>}
-            {message.images && message.images.length > 0 && <Flex wrap="wrap" gap="2" mt="2">{message.images.map((image, imageIndex) => <Image key={imageIndex} src={image.thumbnail} alt={image.name} title={image.name} maxH="32" maxW="48" objectFit="contain" borderRadius="md" borderWidth="1px" borderColor="border"/>)}</Flex>}
             {previousUser && !isWindowNotice(message) && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !isWindowNotice(item) && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;
         })}</Stack>}

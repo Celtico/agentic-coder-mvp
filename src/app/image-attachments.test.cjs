@@ -37,10 +37,18 @@ test('an image is sent at about 1.5 MP at most, with its shape; small ones keep 
 });
 
 test('the chat keeps a thumbnail of 160 px at most, and PNG stays PNG', () => {
-  assert.deepEqual(images.thumbnailSize(1600, 900), { width: 160, height: 90 });
-  assert.deepEqual(images.thumbnailSize(900, 1600), { width: 90, height: 160 });
+  assert.deepEqual(images.thumbnailSize(1600, 900), { width: 480, height: 270 });
+  assert.deepEqual(images.thumbnailSize(900, 1600), { width: 270, height: 480 });
   assert.deepEqual(images.thumbnailSize(100, 50), { width: 100, height: 50 });
   assert.equal(images.outputType('image/png'), 'image/png');
   assert.equal(images.outputType('image/webp'), 'image/jpeg');
   assert.equal(images.outputType('image/jpeg'), 'image/jpeg');
+});
+
+test('a message with images shows each image above its text, without the «[Imatges adjuntes: …]» line the model keeps', () => {
+  assert.equal(images.withoutImageNote('disme què surt?\n\n[Imatges adjuntes: a.png, b.png]'), 'disme què surt?');
+  assert.equal(images.withoutImageNote('[Imatges adjuntes] no és la nota'), '[Imatges adjuntes] no és la nota');
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /\{message\.images\?\.length \? withoutImageNote\(message\.text\) : message\.text\}/);
+  assert.match(app, /<Image key=\{imageIndex\} src=\{image\.thumbnail\} alt=\{image\.name\} title=\{image\.name\} maxH="60" maxW="full" objectFit="contain" borderRadius="lg"\/>/);
 });

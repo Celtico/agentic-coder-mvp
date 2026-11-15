@@ -8,7 +8,7 @@ export const MAX_IMAGE_INPUT_BYTES = 20_000_000
 export const MAX_IMAGES = 4
 /** About 1.5 MP: enough for a screenshot to be read, and it keeps the image tokens and memory in check. */
 export const MAX_IMAGE_PIXELS = 1_500_000
-export const THUMBNAIL_EDGE = 160
+export const THUMBNAIL_EDGE = 480
 
 export type ChatImage = { id: string; name: string; mime: string; data: string; width: number; height: number; thumbnail: string }
 
@@ -61,4 +61,10 @@ export async function prepareImage(file: File): Promise<ChatImage> {
     const thumbnail = await draw(bitmap, thumbnailSize(bitmap.width, bitmap.height), "image/jpeg", 0.8)
     return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: file.name || `imatge.${IMAGE_TYPES[type]}`, mime: type, data: dataUrl.slice(dataUrl.indexOf(",") + 1), width: size.width, height: size.height, thumbnail }
   } finally { bitmap.close() }
+}
+
+/** What the chat shows of a message with images: its text without the «[Imatges adjuntes: …]» line, which
+ * stays in the conversation for the model (the images themselves are shown above the text). */
+export function withoutImageNote(text: string): string {
+  return text.replace(/\n*\[Imatges adjuntes: [^\]\n]*\]\s*$/, "")
 }
