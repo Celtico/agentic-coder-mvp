@@ -18,7 +18,11 @@ const PANE_ACCORDION = "pane" as unknown as "plain"
 const mono = { fontFamily: "mono", fontSize: "xs", whiteSpace: "pre-wrap", overflowWrap: "anywhere", bg: "bg.subtle", borderRadius: "md", px: "2", py: "1.5", maxH: "80", ...scrollArea } as const
 const number = (value: number | null | undefined, suffix = "") => value === null || value === undefined ? "—" : `${value.toLocaleString("ca")}${suffix}`
 const sourcePalette = (source: string) => source === "revisor" ? "purple" : source.startsWith("avalua") || source.startsWith("benchmark") ? "orange" : source === "agent delegat" ? "blue" : "agentic"
-const errorMessage = (error: unknown) => error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(error)
+// A window reloaded (⌘R) over an app started before this panel existed: its main process has no log yet.
+const errorMessage = (error: unknown) => {
+  const text = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(error)
+  return /No handler registered/.test(text) ? "Aquest panell necessita l’app reiniciada (⌘Q i npm start): l’app oberta és d’abans del log." : text
+}
 
 /** A token coloured by how sure the model was of it; the five likeliest at that step on hover. */
 const confidence = (p: number) => p >= 0.9 ? {} : p >= 0.5 ? { bg: "yellow.subtle", color: "yellow.fg" } : { bg: "red.subtle", color: "red.fg" }
@@ -90,11 +94,11 @@ export function LlmLogPane() {
   const [error, setError] = useState("")
   const [confirmClear, setConfirmClear] = useState(false)
   const reload = useCallback(async () => {
-    try { setCalls((await window.agentic.listLlmCalls()).calls as LlmCall[]); setError("") } catch (caught) { setError(errorMessage(caught)) }
+    try { setCalls((await window.agentic.listLlmCalls()).calls as LlmCall[]); setError("") } catch (caught) { setError(errorMessage(caught)); setCalls((current) => current ?? []) }
   }, [])
   // Recording is on while the panel is open, and off when it closes.
   useEffect(() => {
-    void window.agentic.setLlmTrace({ open: true }).then((state) => setLogprobs(state.logprobs))
+    void window.agentic.setLlmTrace({ open: true }).then((state) => setLogprobs(state.logprobs), () => {})
     void reload()
     const stop = window.agentic.onLlmEvent((event: LlmTraceEvent) => {
       if (event.type === "start") setLive({ id: event.id, source: event.source, model: event.model, text: "" })
@@ -126,7 +130,7 @@ export function LlmLogPane() {
         <Box {...mono}>{live.text || "…"}</Box>
       </Box>}
       {calls === null ? <HStack p="3" color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Llegint el log…</Text></HStack>
-        : !calls.length && !live ? <Text p="3" fontSize="sm" color="fg.muted">Encara no hi ha cap crida. Mentre aquest panell és obert, cada missatge del xat (i cada avaluació que comencis) queda registrat aquí.</Text>
+        : !calls.length && !live ? error ? null : <Text p="3" fontSize="sm" color="fg.muted">Encara no hi ha cap crida. Mentre aquest panell és obert, cada missatge del xat (i cada avaluació que comencis) queda registrat aquí.</Text>
         : <Accordion.Root multiple collapsible size="sm" variant={PANE_ACCORDION} lazyMount>{calls.map((call) => <Accordion.Item key={call.id} value={call.id}>
           <Accordion.ItemTrigger>
             <HStack flex="1" gap="2" minW="0">

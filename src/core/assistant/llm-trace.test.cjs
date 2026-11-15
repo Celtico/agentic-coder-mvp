@@ -124,3 +124,9 @@ test('the panel: an icon in the bar, the five views of a call, and the logprobs 
   assert.match(panel, /const \[logprobs, setLogprobs\] = useState\(false\)/);
   assert.doesNotMatch(panel, /#[0-9a-f]{3,8}\b/i, 'only Chakra tokens');
 });
+
+test('the panel over an app started before it: a clear message, not a spinner that never ends', () => {
+  const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
+  assert.match(panel, /No handler registered\/\.test\(text\) \? "Aquest panell necessita l’app reiniciada \(⌘Q i npm start\)/);
+  assert.match(panel, /catch \(caught\) \{ setError\(errorMessage\(caught\)\); setCalls\(\(current\) => current \?\? \[\]\) \}/);
+});
