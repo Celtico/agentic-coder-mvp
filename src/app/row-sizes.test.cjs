@@ -96,9 +96,15 @@ test('while a divider is dragged nothing gets selected: the row stops selecting 
   assert.match(source, /handle\.setPointerCapture\(event\.pointerId\)/);
   assert.match(source, /setDragging\(id\)\n\s*window\.getSelection\(\)\?\.removeAllRanges\(\)/);
   assert.match(source, /userSelect=\{dragging \? "none" : undefined\}/);
-  assert.match(source, /\{dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer\/>\}/);
+  assert.match(source, /\{dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer/);
   // And it all goes back when the drag ends or is cancelled.
-  assert.match(source, /handle\.removeEventListener\("pointercancel", end\)\n\s*if \(handle\.hasPointerCapture\(event\.pointerId\)\) handle\.releasePointerCapture\(event\.pointerId\)\n\s*setDragging\(null\)/);
+  assert.match(source, /if \(handle\.hasPointerCapture\(event\.pointerId\)\) handle\.releasePointerCapture\(event\.pointerId\)\n\s*setDragging\(null\)/);
+  // It ends however the pointer is let go, once: on the divider, in the window, on losing the capture or the focus.
+  for (const [target, name] of [['handle', 'pointerup'], ['handle', 'pointercancel'], ['handle', 'lostpointercapture'], ['window', 'pointerup'], ['window', 'blur']]) {
+    assert.ok(source.includes(`${target}.addEventListener("${name}", end)`) && source.includes(`${target}.removeEventListener("${name}", end)`), `${target} ${name}`);
+  }
+  assert.match(source, /if \(ended\) return\n\s*ended = true/);
+  assert.match(source, /data-pane-drag-layer onPointerUp=\{\(\) => setDragging\(null\)\}/, 'the layer itself never stays');
   // Not dragging: no layer, text can be selected.
   assert.doesNotMatch(ui.render({}), /data-pane-drag-layer/);
 });
@@ -108,4 +114,10 @@ test('the boxes of a row do not clip their pane, so a pane’s shadow shows roun
   for (const box of source.match(/<Flex key=\{item\.id\}[^\n]*|<Flex flex="none" w=[^\n]*/g)) assert.doesNotMatch(box, /overflow="hidden"/, box);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /allowTransparency: true, theme: \{ background: 'rgba\(0, 0, 0, 0\)'/);
+});
+
+test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing stays blocked', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  assert.match(source, /useEffect\(\(\) => \(\) => endDragRef\.current\?\.\(\), \[\]\)/);
+  assert.match(source, /endDragRef\.current = end\n/);
 });

@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { Box, Flex } from "@chakra-ui/react"
 import { draggedPair, paneMinWidth, paneWidth } from "./row-sizes"
 
@@ -23,6 +23,9 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   // While a divider is dragged nothing in the panes is selected: the row stops selecting text, and a
   // layer over the whole window (a webview or the terminal would take the pointer) keeps the resize cursor.
   const [dragging, setDragging] = useState<string | null>(null)
+  // The drag in progress, so it is ended (listeners off, capture released) if the row goes away mid-drag.
+  const endDragRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => endDragRef.current?.(), [])
   const flexWidth = () => rowRef.current?.querySelector<HTMLElement>("[data-pane-flex]")?.getBoundingClientRect().width ?? 0
   const flexMin = paneMinWidth(flexId)
   // The pane on the right of a pane's divider, and how wide each one is when a drag starts.
@@ -44,17 +47,31 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
       changes = pair(id, moved.clientX - startX, starts)
       onWidth(changes)
     }
+    // The drag ends however the pointer is let go: on the divider, anywhere in the window, when the
+    // divider loses the pointer or the window loses the focus. Ended once; never left half-way, which
+    // left the layer over the window and the app blocked.
+    let ended = false
     const end = () => {
+      if (ended) return
+      ended = true
+      endDragRef.current = null
       handle.removeEventListener("pointermove", move)
       handle.removeEventListener("pointerup", end)
       handle.removeEventListener("pointercancel", end)
+      handle.removeEventListener("lostpointercapture", end)
+      window.removeEventListener("pointerup", end)
+      window.removeEventListener("blur", end)
       if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
       setDragging(null)
       onCommit(changes)
     }
+    endDragRef.current = end
     handle.addEventListener("pointermove", move)
     handle.addEventListener("pointerup", end)
     handle.addEventListener("pointercancel", end)
+    handle.addEventListener("lostpointercapture", end)
+    window.addEventListener("pointerup", end)
+    window.addEventListener("blur", end)
   }
 
   const nudge = (id: string) => (event: KeyboardEvent<HTMLDivElement>) => {
@@ -66,7 +83,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
 
   return (
     <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflow="hidden" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
-      {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer/>}
+      {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer onPointerUp={() => setDragging(null)}/>}
       {items.map((item) => {
         // The panes clip their own content (their Card); these boxes do not, so a pane's shadow («amb ombra») shows round its corners.
         if (item.id === flexId) return <Flex key={item.id} flex="1" minW={`${flexMin}px`} minH="0" h="full" data-pane-flex data-pane-id={item.id}>{item.node}</Flex>
