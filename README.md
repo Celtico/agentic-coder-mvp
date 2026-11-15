@@ -1,4 +1,5 @@
-# Agentic Coder MVP (macOS Apple Silicon, 16 GB RAM)
+# Una eina per entrenar el teu propi model llm. Com més potent la teva màquina, més gran el model
+## Agentic Coder MVP (macOS Apple Silicon, 16 GB RAM)
 
 ![Agentic Coder](docs/cover.png)
 

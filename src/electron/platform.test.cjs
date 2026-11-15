@@ -97,3 +97,14 @@ print(json.dumps([a.command, a.iters, a.num_layers, a.mask_prompt, ids, labels, 
   assert.match(main, /mlxModels\.engineFor\(\) === 'mlx' \? 'mlx-locked\.py' : 'cuda-lora\.py'/);
   assert.equal((main.match(/launcher: trainingLauncher\(\)/g) || []).length, 2, 'beta and stable');
 });
+
+test('the PC’s setup: requirements, a script that builds models/.cuda-venv, and the guide', () => {
+  const requirements = read('requirements-linux.txt');
+  for (const name of ['transformers', 'accelerate', 'bitsandbytes', 'peft', 'faster-whisper', 'huggingface_hub']) assert.match(requirements, new RegExp(`^${name}>=`, 'm'), name);
+  const script = read('scripts/setup-linux.sh');
+  assert.match(script, /python3 -m venv models\/\.cuda-venv/);
+  assert.match(script, /pip install torch --index-url/);
+  assert.match(script, /pip install -r requirements-linux\.txt/);
+  const guide = read('docs/linux.md');
+  assert.match(guide, /encara no s'ha\s+> executat en un PC amb GPU NVIDIA/, 'honest about it being untested on real hardware');
+});
