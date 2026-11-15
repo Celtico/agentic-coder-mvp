@@ -1800,28 +1800,7 @@ export function App(): React.JSX.Element {
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
         : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant="enclosed" bg="bg">
-          <Accordion.Item value="cases">
-            <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
-            <Accordion.ItemContent><Accordion.ItemBody pt="0">
-              {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
-              {learningCases && <>
-            <Stack gap="1.5">
-              {learningCases.cases.map(caseRow)}
-              {!learningCases.cases.length && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas desat.</Text>}
-              {learningCases.unreadable > 0 && <Text fontSize="xs" color="fg.muted">{learningCases.unreadable} línies del registre no són un cas llegible i es deixen tal com són.</Text>}
-            </Stack>
-              </>}
-            </Accordion.ItemBody></Accordion.ItemContent>
-          </Accordion.Item>
-          {/* Dades manuals: the cases written by hand, and the button to write one (src/electron/learning-cases.cjs). */}
-          <Accordion.Item value="manual">
-            <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
-            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
-              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
-              {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
-              {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
-            </Stack></Accordion.ItemBody></Accordion.ItemContent>
-          </Accordion.Item>
+          {/* Dades preparades first: what the next beta will be trained with; then where it comes from. */}
           <Accordion.Item value="data">
             <Accordion.ItemTrigger>{rowHeader('Dades preparades', datasetPreview.counts.included, FileText)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="3">
@@ -1846,6 +1825,28 @@ export function App(): React.JSX.Element {
                 <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Desa una còpia de les dades per revisar-la; no entrena res.</Text>
               </HStack>
               <Notice tone="info">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+          <Accordion.Item value="cases">
+            <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0">
+              {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
+              {learningCases && <>
+            <Stack gap="1.5">
+              {learningCases.cases.map(caseRow)}
+              {!learningCases.cases.length && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas desat.</Text>}
+              {learningCases.unreadable > 0 && <Text fontSize="xs" color="fg.muted">{learningCases.unreadable} línies del registre no són un cas llegible i es deixen tal com són.</Text>}
+            </Stack>
+              </>}
+            </Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+          {/* Dades manuals: the cases written by hand, and the button to write one (src/electron/learning-cases.cjs). */}
+          <Accordion.Item value="manual">
+            <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
+              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
+              {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
+              {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
           <Accordion.Item value="training">

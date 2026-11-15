@@ -59,12 +59,14 @@ test('the model list has the newest beta of a base, with the base’s weights an
 
 test('Dades manuals: its own accordion with «Crea un cas» and only the cases written by hand', () => {
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
-  const manual = app.slice(app.indexOf('<Accordion.Item value="manual">'), app.indexOf('<Accordion.Item value="data">'));
+  const manual = app.slice(app.indexOf('<Accordion.Item value="manual">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="manual">')));
   assert.match(manual, /rowHeader\('Dades manuals', learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.length \?\? 0, Pencil\)/);
   assert.match(manual, /<Plus size=\{14\}\/>Crea un cas/);
   assert.match(manual, /learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.map\(caseRow\)/);
-  // Between Casos desats and Dades preparades; no «Crea» button in Dades preparades any more.
-  assert.ok(app.indexOf('<Accordion.Item value="cases">') < app.indexOf('<Accordion.Item value="manual">'));
+  // The order: Dades preparades, Casos desats, Dades manuals, Entrenament; no «Crea» in Dades preparades.
+  const order = ['data', 'cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));
+  assert.ok(order.every((index) => index > -1), String(order));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
   const data = app.slice(app.indexOf('<Accordion.Item value="data">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="data">')));
   assert.doesNotMatch(data, /Crea un cas/);
   // The open sections are remembered, «manual» too.
