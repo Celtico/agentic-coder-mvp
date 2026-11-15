@@ -265,3 +265,10 @@ test('every scrolling box shows a thin bar when it overflows: one shared style, 
   assert.match(style, /_scrollbarThumb: \{ bg: "border\.emphasized", borderRadius: "full"/);
   assert.doesNotMatch(style, /#[0-9a-f]{3,8}\b/i);
 });
+
+test('Preferències: each tab with its icon, in the colour of the panes’ header icons for the tone chosen', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  for (const [icon, label] of [['Cpu', 'Model'], ['Bot', 'Agent'], ['Brain', 'Aprenentatge'], ['Palette', 'Aparença']]) assert.match(app, new RegExp(`<PaneIcon icon=\\{${icon}\\}/>${label}</Tabs\\.Trigger>`), label);
+  const pane = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
+  assert.match(pane, /export const PaneIcon = [\s\S]*?useSlotRecipe\(\{ recipe: paneHeaderRecipe \}\)\(\{ tone: useContext\(PaneToneContext\) \}\)[\s\S]*?css=\{styles\.icon\}/);
+});

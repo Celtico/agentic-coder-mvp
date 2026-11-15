@@ -46,6 +46,12 @@ export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, 
 }
 
 /** A pane's title (icon, title, subtitle) on its own, for a bar that is not a pane header (a floating window's). */
+/** A pane header's icon on its own (a tab, a section): the same colour as in the headers, for the tone chosen. */
+export const PaneIcon = ({ icon: Icon, size = 14 }: { icon: IconType; size?: number }) => {
+  const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: useContext(PaneToneContext) })
+  return <chakra.span css={styles.icon} colorPalette="agentic" display="inline-flex" data-pane-icon><Icon size={size} aria-hidden="true"/></chakra.span>
+}
+
 export const PaneTitle = ({ icon: Icon, title, subtitle, tone }: { icon: IconType; title: string; subtitle?: ReactNode; tone?: PaneHeaderTone }) => {
   const contextTone = useContext(PaneToneContext)
   const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: tone ?? contextTone })

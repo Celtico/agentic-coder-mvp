@@ -13,7 +13,7 @@ import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
-  LuBrain as Brain, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
@@ -22,7 +22,7 @@ import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
 import { scrollArea } from '../theme/scroll-area';
 import { PaneRow } from './pane-row';
-import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
+import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneIcon, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -2559,7 +2559,7 @@ export function App(): React.JSX.Element {
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
               <Tabs.Root defaultValue="model" variant="line" size="sm" colorPalette="agentic">
-                <Tabs.List><Tabs.Trigger value="model" data-initial-focus>Model</Tabs.Trigger><Tabs.Trigger value="agent">Agent</Tabs.Trigger><Tabs.Trigger value="learning">Aprenentatge</Tabs.Trigger><Tabs.Trigger value="appearance">Aparença</Tabs.Trigger></Tabs.List>
+                <Tabs.List>{/* Each tab with its icon, in the colour of the panes' header icons. */}<Tabs.Trigger value="model" data-initial-focus><PaneIcon icon={Cpu}/>Model</Tabs.Trigger><Tabs.Trigger value="agent"><PaneIcon icon={Bot}/>Agent</Tabs.Trigger><Tabs.Trigger value="learning"><PaneIcon icon={Brain}/>Aprenentatge</Tabs.Trigger><Tabs.Trigger value="appearance"><PaneIcon icon={Palette}/>Aparença</Tabs.Trigger></Tabs.List>
                 <Tabs.Content value="model"><Stack gap="4">
                   <Box>
                     <Text fontSize="sm" fontWeight="medium" mb="1.5">Model per defecte</Text>
