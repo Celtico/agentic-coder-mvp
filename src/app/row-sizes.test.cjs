@@ -76,7 +76,7 @@ test('the window: both rows are PaneRows (no proportional splitter); the chat is
   assert.match(app, /<PaneRow items=\{dockItems\} flexId=\{dockItems\[dockItems\.length - 1\]\.id\} widths=\{paneWidths\}/);
   assert.doesNotMatch(app, /<Splitter\./);
   // The divider between the rows changes only the dock's height.
-  assert.match(app, /<Flex flex="none" minH="0" minW="0" position="relative" mt="6px" h=\{`\$\{terminalHeight\}px`\}/);
+  assert.match(app, /<Flex flex="none" minH="0" minW="0" position="relative" mt="1.5" h=\{`\$\{terminalHeight\}px`\}/);
 });
 
 test('a divider changes only the two panes beside it: one wider, the other narrower by as much', () => {
@@ -135,7 +135,7 @@ test('nothing round the rows clips them vertically, so a pane’s shadow shows b
   assert.match(recipes, /title: \{ flex: "0 1 auto", minW: "0"[^}]*textOverflow: "ellipsis" \}/);
   assert.match(recipes, /subtitle: \{ flex: "0 100 auto", minW: "0"/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" pt=\{ownTitleBar \? '0' : '6px'\} pr="6px">\n\s*<Box flex="1" minH="0" minW="0">/);
+  assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" pt=\{ownTitleBar \? '0' : '6px'\} pr="1.5">\n\s*<Box flex="1" minH="0" minW="0">/);
 });
 
 test('the panes fit the row: wider than the window, each gives up a share of the excess above its minimum', () => {

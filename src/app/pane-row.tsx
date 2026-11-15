@@ -113,10 +113,10 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
             <Flex flex="none" w={`${width}px`} minW={`${minOf(item.id)}px`} minH="0" h="full" data-pane-id={item.id}>{item.node}</Flex>
             <Box role="separator" aria-orientation="vertical" aria-label="Arrossega per ajustar l’amplada d’aquest panell" title="Arrossega per ajustar l’amplada d’aquest panell"
               aria-valuenow={width} aria-valuemin={paneMinWidth(item.id)} tabIndex={0} data-pane-handle={item.id} data-group
-              flex="none" w="6px" h="full" display="flex" alignItems="center" justifyContent="center" cursor="col-resize" touchAction="none"
+              flex="none" w="1.5" h="full" display="flex" alignItems="center" justifyContent="center" cursor="col-resize" touchAction="none"
               _focusVisible={{ outlineColor: "border", outlineWidth: "1px", outlineStyle: "solid" }}
               onPointerDown={startDrag(item.id)} onKeyDown={nudge(item.id)}>
-              <Box w="2px" h="32px" rounded="full" bg="transparent" _groupHover={{ bg: "border" }}/>
+              <Box w="0.5" h="8" rounded="full" bg="transparent" _groupHover={{ bg: "border" }}/>
             </Box>
           </Fragment>
         )

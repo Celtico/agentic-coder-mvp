@@ -1652,7 +1652,7 @@ export function App(): React.JSX.Element {
   }
   function changePermissionMode(next: 'ask' | 'auto') { const previous = permissionMode; setPermissionMode(next); void window.agentic.setPermissionMode(next).then(setPermissionMode).catch(() => setPermissionMode(previous)); }
   const modelSelect = (
-    <NativeSelect.Root size="xs" width="auto" maxW="230px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="24px" minH="24px" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={(event) => void changeModel(event.currentTarget.value)}>{modelOptions.filter((model) => model.available || model.id === selectedModel).map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{model.vision ? ' · veu imatges' : ''}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+    <NativeSelect.Root size="xs" width="auto" maxW="230px" minW="0" flexShrink={1} disabled={loading || modelChanging}><NativeSelect.Field h="6" minH="6" border="0" bg="transparent" aria-label="Model local" value={selectedModel} onChange={(event) => void changeModel(event.currentTarget.value)}>{modelOptions.filter((model) => model.available || model.id === selectedModel).map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label}{model.vision ? ' · veu imatges' : ''}{!model.available ? ` · ${model.reason || 'no disponible'}` : ''}</option>)}</NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
   );
   // The composer is one line that grows with what is typed.
   useEffect(() => {
@@ -1686,7 +1686,7 @@ export function App(): React.JSX.Element {
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
-        <Box bg="bg.muted" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="lg" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
+        <Box bg="bg.muted" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="2xl" px="3" py="2.5" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="bg.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
           {chatImages.length > 0 && <Flex wrap="wrap" gap="2" px="2" pb="2">{chatImages.map((image) => <Box key={image.id} position="relative" flex="none">
             <Image src={image.thumbnail} alt={image.name} title={`${image.name} · ${image.width}×${image.height}`} boxSize="14" objectFit="cover" borderRadius="md" borderWidth="1px" borderColor="border"/>
@@ -1694,10 +1694,10 @@ export function App(): React.JSX.Element {
           </Box>)}</Flex>}
           {chatDropActive && <Text px="2" pb="2" color="agentic.fg" fontSize="xs">Deixa anar aquí els documents de text o codi, o les imatges, que vols passar al model.</Text>}
           <Flex align="flex-end" gap="2">
-            <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} onPaste={(event: React.ClipboardEvent<HTMLTextAreaElement>) => { const pasted = Array.from(event.clipboardData.files).filter(isImageFile); if (pasted.length) { event.preventDefault(); void addChatImages(pasted); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="24px" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
+            <Textarea ref={promptRef} value={draft} onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendPrompt(); } }} onPaste={(event: React.ClipboardEvent<HTMLTextAreaElement>) => { const pasted = Array.from(event.clipboardData.files).filter(isImageFile); if (pasted.length) { event.preventDefault(); void addChatImages(pasted); } }} placeholder="Pregunta sobre el projecte o descriu una millora…" rows={1} flex="1" minW="0" minH="6" maxH="190px" px="1" py="0" resize="none" variant="outline" bg="transparent" color="fg" border="0" textStyle="chatMessage" _focusVisible={{ boxShadow: "none" }}/>
             {loading
-              ? <Tip label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'}><Button flex="none" aria-label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'} size="xs" h="28px" minW="28px" px={stopArmed ? '2' : '0'} borderRadius="8px" colorPalette={stopArmed ? 'red' : 'gray'} bg={stopArmed ? 'colorPalette.solid' : 'fg'} color={stopArmed ? 'colorPalette.contrast' : 'bg'} _hover={{ bg: stopArmed ? 'colorPalette.emphasized' : 'fg.muted' }} onClick={() => void stopPrompt()}><Stop size={12} fill="currentColor"/>{stopArmed && <Text as="span" fontSize="xs">Torna a clicar per aturar</Text>}</Button></Tip>
-              : <Tip label="Envia (Retorn)"><Button flex="none" aria-label="Envia" size="xs" w="28px" h="28px" minW="28px" p="0" borderRadius="8px" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button></Tip>}
+              ? <Tip label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'}><Button flex="none" aria-label={stopArmed ? 'Torna a clicar per aturar' : 'Atura la generació'} size="xs" h="7" minW="7" px={stopArmed ? '2' : '0'} borderRadius="lg" colorPalette={stopArmed ? 'red' : 'gray'} bg={stopArmed ? 'colorPalette.solid' : 'fg'} color={stopArmed ? 'colorPalette.contrast' : 'bg'} _hover={{ bg: stopArmed ? 'colorPalette.emphasized' : 'fg.muted' }} onClick={() => void stopPrompt()}><Stop size={12} fill="currentColor"/>{stopArmed && <Text as="span" fontSize="xs">Torna a clicar per aturar</Text>}</Button></Tip>
+              : <Tip label="Envia (Retorn)"><Button flex="none" aria-label="Envia" size="xs" w="7" h="7" minW="7" p="0" borderRadius="lg" colorPalette="agentic" disabled={!draft.trim() && chatAttachments.length === 0} onClick={sendPrompt}><Send size={14}/></Button></Tip>}
           </Flex>
         </Box>
         <Flex align="center" gap="2" mt="1.5" px="1" minW="0">
@@ -1722,7 +1722,7 @@ export function App(): React.JSX.Element {
         <IconButton icon={ExternalLink} label="Ves a l’adreça" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
-          {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="14px" h="14px" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
+          {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="3.5" h="3.5" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}
         </Box>
       </PaneToolbar>
       {browserUrl === 'about:blank'
@@ -1804,7 +1804,7 @@ export function App(): React.JSX.Element {
                   <Box flex="1" minH="0" {...scrollArea}>
                     {gitHistory.commits.filter((commit) => `${commit.subject} ${commit.shortHash} ${commit.author} ${commit.decorations}`.toLowerCase().includes(gitSearch.toLowerCase())).map((commit, index) => <Button key={commit.hash} w="full" h="auto" minH="54px" px="2" py="1.5" justifyContent="flex-start" textAlign="left" whiteSpace="normal" rounded="none" variant={gitSelectedCommit?.hash === commit.hash ? 'subtle' : 'ghost'} colorPalette={gitSelectedCommit?.hash === commit.hash ? 'agentic' : 'gray'} onClick={() => void loadGitCommitDetails(commit)}>
                   <HStack align="stretch" gap="2" w="full" minW="0">
-                    <Flex position="relative" w="16px" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.solid' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
+                    <Flex position="relative" w="4" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.solid' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
                     <Stack minW="0" gap="0"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.subject}</Text><Text fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.author} · {Number.isNaN(Date.parse(commit.date)) ? commit.date : new Date(commit.date).toLocaleString()}</Text>{commit.decorations && <Text fontSize="xs" color="agentic.fg" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{commit.decorations}</Text>}</Stack>
                   </HStack>
                 </Button>)}
@@ -1902,10 +1902,10 @@ export function App(): React.JSX.Element {
                   {trainingRunning
                     ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
                     : <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
-                  <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
+                  <Text flex="1" minW="40" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
                 </HStack>
                 {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
-                {trainingProgress !== null && <Box mt="2" h="4px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
+                {trainingProgress !== null && <Box mt="2" h="1" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
                 {trainingLog.length > 0 && <Box mt="2" maxH="140px" {...scrollArea} fontFamily="mono" fontSize="2xs" color="fg.muted" bg="bg.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
                 {learningVersions && learningVersions.betas.length > 0 && <Stack mt="2" gap="1">{learningVersions.betas.map((beta, index) => <HStack key={beta.folder} gap="2" px="2.5" py="1.5" borderWidth="1px" borderColor="border" borderRadius="md" minW="0">
                   <Stack flex="1" minW="0" gap="0">
@@ -1920,7 +1920,7 @@ export function App(): React.JSX.Element {
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Estable</Text>
                 <HStack gap="2" flexWrap="wrap">
                   <Button size="sm" flex="none" variant="outline" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
-                  <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
+                  <Text flex="1" minW="40" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
                 </HStack>
                 {learningVersions?.candidate?.comparison && <Box mt="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
                   <Text fontSize="sm" fontWeight="medium">Candidata {learningVersions.candidate.number} · {learningVersions.candidate.cases} casos</Text>
@@ -1931,7 +1931,7 @@ export function App(): React.JSX.Element {
                   {learningVersions.candidate.promoted
                     ? <Text mt="2" fontSize="xs" color="agentic.fg">Promocionada: {learningVersions.candidate.promoted.label}</Text>
                     : <HStack mt="2" gap="2" flexWrap="wrap">
-                      <Input size="sm" flex="1" minW="160px" maxLength={60} value={stableName} onChange={(event) => setStableName(event.target.value)} placeholder="Nom del model" aria-label="Nom de la versió estable"/>
+                      <Input size="sm" flex="1" minW="40" maxLength={60} value={stableName} onChange={(event) => setStableName(event.target.value)} placeholder="Nom del model" aria-label="Nom de la versió estable"/>
                       <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions.buttons.promote.enabled || !stableName.trim()} onClick={() => void promoteStable()}><Check size={15}/>Promociona a estable</Button>
                     </HStack>}
                 </Box>}
@@ -2052,10 +2052,10 @@ export function App(): React.JSX.Element {
             {rowNote('Tasques superades per model, de totes les avaluacions.')}
             <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
               <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
-              {([['Obertes', model.open, 'agentic.solid'], ['Apps', model.apps, 'orange.solid'], ['Dirigida', model.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
-                <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
-                <Box flex="1" h="6px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
-                <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
+              {([['Obertes', model.open, 'agentic.solid'], ['Apps', model.apps, 'orange.solid'], ['Dirigida', model.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="3.5">
+                <Text w="16" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
+                <Box flex="1" h="1.5" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
+                <Text w="10" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
               </HStack>)}
             </Box>)}</Stack>
           </Accordion.ItemBody></Accordion.ItemContent>
@@ -2254,11 +2254,11 @@ export function App(): React.JSX.Element {
             <Box position="relative" data-rail-item draggable opacity={railDragging === panel ? 0.4 : 1}
               onDragStart={(event: React.DragEvent<HTMLDivElement>) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', panel); setRailDragging(panel); }}
               onDragEnd={() => { setRailDragging(null); setRailDrop(null); }}>
-              {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+              {railDrop?.group === group && railDrop.index === index && <Box position="absolute" top="-3px" left="1" right="1" h="0.5" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
               {/* Plain ghost, no background: open, only the icon's colour changes to the accent (the «agentic»
                   palette is the accent); closed, muted. Hover is Chakra's ghost. */}
               <IconButton icon={button.icon} label={button.label} w="38px" h="38px" variant="ghost" colorPalette={button.palette} color={button.palette === 'agentic' ? 'agentic.fg' : 'fg.muted'} aria-pressed={button.palette === 'agentic'} onClick={button.onClick}/>
-              {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+              {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="1" right="1" h="0.5" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>
           <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
@@ -2266,7 +2266,7 @@ export function App(): React.JSX.Element {
           </Menu.Content></Menu.Positioner></Portal>
         </Menu.Root>;
       })}
-      {railDragging && railDrop?.group === group && railLayout[group].length === 0 && <Box h="2px" w="30px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
+      {railDragging && railDrop?.group === group && railLayout[group].length === 0 && <Box h="0.5" w="30px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
     </Flex>
   );
   // The app's menu (src/electron/app-menu.cjs): its actions, with what this render knows, and the panes
@@ -2288,8 +2288,8 @@ export function App(): React.JSX.Element {
   const dockItems = rowItems('bottom');
   const sideItems = rowItems('top');
   const bottomDock = dockItems.length > 0 && (
-    <Flex flex="none" minH="0" minW="0" position="relative" mt="6px" h={`${terminalHeight}px`} maxH="calc(100vh - 240px)">
-      <Center position="absolute" top="-7px" left="0" right="0" h="8px" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} data-group><Box w="32px" h="2px" rounded="full" bg="transparent" _groupHover={{ bg: 'border' }}/></Center>
+    <Flex flex="none" minH="0" minW="0" position="relative" mt="1.5" h={`${terminalHeight}px`} maxH="calc(100vh - 240px)">
+      <Center position="absolute" top="-7px" left="0" right="0" h="2" zIndex="5" cursor="row-resize" title="Arrossega per ajustar l’alçada" aria-label="Arrossega per ajustar l’alçada del terminal" onPointerDown={startTerminalResize} data-group><Box w="8" h="0.5" rounded="full" bg="transparent" _groupHover={{ bg: 'border' }}/></Center>
       {/* The same as the top row: each pane its own width, the last one takes what is left. */}
       {dockItems.length === 1 ? dockItems[0].node : <PaneRow items={dockItems} flexId={dockItems[dockItems.length - 1].id} widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila inferior de panells"/>}
     </Flex>
@@ -2325,7 +2325,7 @@ export function App(): React.JSX.Element {
         </Flex>
         {/* Nothing here clips: the rows always fit the width (src/app/row-sizes.ts), so the panes' shadow
             («amb ombra») shows at the outer sides too; only the window itself clips. */}
-        <Flex direction="column" h="full" minH="0" minW="0" pt={ownTitleBar ? '0' : '6px'} pr="6px">
+        <Flex direction="column" h="full" minH="0" minW="0" pt={ownTitleBar ? '0' : '6px'} pr="1.5">
         <Box flex="1" minH="0" minW="0">
         {topRow}
         </Box>
@@ -2333,7 +2333,7 @@ export function App(): React.JSX.Element {
         {terminalResizing && <Box position="fixed" inset="0" zIndex="4000" cursor="row-resize"/>}
         </Flex>
     </Grid>
-    <Flex flex="none" minW="0" h="28px" align="center" justify="space-between" gap="2" px="2" bg="canvas" color="fg.muted" fontSize="xs" overflow="hidden">
+    <Flex flex="none" minW="0" h="7" align="center" justify="space-between" gap="2" px="2" bg="canvas" color="fg.muted" fontSize="xs" overflow="hidden">
           <HStack minW="0" gap="1" overflow="hidden">
             <Button size="xs" variant="ghost" minW="0" maxW="220px" px="2" onClick={() => void selectProject()} title={project?.path || 'Selecciona un projecte'}>
               <FolderOpen size={13}/><Text overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{project?.path.split(/[\\/]/).filter(Boolean).at(-1) || 'Cap projecte'}</Text>
@@ -2799,7 +2799,7 @@ export function App(): React.JSX.Element {
               <Text fontSize="xs" color="fg.muted">Historial dels fitxers</Text>
             </Stack>
             {fileHistoryLoading && !fileHistoryVersions.length ? <HStack px="3" color="fg.muted"><Spinner size="sm"/><Text>Carregant historial…</Text></HStack>
-              : fileHistoryVersions.length ? <Box flex="1" minH="0" {...scrollArea}>{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="64px" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'agentic' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
+              : fileHistoryVersions.length ? <Box flex="1" minH="0" {...scrollArea}>{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="16" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'agentic' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
                 : <Text px="3" fontSize="sm" color="fg.muted">No hi ha versions desades en aquesta carpeta.</Text>}
           </Flex>
           <Flex minW="0" minH="0" direction="column">

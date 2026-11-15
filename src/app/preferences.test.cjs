@@ -138,3 +138,8 @@ test('every colour of the app is Chakra’s: no fg, border or surface of our own
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   assert.doesNotMatch(app, /["']surface(\.subtle)?["']/);
 });
+
+test('no shadow of our own: the chat’s message box has none, and only Chakra’s recipes bring theirs', () => {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /boxShadow=|shadow="/);
+});
