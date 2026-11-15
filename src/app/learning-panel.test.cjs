@@ -73,7 +73,7 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   assert.match(training, /Mostra les dades<\/ChakraButton>/);
   assert.match(training, /Descarrega \(\.jsonl\)<\/ChakraButton>/);
   // The open sections are remembered, «manual» too.
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "training"\]/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "training", "models"\]/);
 });
 
 test('a function the running main process does not have yet says «restart the app» instead of nothing', () => {

@@ -13,10 +13,11 @@ import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
-  LuBrain as Brain, LuBoxes as Boxes, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuBoxes as Boxes, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
+import { LlmLogPane } from './llm-log';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
@@ -287,6 +288,8 @@ export function App(): React.JSX.Element {
   // the place of the browser or of each other.
   const [gitOpen, setGitOpen] = useState(initialView.panels.git);
   const [learningOpen, setLearningOpen] = useState(initialView.panels.learning);
+  // Log del model (src/app/llm-log.tsx): open, it records each call to the model.
+  const [llmLogOpen, setLlmLogOpen] = useState(initialView.panels.llmlog);
   // The evaluation panel runs the agent benchmark with the selected model and shows what it did.
   const [evaluationOpen, setEvaluationOpen] = useState(initialView.panels.evaluation);
   const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
@@ -1471,8 +1474,8 @@ export function App(): React.JSX.Element {
   // Saving is the user's decision. Each save keeps the previous version in the local history.
   // The app opens as it was left (src/app/view-state.ts): which panels were open…
   useEffect(() => {
-    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, conversations: conversationsOpen, files: filesOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, console: consoleOpen, terminal: terminalOpen }; });
-  }, [navigationOpen, conversationsOpen, filesOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, consoleOpen, terminalOpen]);
+    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, conversations: conversationsOpen, files: filesOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen, console: consoleOpen, terminal: terminalOpen }; });
+  }, [navigationOpen, conversationsOpen, filesOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, llmLogOpen, consoleOpen, terminalOpen]);
   // …and, per project, the page in the browser, the file in the editor (if it still exists) and the
   // local history. They are put back once per project, before anything is saved for it.
   // Panes that come back open load what they show, as if their icon had been clicked.
@@ -1688,7 +1691,7 @@ export function App(): React.JSX.Element {
       window.removeEventListener('pointerup', up);
       setTerminalResizing(false);
       // Dragged almost shut: close it and keep the last useful height for next time.
-      if (latest < TERMINAL_MIN_HEIGHT) { setTerminalOpen(false); setGitOpen(false); setLearningOpen(false); setConsoleOpen(false); setTerminalHeight(Math.max(startHeight, 200)); return; }
+      if (latest < TERMINAL_MIN_HEIGHT) { setTerminalOpen(false); setGitOpen(false); setLearningOpen(false); setLlmLogOpen(false); setConsoleOpen(false); setTerminalHeight(Math.max(startHeight, 200)); return; }
       localStorage.setItem(TERMINAL_HEIGHT_KEY, String(latest));
     };
     window.addEventListener('pointermove', move);
@@ -2286,7 +2289,7 @@ export function App(): React.JSX.Element {
               </Box>
             </PaneCard>
   );
-  const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen };
+  const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen };
   const paneNode = (panel: Pane, row: RailGroup): React.JSX.Element => {
     const frame = row === 'top' ? sidePane : dockPane;
     switch (panel) {
@@ -2301,6 +2304,7 @@ export function App(): React.JSX.Element {
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
+      case 'llmlog': return <LlmLogPane/>;
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
       case 'terminal': return terminalDock;
     }
@@ -2315,6 +2319,7 @@ export function App(): React.JSX.Element {
     terminal: { icon: TerminalIcon, label: terminalOpen ? 'Tanca el terminal' : 'Obre el terminal', palette: terminalOpen ? 'agentic' : 'gray', onClick: () => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); } },
     git: { icon: GitBranch, label: gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git', palette: gitOpen ? 'agentic' : 'gray', onClick: () => void openGitPanel() },
     learning: { icon: Brain, label: learningOpen ? 'Tanca l’aprenentatge local' : 'Aprenentatge local', palette: learningOpen ? 'agentic' : 'gray', onClick: () => void openLearningPanel() },
+    llmlog: { icon: ScrollText, label: llmLogOpen ? 'Tanca el log del model' : 'Log del model', palette: llmLogOpen ? 'agentic' : 'gray', onClick: () => setLlmLogOpen((open) => !open) },
   };
   // Dragging an icon: the slot it would go to is the first icon of the group whose middle is below the
   // pointer (or the end of the group). A line in the agentic colour shows it.
@@ -2374,7 +2379,7 @@ export function App(): React.JSX.Element {
     }
   };
   useEffect(() => window.agentic.onMenu?.((value) => menuActionRef.current(value)) ?? undefined, []);
-  useEffect(() => { window.agentic.reportPanes?.({ editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen }); }, [editorOpen, browserOpen, evaluationOpen, consoleOpen, terminalOpen, gitOpen, learningOpen]);
+  useEffect(() => { window.agentic.reportPanes?.({ editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen }); }, [editorOpen, browserOpen, evaluationOpen, consoleOpen, terminalOpen, gitOpen, learningOpen, llmLogOpen]);
   const rowItems = (row: RailGroup) => panelsInRow(railLayout, row, (panel) => paneOpen[panel]).map((panel) => ({ id: `${row === 'top' ? 'side' : 'dock'}-${panel}`, node: paneNode(panel, row) }));
   const dockItems = rowItems('bottom');
   const sideItems = rowItems('top');

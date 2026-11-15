@@ -43,9 +43,9 @@ test('panels, evaluation sections and the history window come back as they were 
 test('the layout of the left bar comes back, made safe for icons it does not know', () => {
   const storage = memoryStorage();
   view.updateViewState(storage, (state) => { state.rail = { top: ['terminal'], bottom: ['browser', 'git'] }; });
-  assert.deepEqual(view.loadViewState(storage).rail, { top: ['conversations', 'files', 'terminal', 'evaluation'], bottom: ['browser', 'git', 'console', 'learning'] });
+  assert.deepEqual(view.loadViewState(storage).rail, { top: ['conversations', 'files', 'terminal', 'evaluation'], bottom: ['browser', 'git', 'console', 'learning', 'llmlog'] });
   const withEditor = memoryStorage({ [view.VIEW_STATE_KEY]: JSON.stringify({ rail: { top: ['x', 'editor', 'git'], bottom: 7 } }) });
-  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['conversations', 'files', 'git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning'] });
+  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['conversations', 'files', 'git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning', 'llmlog'] });
 });
 
 test('Converses and Fitxers are shown unless hidden, also with a state saved before they had icons', () => {

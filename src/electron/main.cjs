@@ -23,6 +23,7 @@ const { validateChatImages, writeChatImages, removeChatImages } = require('./cha
 const dictation = require('./dictation.cjs');
 const versions = require('./learning-versions.cjs');
 const modelManager = require('./model-manager.cjs');
+const llmCalls = require('./llm-calls.cjs');
 const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
 const menuLabels = require('./menu-labels.cjs');
 const { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normalizeAgentPreferences, migrateAgentPreferences, limitHistory } = require('./preferences.cjs');
@@ -509,6 +510,31 @@ function stopProjectProcess() {
   });
 }
 
+// Log del model (src/core/assistant/llm-trace.ts): what goes into the model and what comes out, recorded
+// only while its panel is open, in logs/llm-calls.jsonl in the data folder (never in the history or the
+// training data). The logprobs (each token's probability) cost speed: their own switch, off by default.
+const llmTrace = { open: false, logprobs: false };
+const llmCallsLog = () => path.join(app.getPath('userData'), 'logs', 'llm-calls.jsonl');
+const sendLlmTrace = () => { if (modelWorker?.connected) modelWorker.send({ type: 'llm-trace', on: llmTrace.open, logprobs: llmTrace.logprobs, file: llmCallsLog() }); };
+ipcMain.handle('llm:set', async (_event, change) => {
+  if (typeof change?.open === 'boolean') llmTrace.open = change.open;
+  if (typeof change?.logprobs === 'boolean') llmTrace.logprobs = change.logprobs;
+  sendLlmTrace();
+  return { ...llmTrace };
+});
+// The last calls (newest first), each with the tools run after it.
+ipcMain.handle('llm:list', async () => llmCalls.readCalls([llmCallsLog().replace(/\.jsonl$/, '.1.jsonl'), llmCallsLog()], 50));
+ipcMain.handle('llm:clear', async () => {
+  for (const file of [llmCallsLog(), llmCallsLog().replace(/\.jsonl$/, '.1.jsonl')]) await fs.rm(file, { force: true });
+  return { calls: [] };
+});
+ipcMain.handle('llm:reveal', async () => {
+  await fs.mkdir(path.dirname(llmCallsLog()), { recursive: true });
+  if (!fsSync.existsSync(llmCallsLog())) await fs.writeFile(llmCallsLog(), '');
+  shell.showItemInFolder(llmCallsLog());
+  return true;
+});
+
 /** The chat models loaded in this app session (their workers may have been stopped since). */
 const loadedModels = new Set();
 /** The model the running chat worker has (or is loading). */
@@ -544,8 +570,11 @@ async function startModelWorker() {
   });
   modelWorker = child;
   modelWorkerModelId = (await currentModel()).id;
+  // Log del model: on only while its panel is open.
+  child.send({ type: 'llm-trace', on: llmTrace.open, logprobs: llmTrace.logprobs, file: llmCallsLog() });
   loadedModels.add(modelWorkerModelId);
   child.on('message', (message) => {
+    if (message?.type === 'llm-event') { if (win && !win.isDestroyed()) win.webContents.send('llm:event', message.event); return; }
     if (message?.type === 'status') { activeTurns.status(message.value); win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
       const toolKey = `${message.id}:${message.toolId}`;
@@ -1390,7 +1419,7 @@ async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = '
   return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : []), ...(tasks.length ? ['--task', tasks.join(',')] : [])], {
     signal, onLine,
     // The project's npm, npx and Vite run on that same Node.
-    env: { PATH: [path.dirname(nodeExecutable), process.env.PATH || ''].join(path.delimiter), ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+    env: { PATH: [path.dirname(nodeExecutable), process.env.PATH || ''].join(path.delimiter), ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(llmTrace.open ? { AGENT_LLM_TRACE: '1', AGENT_LLM_TRACE_SOURCE: adapterPath ? 'benchmark de beta' : 'avaluació', AGENT_LLM_CALLS_LOG: llmCallsLog() } : {}), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   });
 }
 

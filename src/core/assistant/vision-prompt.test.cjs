@@ -17,7 +17,8 @@ test('main tells the worker whether the model sees images and whether it was alr
   const main = read('src/electron/main.cjs');
   assert.match(main, /loadedModels\.has\(\(await currentModel\(\)\)\.id\) \? \{ AGENT_MODEL_RELOAD: '1' \}/);
   assert.match(main, /mlxModels\.hasVision\([^\n]*\{ AGENT_MODEL_VISION: '1' \}/);
-  assert.match(main, /modelWorker = child;\n  modelWorkerModelId = \(await currentModel\(\)\)\.id;\n  loadedModels\.add\(modelWorkerModelId\);/);
+  assert.match(main, /modelWorker = child;\n  modelWorkerModelId = \(await currentModel\(\)\)\.id;\n/);
+  assert.match(main, /loadedModels\.add\(modelWorkerModelId\);/);
 });
 
 test('«la primera vegada» only on the first load of the session', () => {

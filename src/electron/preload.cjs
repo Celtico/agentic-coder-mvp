@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld('agentic', {
   setPermissionMode: (mode) => ipcRenderer.invoke('permissions:set', mode),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
+  setLlmTrace: (change) => ipcRenderer.invoke('llm:set', change),
+  listLlmCalls: () => ipcRenderer.invoke('llm:list'),
+  clearLlmCalls: () => ipcRenderer.invoke('llm:clear'),
+  revealLlmCalls: () => ipcRenderer.invoke('llm:reveal'),
+  onLlmEvent: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('llm:event', listener);
+    return () => ipcRenderer.removeListener('llm:event', listener);
+  },
   manageModels: () => ipcRenderer.invoke('models:manage'),
   setModelShown: (id, shown) => ipcRenderer.invoke('models:set-shown', id, shown),
   removeModel: (id) => ipcRenderer.invoke('models:remove', id),

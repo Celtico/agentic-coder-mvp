@@ -68,7 +68,14 @@ async function runTask(task, { LocalCodingAgent, engine, timeoutMs, keep, run })
   let timer;
   // A request that runs out of time keeps generating until the model process stops; it is stopped
   // (and loaded again by the next task), so the next task does not find the model busy.
-  const asked = agent.ask(task.prompt, root, tools.execute);
+  // Log del model (an evaluation started with the panel open): each tool with its result.
+  const tracer = engine.tracer?.enabled ? engine.tracer : null;
+  const execute = !tracer ? tools.execute : async (tool) => {
+    const startedTool = Date.now();
+    try { const result = await tools.execute(tool); tracer.tool(tool?.name, tool?.arguments, !(result && typeof result === 'object' && 'error' in result), Date.now() - startedTool, result); return result; }
+    catch (caught) { tracer.tool(tool?.name, tool?.arguments, false, Date.now() - startedTool, caught instanceof Error ? caught.message : String(caught)); throw caught; }
+  };
+  const asked = agent.ask(task.prompt, root, execute);
   asked.catch(() => {});
   try {
     answer = await Promise.race([

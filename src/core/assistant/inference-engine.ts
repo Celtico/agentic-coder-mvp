@@ -3,6 +3,8 @@ import process from 'node:process';
 import fs from 'node:fs/promises';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
+import fsSync from 'node:fs';
+import { LlmTracer, parseOutput, type LlmCallRecord, type TraceContext } from './llm-trace';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatTurn = { role: ChatRole; content: string };
@@ -39,6 +41,12 @@ export class MlxInferenceEngine implements InferenceEngine {
   private pending: { resolve: (value: string) => void; reject: (error: Error) => void } | null = null;
   private state: ModelStatus['state'] = 'unloaded';
   private memory: MemoryUsage = { residentBytes: 0, heapBytes: 0, externalBytes: 0 };
+  /** Log del model (src/core/assistant/llm-trace.ts): off unless the panel is open or AGENT_LLM_TRACE=1. */
+  readonly tracer = new LlmTracer({ enabled: process.env.AGENT_LLM_TRACE === '1', file: process.env.AGENT_LLM_CALLS_LOG || null });
+  /** Who is asking (the chat, the reviewer, an evaluation…) and the parts of its system prompt; set by the agent. */
+  traceContext: TraceContext = { source: process.env.AGENT_LLM_TRACE_SOURCE || 'xat' };
+  private loadSeconds: number | null = null;
+  private traced: { id: string; at: string; started: number; messages: ChatTurn[]; options: GenerationOptions; context: TraceContext } | null = null;
 
   async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {
     if (this.state === 'ready') return;
@@ -63,9 +71,11 @@ export class MlxInferenceEngine implements InferenceEngine {
         try { message = JSON.parse(line); } catch { return; }
         // An error before «ready» (no runtime, the model already loaded elsewhere…) is the reason it did not load.
         if (message.type === 'result' && typeof message.error === 'string' && this.state === 'loading') { reject(new Error(message.error)); return; }
-        if (message.type === 'ready') { this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
+        if (message.type === 'token' && this.traced && typeof message.text === 'string') { this.tracer.emit({ type: 'token', id: this.traced.id, text: message.text }); return; }
+        if (message.type === 'ready') { this.loadSeconds = typeof message.loadSeconds === 'number' ? message.loadSeconds : null; this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;
+          this.finishTrace(message);
           if (typeof message.error === 'string') pending.reject(new Error(message.error));
           else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));
         }
@@ -91,13 +101,54 @@ export class MlxInferenceEngine implements InferenceEngine {
   async generateResponse(messages: ChatTurn[], options: GenerationOptions): Promise<string> {
     if (!this.child || this.state !== 'ready') throw new Error('El model MLX encara no està carregat.');
     if (this.pending) throw new Error('El runtime MLX ja està generant una resposta.');
+    // Log del model: only with the panel open; otherwise the request is exactly as it always was.
+    const traceFields = this.startTrace(messages, options);
     return new Promise((resolve, reject) => {
       this.pending = { resolve, reject };
-      this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0, ...(options.images?.paths.length ? { images: options.images } : {}) })}\n`, (error) => {
+      this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0, ...(options.images?.paths.length ? { images: options.images } : {}), ...traceFields })}\n`, (error) => {
         if (!error) return;
         this.pending = null; reject(error);
       });
     });
+  }
+
+  private startTrace(messages: ChatTurn[], options: GenerationOptions): Record<string, unknown> {
+    this.traced = null;
+    if (!this.tracer.enabled) return {};
+    const context = this.traceContext;
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    this.traced = { id, at: new Date().toISOString(), started: Date.now(), messages: messages.map((message) => ({ ...message })), options, context };
+    this.tracer.lastCallId = id;
+    this.tracer.emit({ type: 'start', id, source: context.source, model: this.modelId, at: this.traced.at });
+    return { trace: true, ...(this.tracer.logprobs ? { logprobs: true } : {}), trace_parts: (context.systemParts || []).map((part) => part.text) };
+  }
+
+  private finishTrace(message: Record<string, unknown>): void {
+    const traced = this.traced;
+    this.traced = null;
+    if (!traced) return;
+    const trace = (message.trace && typeof message.trace === 'object' ? message.trace : {}) as Record<string, any>;
+    const counts = (trace.counts || {}) as { messages?: (number | null)[]; tools?: number | null; parts?: (number | null)[] };
+    const text = typeof message.text === 'string' ? message.text : null;
+    const parsed = parseOutput(text || '');
+    const size = (file: string) => { try { return fsSync.statSync(file).size; } catch { return null; } };
+    const record: LlmCallRecord = {
+      type: 'call', id: traced.id, at: traced.at, source: traced.context.source, model: this.modelId, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null,
+      params: { temperature: traced.options.do_sample ? traced.options.temperature : 0, topP: null, maxTokens: traced.options.max_new_tokens, stop: [], seed: null, logprobs: this.tracer.logprobs },
+      input: {
+        messages: traced.messages.map((item, index) => ({ role: item.role, content: item.content, tokens: counts.messages?.[index] ?? null })),
+        parts: (traced.context.systemParts || []).map((part, index) => ({ ...part, tokens: counts.parts?.[index] ?? null })),
+        tools: (traced.options.tools || []).map((tool) => tool.function.name), toolTokens: counts.tools ?? null,
+        images: (traced.options.images?.paths || []).map((file) => ({ path: file, bytes: size(file) })),
+        prompt: typeof trace.prompt === 'string' ? trace.prompt : null, promptTokens: trace.promptTokens ?? null, context: trace.context ?? null,
+      },
+      output: { raw: typeof trace.raw === 'string' ? trace.raw : null, text, ...parsed, finishReason: trace.finishReason ?? null, error: typeof message.error === 'string' ? message.error : null, ...(Array.isArray(trace.tokens) ? { tokens: trace.tokens } : {}) },
+      metrics: { loadSeconds: this.loadSeconds, firstTokenSeconds: trace.firstTokenSeconds ?? null, promptTokens: trace.promptTokens ?? null, promptTps: trace.promptTps ?? null, generationTokens: trace.generationTokens ?? null, generationTps: trace.generationTps ?? null, peakMemoryGb: trace.peakMemoryGb ?? null, seconds: trace.seconds ?? (Date.now() - traced.started) / 1000 },
+      backend: trace.backend ?? null,
+    };
+    // The load time goes with the first call after the model was loaded.
+    this.loadSeconds = null;
+    this.tracer.record(record);
   }
 
   async unloadModel(): Promise<void> {

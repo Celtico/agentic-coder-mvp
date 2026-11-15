@@ -42,6 +42,7 @@ module.exports = {
     terminal: 'Terminal',
     git: 'Git',
     learning: 'Aprenentatge',
+    llmlog: 'Log del model',
   },
 
   window: 'Finestra',

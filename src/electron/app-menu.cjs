@@ -1,6 +1,6 @@
 // The app's menu, in Catalan (the text is in src/electron/menu-labels.cjs). Built as a plain template so
 // it can be checked without Electron; main.cjs gives it the actions and turns it into the menu.
-const PANES = ['editor', 'browser', 'evaluation', 'console', 'terminal', 'git', 'learning'];
+const PANES = ['editor', 'browser', 'evaluation', 'console', 'terminal', 'git', 'learning', 'llmlog'];
 
 /**
  * `actions`: { preferences, openFolder, newChat, save, togglePane(pane), capture, repository, readme, turnLog }.

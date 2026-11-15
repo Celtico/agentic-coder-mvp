@@ -48,7 +48,7 @@ test('Visualització lists the app’s panes, checked when open; each one toggle
   const { template, calls } = menu({ isMac: true, panes: { browser: true, terminal: true } });
   const view = template.find((item) => item.label === 'Visualització');
   const panes = view.submenu.filter((item) => item.type === 'checkbox');
-  assert.deepEqual(panes.map((item) => [item.label, item.checked]), [['Editor', false], ['Navegador', true], ['Avaluació', false], ['Consola', false], ['Terminal', true], ['Git', false], ['Aprenentatge', false]]);
+  assert.deepEqual(panes.map((item) => [item.label, item.checked]), [['Editor', false], ['Navegador', true], ['Avaluació', false], ['Consola', false], ['Terminal', true], ['Git', false], ['Aprenentatge', false], ['Log del model', false]]);
   panes.forEach((item) => item.click());
   assert.deepEqual(calls.map(([name, pane]) => [name, pane]), PANES.map((pane) => ['togglePane', pane]));
 });

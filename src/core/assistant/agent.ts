@@ -4,6 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine, type InferenceToolDefinition } from './inference-engine';
 import { prompt as promptText, toolDescriptions } from './prompts';
+import { splitSystem, type TraceContext } from './llm-trace';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
 
 // 'draft': an answer the reviewer sent back; the window keeps it in case the user stops the work.
@@ -640,6 +641,13 @@ export class LocalCodingAgent {
   private trajectorySystem = '';
   private askDepth = 0;
 
+  /** The engine, told who is asking (Log del model). Only a label: the call itself is not changed. */
+  private traced(context: TraceContext): InferenceEngine {
+    const engine = this.engine as InferenceEngine & { traceContext?: TraceContext };
+    if ('traceContext' in engine) engine.traceContext = context;
+    return engine;
+  }
+
   async ask(prompt: string, projectRoot: string, executeTool: AgentToolExecutor, conversationHistory: ChatTurn[] = [], options: { allowDelegation?: boolean; recordHistory?: boolean; images?: string[] } = {}): Promise<string> {
     const topLevel = this.askDepth === 0;
     if (topLevel) { this.trajectorySteps = []; this.trajectorySystem = ''; this.lastTrajectory = null; }
@@ -784,6 +792,16 @@ export class LocalCodingAgent {
     // Its HTML comments are notes for whoever edits it, not text for the model.
     const visionText = process.env.AGENT_MODEL_VISION === '1' ? promptText('vision').replace(/<!--[\s\S]*?-->/g, '').trim() : '';
     const system = visionText ? `${baseSystem}\n\n${visionText}` : baseSystem;
+    // Log del model (only while it is on): who asks, and where each piece of the system prompt comes from.
+    const traceOn = Boolean((this.engine as { tracer?: { enabled?: boolean } }).tracer?.enabled);
+    const systemTrace: TraceContext = {
+      source: this.askDepth > 1 ? 'agent delegat' : (process.env.AGENT_LLM_TRACE_SOURCE || 'xat'),
+      systemParts: traceOn ? splitSystem(system, [
+        { source: 'AGENTS.md', text: projectInstructions }, { source: 'SKILLS.md', text: projectSkills }, { source: 'eines MCP', text: mcpTools },
+        { source: 'casos verificats recuperats', text: verifiedExperiences }, { source: 'pàgines demanades', text: requestedPages },
+        { source: 'llista de fitxers', text: context.manifest || '' }, { source: 'contingut de fitxers', text: context.contents || '' }, { source: 'prompts/vision.md', text: visionText },
+      ], compact ? 'prompts/system-compact.md' : 'prompts/system.md') : [],
+    };
 
     await this.engine.loadModel((message) => this.onStatus({ type: 'status', message }));
     const recentHistory = conversationHistory.slice(-100).flatMap((turn) => {
@@ -913,7 +931,7 @@ export class LocalCodingAgent {
         { role: 'user', content: tidyBlankLines(promptText('review-request', { request: prompt.slice(0, 1500), projectInstructions, files: files.join('\n\n') || '(cap)', page: lastPageVerdict ? promptText('review-page-seen', { page: lastPageVerdict.slice(0, 1200) }) : promptText('review-page-not-opened') })) },
       ];
       let verdict = '';
-      try { verdict = await this.engine.generateResponse(reviewMessages, { max_new_tokens: 350, temperature: 0.1, do_sample: false, tools: [] }); }
+      try { verdict = await this.traced({ source: 'revisor' }).generateResponse(reviewMessages, { max_new_tokens: 350, temperature: 0.1, do_sample: false, tools: [] }); }
       catch { return null; }
       await logTurn({ iteration: 'review', compact, lastInput: reviewMessages[1].content.slice(0, 1500), raw: verdict.slice(0, 1500), parsed: 'review' });
       let problems: string[] = [];
@@ -950,7 +968,7 @@ export class LocalCodingAgent {
         ? agentToolDefinitions.filter((item) => COMPACT_TOOL_NAMES.has(item.function.name))
         : agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'));
       const startedAt = Date.now();
-      const raw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(availableTools) });
+      const raw = await this.traced(systemTrace).generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(availableTools) });
       const action = parseAction(raw);
       // An answer with no call while no tool has run yet in a turn that asks for work: it says it is done
       // without having done anything. Marked in the log, so the evaluation and the history can count it.
@@ -1048,7 +1066,7 @@ export class LocalCodingAgent {
       if (requestedCodeChange && !planPublished && !compact) {
         messages.push({ role: 'assistant', content: raw }, { role: 'user', content: promptText('nudge-write-plan') });
         this.onStatus({ type: 'status', message: 'El model està escrivint el pla abans de començar…' });
-        const planningRaw = await this.engine.generateResponse(messages, { max_new_tokens: 300, temperature: 0.2, do_sample: false, images: imageInput, tools: [] });
+        const planningRaw = await this.traced(systemTrace).generateResponse(messages, { max_new_tokens: 300, temperature: 0.2, do_sample: false, images: imageInput, tools: [] });
         const planningAction = parseAction(planningRaw);
         // A call instead of a plan (even to a tool that does not exist, like «plan») is not a plan:
         // its markup is never published, and the plan is the prose around it or the default one.
@@ -1089,7 +1107,7 @@ export class LocalCodingAgent {
         }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: promptText('nudge-repeated-call', { tool: tool.name, result: previousResult }) });
-        const finalRaw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'))) });
+        const finalRaw = await this.traced(systemTrace).generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(agentToolDefinitions.filter((item) => (options.allowDelegation !== false || item.function.name !== 'delegate_tasks') && (this.webSearch || item.function.name !== 'web_search'))) });
         const finalAction = parseAction(finalRaw);
         answer = finalAction?.type === 'final'
           ? finalAction.content

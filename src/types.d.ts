@@ -100,6 +100,11 @@ export interface AgenticBridge {
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
+  setLlmTrace(change: { open?: boolean; logprobs?: boolean }): Promise<{ open: boolean; logprobs: boolean }>;
+  listLlmCalls(): Promise<{ calls: unknown[] }>;
+  clearLlmCalls(): Promise<{ calls: [] }>;
+  revealLlmCalls(): Promise<boolean>;
+  onLlmEvent(callback: (event: import('./core/assistant/llm-trace').LlmTraceEvent) => void): () => void;
   manageModels(): Promise<ManagedModels>;
   setModelShown(id: string, shown: boolean): Promise<ManagedModels>;
   removeModel(id: string): Promise<ManagedModels>;

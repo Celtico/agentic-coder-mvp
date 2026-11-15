@@ -3,12 +3,14 @@ import importlib.util
 import json
 import os
 import sys
+import time
 import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mlx_text  # noqa: E402
 import mlx_lock  # noqa: E402
 import mlx_vision  # noqa: E402
+import mlx_trace  # noqa: E402
 
 
 def emit(value):
@@ -24,13 +26,16 @@ except RuntimeError as error:
     sys.exit(1)
 
 try:
-    from mlx_lm import load, generate
+    from mlx_lm import load, generate, stream_generate
     from mlx_lm.sample_utils import make_sampler
 
     # An optional LoRA adapter goes on top of the base weights, which are never modified.
     adapter_path = os.environ.get("AGENT_MLX_ADAPTER_PATH") or None
+    _load_started = time.perf_counter()
     model, tokenizer = load(sys.argv[1], adapter_path=adapter_path)
-    emit({"type": "ready", "adapter": adapter_path})
+    # Log del model: how long the load took, reported with the first traced call.
+    LOAD_SECONDS = round(time.perf_counter() - _load_started, 2)
+    emit({"type": "ready", "adapter": adapter_path, "loadSeconds": LOAD_SECONDS})
 except Exception as error:
     emit({"type": "result", "error": f"No s’ha pogut carregar MLX: {error}"})
     sys.exit(1)
@@ -68,6 +73,7 @@ def strip_thinking(text):
 # Images (mlx_vision.py): a model whose weights have a vision tower switches to mlx-vlm on the first
 # request with images, after freeing the text model, and stays there. Not with a LoRA adapter on top.
 MODEL_DIR = sys.argv[1]
+CONTEXT_LIMIT = mlx_trace.context_limit(MODEL_DIR)
 HAS_VISION = mlx_vision.model_has_vision(MODEL_DIR) and not adapter_path
 BACKEND = "text"
 VLM = None
@@ -88,9 +94,10 @@ def switch_to_vision():
     BACKEND = "vision"
 
 
-def generate_with_vision(messages, tools, request, paths, index):
+def generate_with_vision(messages, tools, request, paths, index, trace=None):
     from mlx_vlm import generate as vlm_generate
     vlm_model, processor = VLM
+    started = time.perf_counter()
     prompt = processor.apply_chat_template(
         mlx_vision.with_images(messages, index, len(paths)),
         tokenize=False,
@@ -107,6 +114,9 @@ def generate_with_vision(messages, tools, request, paths, index):
         temperature=float(request.get("temperature", 0.0)),
         verbose=False,
     )
+    # Log del model: the prompt after the template and the figures mlx-vlm gives (no token stream here).
+    if trace is not None:
+        trace.update(mlx_trace.metrics(result, started), prompt=prompt)
     return getattr(result, "text", result)
 
 
@@ -129,8 +139,14 @@ for line in sys.stdin:
         if backend == "vision":
             if BACKEND != "vision":
                 switch_to_vision()
-            answer = generate_with_vision(messages, tools, request, paths, image_message)
-            emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip()})
+            trace = {} if request.get("trace") else None
+            answer = generate_with_vision(messages, tools, request, paths, image_message, trace)
+            text = normalize_tool_calls(strip_thinking(answer), tools).strip()
+            if trace is not None:
+                trace.update(raw=answer, backend="mlx-vlm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(VLM[1].tokenizer.encode if hasattr(VLM[1], "tokenizer") else tokenizer.encode, messages, tools, request.get("trace_parts")))
+                emit({"type": "result", "text": text, "trace": trace})
+            else:
+                emit({"type": "result", "text": text})
             continue
         prompt = tokenizer.apply_chat_template(
             messages,
@@ -139,6 +155,16 @@ for line in sys.stdin:
             tools=tools,
             enable_thinking=THINKING,
         )
+        if request.get("trace"):
+            # Log del model (the panel is open): the same generation, streamed and measured.
+            answer, trace = mlx_trace.traced_generate(
+                stream_generate, model, tokenizer, prompt, int(request.get("max_tokens", 700)),
+                make_sampler(temp=float(request.get("temperature", 0.0))), LOGITS_PROCESSORS or None, emit,
+                logprobs=bool(request.get("logprobs")),
+            )
+            trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")))
+            emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "trace": trace})
+            continue
         answer = generate(
             model,
             tokenizer,
