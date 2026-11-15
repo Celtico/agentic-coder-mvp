@@ -21,7 +21,7 @@ test('each pane but the editor has a toggle in the left bar that shows when it i
     assert.match(app, new RegExp(`${name}: \\{ icon: ${icon}, label: [^\\n]*palette: ${open} \\? 'agentic'`), icon);
   }
   // Plain ghost with no background: open, only the icon is in the accent; closed, muted. The same size for all.
-  assert.match(app, /icon=\{button\.icon\} label=\{button\.label\} w="38px" h="38px" variant="ghost" colorPalette=\{button\.palette\} color=\{button\.palette === 'agentic' \? 'agentic\.fg' : 'fg\.muted'\} aria-pressed=\{button\.palette === 'agentic'\}/);
+  assert.match(app, /icon=\{button\.icon\} label=\{button\.label\} w="38px" h="38px" variant="ghost" colorPalette=\{button\.palette\} color=\{button\.palette === 'agentic' \? 'colorPalette\.solid' : 'fg\.muted'\} aria-pressed=\{button\.palette === 'agentic'\}/);
   assert.doesNotMatch(app, /variant=\{button\.palette === 'agentic' \? 'solid'/, 'never a full solid background');
   assert.doesNotMatch(app, /bg=\{button\.palette === 'agentic'/, 'no background when open, not even subtle');
   // The console is opened only from the bar now, not from the browser's toolbar as well.
