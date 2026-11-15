@@ -1658,8 +1658,10 @@ export function App(): React.JSX.Element {
 
   const editorTabLabels = tabLabels(editorTabs);
   const editorPane = (
-    <Flex h="full" minH="0" minW="0" direction="column" p="3" bg="bg">
-      <Flex align="center" justify="space-between" gap="2" mb="3" minW="0">
+    // Monaco goes edge to edge (full bleed): only the tabs row has padding, with a line under it like
+    // the panes' secondary bar.
+    <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
+      <Flex flex="none" align="center" justify="space-between" gap="2" px="3" minW="0" borderBottomWidth="1px" borderColor="border" data-editor-tabs>
         {/* One tab per open file; its × closes it (a dot before the name: changes not saved). */}
         <Tabs.Root flex="1" minW="0" size="sm" variant="line" value={editingPath ?? ''} onValueChange={({ value }) => { if (value) void openEditor(value); }} activationMode="manual">
           <Tabs.List minW="0" overflowX="auto" overflowY="hidden" borderBottomWidth="0" aria-label="Fitxers oberts">

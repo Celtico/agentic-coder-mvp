@@ -245,3 +245,11 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
   assert.match(app, /<PaneRow items=\{topItems\} flexId="chat"/);
   assert.doesNotMatch(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}/, 'no fixed grid of equal columns');
 });
+
+test('the editor: Monaco goes edge to edge, only the tabs row has padding and a line under it', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  const editor = app.slice(app.indexOf('const editorPane = ('), app.indexOf('<Editor\n', app.indexOf('const editorPane = (')));
+  assert.match(editor, /<Flex h="full" minH="0" minW="0" direction="column" bg="bg">/);
+  assert.doesNotMatch(editor, /direction="column" p="3"/, 'no padding around Monaco');
+  assert.match(editor, /<Flex flex="none" align="center" justify="space-between" gap="2" px="3" minW="0" borderBottomWidth="1px" borderColor="border" data-editor-tabs>/);
+});
