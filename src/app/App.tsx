@@ -20,6 +20,7 @@ import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-c
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
+import { scrollArea } from '../theme/scroll-area';
 import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
@@ -1635,7 +1636,7 @@ export function App(): React.JSX.Element {
   const chatModelLabel = modelOptions.find((model) => model.id === selectedModel)?.label;
   const chatPane = (
     <PaneCard label="Agentic Coder" header={<PaneHeader icon={ChatMark} title="Agentic Coder" subtitle={chatModelLabel}/>}>
-      <Box ref={feedRef} flex="1" minH="0" overflowY="auto" overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" scrollbarGutter="stable">
+      <Box ref={feedRef} flex="1" minH="0" {...scrollArea} overscrollBehavior="contain" px="max(24px, calc((100% - 820px) / 2))" py="8" scrollbarGutter="stable">
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
           const experienceKey = `${activeSessionId}:${index}`;
@@ -1767,7 +1768,7 @@ export function App(): React.JSX.Element {
               : <Grid flex="1" minH="0" minW="0" templateColumns={gitWide ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'} templateRows={gitWide || !gitSelectedCommit ? 'minmax(0, 1fr)' : 'minmax(0, 3fr) minmax(0, 2fr)'}>
                 <Flex minW="0" minH="0" direction="column" borderRightWidth={gitWide ? '1px' : '0'} borderColor="border">
                   <Box flex="none" p="2" borderBottomWidth="1px" borderColor="border"><Input size="sm" value={gitSearch} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setGitSearch(event.target.value)} placeholder="Missatge o hash" aria-label="Filtra commits"/></Box>
-                  <Box flex="1" minH="0" overflowY="auto">
+                  <Box flex="1" minH="0" {...scrollArea}>
                     {gitHistory.commits.filter((commit) => `${commit.subject} ${commit.shortHash} ${commit.author} ${commit.decorations}`.toLowerCase().includes(gitSearch.toLowerCase())).map((commit, index) => <Button key={commit.hash} w="full" h="auto" minH="54px" px="2" py="1.5" justifyContent="flex-start" textAlign="left" whiteSpace="normal" rounded="none" variant={gitSelectedCommit?.hash === commit.hash ? 'subtle' : 'ghost'} colorPalette={gitSelectedCommit?.hash === commit.hash ? 'agentic' : 'gray'} onClick={() => void loadGitCommitDetails(commit)}>
                   <HStack align="stretch" gap="2" w="full" minW="0">
                     <Flex position="relative" w="16px" flex="none" align="center" justify="center"><Box position="absolute" top="0" bottom="0" left="7px" borderLeftWidth="1px" borderColor="border"/><Box position="relative" zIndex="1" w="9px" h="9px" rounded="full" bg={index === 0 ? 'agentic.solid' : 'fg.muted'} borderWidth="2px" borderColor="bg"/></Flex>
@@ -1782,7 +1783,7 @@ export function App(): React.JSX.Element {
                 : gitCommitDetails ? <>
                   <Box p="3" borderBottomWidth="1px" borderColor="border"><Text fontWeight="semibold" fontSize="sm" overflowWrap="anywhere">{gitCommitDetails.subject}</Text><Text mt="2" fontSize="xs" color="fg.muted">{gitCommitDetails.author} · {Number.isNaN(Date.parse(gitCommitDetails.date)) ? gitCommitDetails.date : new Date(gitCommitDetails.date).toLocaleString()}</Text><Text mt="1" fontSize="xs" color="fg.muted" fontFamily="mono">{gitCommitDetails.shortHash}</Text>{gitCommitDetails.decorations && <Badge mt="2" colorPalette="agentic" variant="subtle">{gitCommitDetails.decorations}</Badge>}</Box>
                   <Text px="3" py="2" fontSize="xs" color="fg.muted">{gitCommitDetails.files.length} fitxers canviats</Text>
-                  <Box flex="1" minH="0" overflowY="auto">{gitCommitDetails.files.map((file) => <HStack key={`${file.status}-${file.path}`} px="3" py="1.5" gap="2" title={file.path}><Badge size="sm" colorPalette={file.status === 'A' ? 'green' : file.status === 'D' ? 'red' : 'yellow'}>{file.status}</Badge><Text fontSize="xs" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{file.path}</Text></HStack>)}{!gitCommitDetails.files.length && <Text px="3" fontSize="sm" color="fg.muted">No hi ha fitxers modificats en aquest commit.</Text>}</Box>
+                  <Box flex="1" minH="0" {...scrollArea}>{gitCommitDetails.files.map((file) => <HStack key={`${file.status}-${file.path}`} px="3" py="1.5" gap="2" title={file.path}><Badge size="sm" colorPalette={file.status === 'A' ? 'green' : file.status === 'D' ? 'red' : 'yellow'}>{file.status}</Badge><Text fontSize="xs" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{file.path}</Text></HStack>)}{!gitCommitDetails.files.length && <Text px="3" fontSize="sm" color="fg.muted">No hi ha fitxers modificats en aquest commit.</Text>}</Box>
                   {gitCommitDetails.truncated && <Text p="3" fontSize="xs" color="fg.warning">La llista de fitxers s’ha limitat.</Text>}
                 </> : <Text p="3" fontSize="sm" color="fg.muted">Selecciona un commit per veure’n els detalls.</Text>}
                 </Flex>}
@@ -1817,7 +1818,7 @@ export function App(): React.JSX.Element {
                 </HStack>
               </HStack>;
   const learningPane = (
-    <Box h="full" minH="0" p="3" overflowY="auto" scrollbarGutter="stable"><Stack gap="3">
+    <Box h="full" minH="0" p="3" {...scrollArea} scrollbarGutter="stable"><Stack gap="3">
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
@@ -1870,7 +1871,7 @@ export function App(): React.JSX.Element {
                 </HStack>
                 {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
                 {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
-                {trainingLog.length > 0 && <Box mt="2" maxH="140px" overflowY="auto" fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
+                {trainingLog.length > 0 && <Box mt="2" maxH="140px" {...scrollArea} fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
                 {learningVersions && learningVersions.betas.length > 0 && <Stack mt="2" gap="1">{learningVersions.betas.map((beta, index) => <HStack key={beta.folder} gap="2" px="2.5" py="1.5" borderWidth="1px" borderColor="border" borderRadius="md" minW="0">
                   <Stack flex="1" minW="0" gap="0">
                     <Text fontSize="sm" fontWeight="medium">Beta {beta.number} · {beta.cases} {beta.cases === 1 ? 'cas' : 'casos'}{index === 0 ? ' · al selector' : ''}</Text>
@@ -1941,7 +1942,7 @@ export function App(): React.JSX.Element {
         <Button variant="ghost" size="xs" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
         <Button variant="ghost" size="xs" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>
       </PaneToolbar>
-      <Box flex="1" minH="0" overflowY="auto" px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
+      <Box flex="1" minH="0" {...scrollArea} px="3" py="2" fontFamily="Menlo, Monaco, monospace" fontSize="11px" lineHeight="1.5" aria-label="Consola del navegador" aria-live="polite">
         {consoleEntries.length === 0
           ? <Notice tone="info">{browserUrl === 'about:blank' ? 'Obre una pàgina al navegador i aquí hi sortirà el que escrigui a la consola.' : 'La pàgina no ha escrit res a la consola.'}</Notice>
           : consoleEntries.map((entry, index) => <Flex key={index} gap="3" py="0.5" borderBottomWidth="1px" borderColor="border" color={consoleTone[entry.level]}>
@@ -2093,7 +2094,7 @@ export function App(): React.JSX.Element {
               <PaneHeader icon={Conversations} title="Converses" actions={<><IconButton icon={Trash} label="Paperera de converses" onClick={() => void openChatTrash()}/><IconButton icon={Plus} label="Nova conversa" onClick={() => void newChat()}/></>}/>
               </>}>
               {/* Every conversation of the project (it used to stop at 12, so the list never scrolled). */}
-              <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" px="2" pt="1.5" pb="2">
+              <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable" px="2" pt="1.5" pb="2">
                 <Stack gap="0.5">
                     {sessions.filter((session) => session.messages.some((message) => message.role === 'user') && (!session.projectPath || session.projectPath === project?.path)).map((session) => <Menu.Root key={session.id}>
                       <Menu.ContextTrigger asChild><Box position="relative" data-group>
@@ -2122,7 +2123,7 @@ export function App(): React.JSX.Element {
               </Menu.Root>
               </>}/>
               </>}>
-              <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" px="2" pt="1.5" pb="2">
+              <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable" px="2" pt="1.5" pb="2">
                     {!project && <Text px="2" fontSize="xs" color="fg.muted">Selecciona un projecte a dalt per veure’n els fitxers.</Text>}
                     <Box w="full" minH="full" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => {
                       event.preventDefault();
@@ -2167,7 +2168,7 @@ export function App(): React.JSX.Element {
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
       case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>} toolbar={evaluationToolbar}>
-        <Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable" pt="1" px="3" pb="3">{evaluationPane}</Box>
+        <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable" pt="1" px="3" pb="3">{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
@@ -2379,7 +2380,7 @@ export function App(): React.JSX.Element {
                       <Accordion.ItemContent><Accordion.ItemBody><Stack gap="2" fontSize="xs">
                         {([['Què es demana', item.task], ['El missatge de l’usuari', item.prompt], ['La resposta bona', item.answer], ['Per què és bona', item.evidence]] as const).map(([label, text]) => <Box key={label}>
                           <Text color="fg.muted" mb="1">{label}</Text>
-                          <Box as="pre" whiteSpace="pre-wrap" overflowWrap="anywhere" fontFamily={label === 'La resposta bona' ? 'mono' : 'body'} bg="bg.subtle" borderRadius="md" p="2" maxH="48" overflowY="auto">{text}</Box>
+                          <Box as="pre" whiteSpace="pre-wrap" overflowWrap="anywhere" fontFamily={label === 'La resposta bona' ? 'mono' : 'body'} bg="bg.subtle" borderRadius="md" p="2" maxH="48" {...scrollArea}>{text}</Box>
                         </Box>)}
                       </Stack></Accordion.ItemBody></Accordion.ItemContent>
                     </Accordion.Item>)}</Accordion.Root>}
@@ -2732,7 +2733,7 @@ export function App(): React.JSX.Element {
               <Text fontSize="xs" color="fg.muted">Historial dels fitxers</Text>
             </Stack>
             {fileHistoryLoading && !fileHistoryVersions.length ? <HStack px="3" color="fg.muted"><Spinner size="sm"/><Text>Carregant historial…</Text></HStack>
-              : fileHistoryVersions.length ? <Box flex="1" minH="0" overflowY="auto">{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="64px" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'agentic' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
+              : fileHistoryVersions.length ? <Box flex="1" minH="0" {...scrollArea}>{fileHistoryVersions.map((version, index) => <Button key={`${version.id}:${version.path}:${index}`} w="full" h="auto" minH="64px" p="3" rounded="none" justifyContent="flex-start" textAlign="left" whiteSpace="normal" variant={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'subtle' : 'ghost'} colorPalette={fileHistorySelectedId === version.id && fileHistoryVersionPath === version.path ? 'agentic' : 'gray'} onClick={() => void selectFileHistoryVersion(version)}><Stack gap="0" align="flex-start"><Text fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" maxW="full" title={version.path}>{version.path}</Text><Text fontSize="xs" color="fg.muted">{Number.isNaN(Date.parse(version.savedAt)) ? version.savedAt : new Date(version.savedAt).toLocaleString()} · {version.label} · {version.bytes} bytes</Text></Stack></Button>)}</Box>
                 : <Text px="3" fontSize="sm" color="fg.muted">No hi ha versions desades en aquesta carpeta.</Text>}
           </Flex>
           <Flex minW="0" minH="0" direction="column">

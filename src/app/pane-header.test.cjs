@@ -239,7 +239,7 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   for (const name of ['conversationsColumn', 'filesColumn']) {
     const column = app.slice(app.indexOf(`const ${name} = (`), app.indexOf('</PaneCard>', app.indexOf(`const ${name} = (`)));
-    assert.match(column, /<Box flex="1" minH="0" overflowY="auto" scrollbarGutter="stable"/, name);
+    assert.match(column, /<Box flex="1" minH="0" \{\.\.\.scrollArea\} scrollbarGutter="stable"/, name);
   }
   // The whole list of the project's conversations, not the first 12: a long list scrolls.
   const conversations = app.slice(app.indexOf('const conversationsColumn = ('), app.indexOf('const filesColumn = ('));
@@ -255,4 +255,13 @@ test('the editor: Monaco goes edge to edge, only the tabs row has padding and a 
   assert.match(editor, /<Flex h="full" minH="0" minW="0" direction="column" bg="bg">/);
   assert.doesNotMatch(editor, /direction="column" p="3"/, 'no padding around Monaco');
   assert.match(editor, /<Flex flex="none" align="center" justify="space-between" gap="2" px="3" minW="0" borderBottomWidth="1px" borderColor="border" data-editor-tabs>/);
+});
+
+test('every scrolling box shows a thin bar when it overflows: one shared style, the theme’s tokens', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /overflowY="auto"/, 'every scrolling box uses scrollArea');
+  assert.ok((app.match(/\{\.\.\.scrollArea\}/g) || []).length >= 10);
+  const style = fs.readFileSync(path.join(__dirname, '..', 'theme', 'scroll-area.ts'), 'utf8');
+  assert.match(style, /_scrollbarThumb: \{ bg: "border\.emphasized", borderRadius: "full"/);
+  assert.doesNotMatch(style, /#[0-9a-f]{3,8}\b/i);
 });
