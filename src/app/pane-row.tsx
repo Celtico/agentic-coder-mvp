@@ -57,11 +57,14 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     handle.setPointerCapture(event.pointerId)
     const startX = event.clientX
     const starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }
-    let changes = pair(id, 0, starts)
+    // The widths as they are on screen (fitted to the window) become the saved ones for the whole row: if
+    // the saved widths did not fit, the squeeze no longer redistributes while dragging, so no other pane moves.
+    const onScreen = Object.fromEntries(fixedIds.map((paneId) => [paneId, fitted[paneId]]))
+    let changes = { ...onScreen, ...pair(id, 0, starts) }
     setDragging(id)
     window.getSelection()?.removeAllRanges()
     const move = (moved: globalThis.PointerEvent) => {
-      changes = pair(id, moved.clientX - startX, starts)
+      changes = { ...onScreen, ...pair(id, moved.clientX - startX, starts) }
       onWidth(changes)
     }
     // The drag ends however the pointer is let go: on the divider, anywhere in the window, when the
@@ -95,7 +98,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     const step = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0
     if (!step) return
     event.preventDefault()
-    onCommit(pair(id, step))
+    onCommit({ ...Object.fromEntries(fixedIds.map((paneId) => [paneId, fitted[paneId]])), ...pair(id, step) })
   }
 
   return (

@@ -167,3 +167,22 @@ test('the work area does not clip the bottom row and sits above the status bar, 
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<Grid ref=\{appAreaRef\} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax\(0, 1fr\)" bg="canvas" position="relative" zIndex="1">/);
 });
+
+test('dragging starts from the widths on screen: if the saved ones were squeezed to fit, no other pane moves at a limit', () => {
+  const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  assert.match(row, /const onScreen = Object\.fromEntries\(fixedIds\.map\(\(paneId\) => \[paneId, fitted\[paneId\]\]\)\)/);
+  assert.match(row, /changes = \{ \.\.\.onScreen, \.\.\.pair\(id, moved\.clientX - startX, starts\) \}/);
+  // With the on-screen widths saved, the row fits and the fit leaves them as they are.
+  const ids = ['dock-console', 'dock-terminal', 'dock-evaluation'];
+  const squeezed = rows.fitPaneWidths(ids, { 'dock-console': 520, 'dock-terminal': 520, 'dock-evaluation': 720 }, { rowWidth: 1600, flexMin: 140, handles: 3 });
+  assert.deepEqual(rows.fitPaneWidths(ids, squeezed, { rowWidth: 1600, flexMin: 140, handles: 3 }), squeezed);
+});
+
+test('a drag exchanges width only inside its pair: the pair’s sum stays the same at any delta, clamped at either minimum', () => {
+  for (const delta of [-1000, -137.4, -3.5, 0, 2.5, 61.7, 1000]) {
+    const pair = rows.draggedPair({ left: 'dock-terminal', right: 'dock-evaluation', startLeft: 300, startRight: 400, delta, rightIsFlex: false, flexMin: 140 });
+    assert.equal(pair['dock-terminal'] + pair['dock-evaluation'], 700, String(delta));
+    assert.ok(pair['dock-terminal'] >= 140 && pair['dock-evaluation'] >= 140, String(delta));
+    assert.deepEqual(Object.keys(pair).sort(), ['dock-evaluation', 'dock-terminal'], 'no other pane');
+  }
+});
