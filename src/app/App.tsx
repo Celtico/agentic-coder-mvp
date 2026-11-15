@@ -11,7 +11,7 @@ import {
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
-  LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
+  LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
@@ -1804,7 +1804,6 @@ export function App(): React.JSX.Element {
         {/* Reload beside the arrows, like a browser's toolbar. */}
         <IconButton icon={RefreshCw} label="Recarrega" onClick={() => webviewRef.current?.reload()}/>
         <Input flex="1" minW="0" variant="subtle" value={browserAddress} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBrowserAddress(event.target.value)} onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => { if (event.key === 'Enter') navigateBrowser(); }} placeholder="https://…" size="xs"/>
-        <IconButton icon={ExternalLink} label="Ves a l’adreça" colorPalette="agentic" onClick={navigateBrowser}/>
         <IconButton icon={Paperclip} label="Afegeix la pàgina al xat" onClick={usePageContext} disabled={browserUrl === 'about:blank'}/>
         <Box position="relative" flex="none">
           {consoleErrorCount > 0 && <Box position="absolute" top="1px" right="1px" minW="3.5" h="3.5" px="3px" rounded="full" bg="red.solid" color="red.contrast" fontSize="9px" lineHeight="14px" textAlign="center" pointerEvents="none">{consoleErrorCount > 99 ? '99+' : consoleErrorCount}</Box>}

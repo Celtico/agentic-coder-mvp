@@ -311,3 +311,9 @@ test('Preferències › Aparença: its sections open and close (the theme open),
   const preferences = app.slice(app.indexOf('<Dialog.Content data-preferences>'), app.indexOf('</Dialog.Content>', app.indexOf('<Dialog.Content data-preferences>')));
   assert.doesNotMatch(preferences, /Dialog\.Footer|>Tanca</);
 });
+
+test('the browser’s address goes with Enter; there is no separate «go» button', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /label="Ves a l’adreça"/);
+  assert.match(app, /onKeyDown=\{\(event: React\.KeyboardEvent<HTMLInputElement>\) => \{ if \(event\.key === 'Enter'\) navigateBrowser\(\); \}\}/);
+});
