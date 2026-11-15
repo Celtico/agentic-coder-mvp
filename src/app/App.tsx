@@ -1011,9 +1011,7 @@ export function App(): React.JSX.Element {
       // Silence (no sound reaches the microphone): Whisper would invent «Gràcies.»; it is not called.
       if (isSilent(wavLevel(wav))) {
         if (live) void window.agentic.stopLiveDictation?.();
-        // Which setting to change: macOS's answer for the microphone and the app it counts (src/electron/dictation.cjs).
-        const microphone = await window.agentic.microphoneStatus?.().catch(() => null);
-        setStatus(microphone?.notice || 'No arriba so del micròfon: comprova el dispositiu d’entrada i el permís del micròfon (Configuració del Sistema › Privadesa i seguretat › Micròfon).');
+        setStatus('No arriba so del micròfon: comprova el dispositiu d’entrada i el permís del micròfon (Configuració del Sistema › Privadesa i seguretat › Micròfon › Electron).');
         return;
       }
       const audio = { data: toBase64(wav) };

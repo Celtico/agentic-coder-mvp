@@ -191,23 +191,7 @@ const WHISPER_MIN_FREE_BYTES = 1.5 * 1024 ** 3;
 const WHISPER_ROOMY_TOTAL_BYTES = 12 * 1024 ** 3;
 const roomForWhisper = (freeBytes, totalBytes = 0) => totalBytes >= WHISPER_ROOMY_TOTAL_BYTES || (Number.isFinite(freeBytes) && freeBytes >= WHISPER_MIN_FREE_BYTES);
 
-/** The app macOS asks about the microphone when the app runs from a terminal (its name, as Settings shows it). */
-function launcherName(termProgram, bundleId) {
-  const byProgram = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', vscode: 'Visual Studio Code', WarpTerminal: 'Warp', ghostty: 'Ghostty' };
-  if (byProgram[termProgram]) return byProgram[termProgram];
-  if (bundleId === 'com.anthropic.claudefordesktop') return 'Claude';
-  return termProgram ? String(termProgram) : null;
-}
-
-/** The notice for a silent recording: the setting to change, as precisely as the app can tell it. */
-function silentRecordingNotice({ status, launcher } = {}) {
-  const where = launcher || 'Electron';
-  if (status && status !== 'granted') return `macOS no deixa usar el micròfon a l’app: Configuració del Sistema › Privadesa i seguretat › Micròfon › activa «${where}»${launcher ? ' (és des d’on obres l’app amb npm start)' : ''}, i torna-la a obrir.`;
-  return `No arriba so del micròfon: comprova a Configuració del Sistema › So › Entrada que el micròfon triat és el bo i que el nivell es mou quan parles${launcher ? `, i a Privadesa i seguretat › Micròfon que «${launcher}» hi és activat (és des d’on obres l’app amb npm start)` : ''}.`;
-}
-
 module.exports = {
-  launcherName, silentRecordingNotice,
   createLiveTranscriber, createResidentTranscriber, LIVE_DICTATION_IDLE_MS, WHISPER_MIN_FREE_BYTES, roomForWhisper,
   DICTATION_MODELS, DEFAULT_DICTATION_MODEL, DICTATION_LANGUAGES, MAX_AUDIO_BYTES,
   defaultDictationPreferences, normalizeDictationPreferences, dictationModelDirectory, dictationModelInstalled,

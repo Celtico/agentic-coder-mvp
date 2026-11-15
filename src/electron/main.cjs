@@ -1739,16 +1739,6 @@ ipcMain.handle('preferences:set-dictation', async (_event, change) => {
   await saveSettings();
   return dictationPreferences;
 });
-// Why a recording is silent, for the window's notice: macOS's answer for the microphone, and which app
-// that answer belongs to. Run with «npm start» from a terminal, macOS counts the terminal app (Terminal,
-// iTerm…), not Electron: it is that app that needs the microphone in Privacy & Security.
-ipcMain.handle('dictation:microphone-status', async () => {
-  const state = {
-    status: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('microphone') : 'granted',
-    launcher: app.isPackaged ? null : dictation.launcherName(process.env.TERM_PROGRAM, process.env.__CFBundleIdentifier),
-  };
-  return { ...state, notice: dictation.silentRecordingNotice(state) };
-});
 // macOS asks the user once for the microphone; the answer is the system's.
 ipcMain.handle('dictation:microphone', async () => process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true);
 // Live dictation: a warm Whisper while the user speaks (partial text every few seconds), then the final
