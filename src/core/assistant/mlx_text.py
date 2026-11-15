@@ -1,5 +1,6 @@
 """Text handling of the MLX worker that does not need a model: kept apart so it can be tested."""
 import json
+import re
 
 
 def strip_thinking(text, start, end):
@@ -20,7 +21,11 @@ def normalize_tool_calls(text, tools, start, end, parser):
     Qwen 3.5 and Qwen3-Coder: XML inside <tool_call>...</tool_call>). mlx_lm knows the format of the loaded
     model; its calls are rewritten as <tool_call>{json}</tool_call>, the one form the agent reads, so the
     agent does not depend on the model family. A call that is already JSON is left as it is."""
-    if not start or not parser or start not in text:
+    # Without a parser of its own (a vision model's weights loaded with mlx_lm, 15-11-2026: MiMo VL), the
+    # calls are still read in the forms that need none: JSON, and JSON inside <function=name>…</function>.
+    if not start:
+        start, end = "<tool_call>", "</tool_call>"
+    if start not in text:
         return text
     out, rest = "", text
     while start in rest:
@@ -34,6 +39,8 @@ def normalize_tool_calls(text, tools, start, end, parser):
         except Exception:
             pass
         try:
+            if not parser:
+                raise ValueError("no parser")
             parsed = parser(body, tools)
             for call in parsed if isinstance(parsed, list) else [parsed]:
                 out += "<tool_call>" + json.dumps({"name": call["name"], "arguments": call.get("arguments", {})}, ensure_ascii=False) + "</tool_call>"
@@ -47,6 +54,20 @@ def _tool_call_objects(body):
     text = body.strip()
     if text.startswith("call:"):
         text = text[len("call:"):].strip()
+    # Qwen-style models sometimes put JSON arguments inside the XML function tag.
+    tagged = re.fullmatch(r"<function=([\w.-]+)>\s*(\{.*\})\s*</function>", text, re.DOTALL)
+    if tagged:
+        return [{"name": tagged.group(1), "arguments": json.loads(tagged.group(2))}]
+    # Qwen3-Coder's XML (<function=name><parameter=key>value</parameter>…), read without mlx_lm's parser.
+    xml = re.fullmatch(r"<function=([\w.-]+)>(.*)</function>", text, re.DOTALL)
+    if xml and "<parameter=" in xml.group(2):
+        arguments = {}
+        for key, value in re.findall(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", xml.group(2), re.DOTALL):
+            try:
+                arguments[key] = json.loads(value) if value.strip()[:1] in "[{" else value
+            except ValueError:
+                arguments[key] = value
+        return [{"name": xml.group(1), "arguments": arguments}]
     value = json.loads(text)
     calls = value if isinstance(value, list) else [value]
     if not all(isinstance(call, dict) and isinstance(call.get("name"), str) for call in calls):
