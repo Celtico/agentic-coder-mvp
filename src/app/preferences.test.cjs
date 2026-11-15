@@ -107,7 +107,7 @@ test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s
   // Swatch cards like Chakra's token docs: the colour alone, its name and its values.
   assert.match(app, /role="radiogroup" aria-label="Fons de les finestres"/);
   assert.match(app, /PANE_BACKGROUNDS\.map\(\(value\) => \{/);
-  assert.match(app, /<Box h="14" borderRadius="md" borderWidth="1px" borderColor="border" bg=\{token\} data-swatch\/>/);
+  assert.match(app, /<Box h="14" borderRadius="md" bg="canvas" p="2" display="flex" data-swatch>\n\s*<Card\.Root variant=\{appearance\.paneStyle\} bg=\{token\} flex="1" minH="0"\/>/);
   assert.doesNotMatch(app, /<Theme key=\{mode\}/, 'only the colour, no light/dark comparison');
   assert.doesNotMatch(app, /<NativeSelect\.Field aria-label="Fons de les finestres"/);
   assert.match(app, /theme: \{ background: tokenColor\(paneSurface\)/, 'the terminal follows it');

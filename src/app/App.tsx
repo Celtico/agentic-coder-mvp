@@ -2693,8 +2693,10 @@ export function App(): React.JSX.Element {
                       {PANE_BACKGROUNDS.map((value) => {
                         const token = value === 'auto' ? (appearance.paneStyle === 'elevated' ? 'bg.panel' : 'bg') : value;
                         return <Box key={value} as="button" role="radio" aria-checked={appearance.paneBg === value} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneBg === value ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneBg: value }))} data-pane-bg-option={value}>
-                          {/* Only the colour, in the mode in use, like Chakra's token docs. */}
-                          <Box h="14" borderRadius="md" borderWidth="1px" borderColor="border" bg={token} data-swatch/>
+                          {/* How the inside of a panel looks with it: an empty panel (the panel style chosen) on the window. */}
+                          <Box h="14" borderRadius="md" bg="canvas" p="2" display="flex" data-swatch>
+                            <Card.Root variant={appearance.paneStyle} bg={token} flex="1" minH="0"/>
+                          </Box>
                           <Text mt="1.5" fontSize="xs" truncate fontFamily={value === 'auto' ? undefined : 'mono'} color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value === 'auto' ? `Segons l’estil (${token})` : value}</Text>
                           {/* Its values, as Chakra's token docs show them: «light: {gray.100} · dark: {gray.900}». */}
                           {(['_light', '_dark'] as const).map((mode) => <Text key={mode} fontSize="2xs" color="fg.muted" fontFamily="mono" truncate>{mode === '_light' ? 'light' : 'dark'}: {tokenValue(chakraSystem, token, mode)}</Text>)}
