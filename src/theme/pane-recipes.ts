@@ -64,7 +64,9 @@ export const paneCardRecipe = defineSlotRecipe({
     variant: {
       subtle: { root: { bg: "bg" } },
       outline: { root: { bg: "bg", borderWidth: "1px", borderColor: "border" } },
-      elevated: { root: { bg: "bg", boxShadow: "md" } },
+      // In dark mode a shadow on the dark canvas does not show: there a raised pane is a lighter surface
+      // with a faint light edge, as dark interfaces show height.
+      elevated: { root: { bg: "bg", boxShadow: "md", _dark: { bg: "bg.subtle", boxShadow: "lg", borderWidth: "1px", borderColor: "whiteAlpha.100" } } },
     },
     size: { ...(chakraCard.variants.size as Record<string, unknown>), pane: { root: { "--card-padding": "0" } } },
   },

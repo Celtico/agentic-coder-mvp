@@ -107,7 +107,7 @@ test('every pane is a Chakra Card with its header and body, in Chakra’s three 
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /subtle: \{ root: \{ bg: "bg" \} \}/);
   assert.match(recipes, /outline: \{ root: \{ bg: "bg", borderWidth: "1px", borderColor: "border" \} \}/);
-  assert.match(recipes, /elevated: \{ root: \{ bg: "bg", boxShadow: "md" \} \}/);
+  assert.match(recipes, /elevated: \{ root: \{ bg: "bg", boxShadow: "md", _dark: \{ bg: "bg\.subtle", boxShadow: "lg", borderWidth: "1px", borderColor: "whiteAlpha\.100" \} \} \}/, 'in dark mode the shadow alone does not show: a lighter surface and a faint edge');
   assert.match(recipes, /defaultVariants: \{ \.\.\.chakraCard\.defaultVariants, variant: "subtle", size: "pane" \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.equal((app.match(/<PaneCard[ >]/g) || []).length, 8, 'terminal, the two frames, evaluation, the two columns, the chat, and the preview in Preferències');
