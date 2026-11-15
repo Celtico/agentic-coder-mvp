@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('agentic', {
   setDictationPreferences: (change) => ipcRenderer.invoke('preferences:set-dictation', change),
   askMicrophone: () => ipcRenderer.invoke('dictation:microphone'),
   transcribe: (audio) => ipcRenderer.invoke('dictation:transcribe', audio),
+  startLiveDictation: () => ipcRenderer.invoke('dictation:live-start'),
+  liveDictationPartial: (audio) => ipcRenderer.invoke('dictation:live-partial', audio),
+  liveDictationFinal: (audio) => ipcRenderer.invoke('dictation:live-final', audio),
+  stopLiveDictation: () => ipcRenderer.invoke('dictation:live-stop'),
   setAgentPreferences: (change) => ipcRenderer.invoke('preferences:set-agent', change),
   // The app's menu (src/electron/app-menu.cjs): its actions in the window, and the panes it marks open.
   onMenu: (callback) => {

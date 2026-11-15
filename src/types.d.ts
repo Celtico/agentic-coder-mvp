@@ -83,6 +83,11 @@ export interface AgenticBridge {
   setDictationPreferences(change: Partial<DictationPreferences>): Promise<DictationPreferences>;
   askMicrophone(): Promise<boolean>;
   transcribe(audio: { data: string }): Promise<{ text: string }>;
+  /** Live dictation (a warm Whisper while the user speaks); not live when the chat is answering, with the reason. */
+  startLiveDictation?(): Promise<{ live: boolean; reason?: string }>;
+  liveDictationPartial?(audio: { data: string }): Promise<{ text: string }>;
+  liveDictationFinal?(audio: { data: string }): Promise<{ text: string }>;
+  stopLiveDictation?(): Promise<boolean>;
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;

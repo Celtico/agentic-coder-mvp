@@ -61,3 +61,33 @@ export async function recordingToWav(blob: Blob): Promise<ArrayBuffer> {
     return encodeWav(mixToMono([rendered.getChannelData(0)]))
   } finally { await context.close().catch(() => {}) }
 }
+
+/**
+ * Partial transcriptions while the user speaks, never two at once: a job pushed while one runs waits,
+ * and a newer one replaces it (only the latest audio matters). `idle()` resolves when nothing runs or waits.
+ */
+export function createLatestQueue<T>(run: (job: T) => Promise<void>) {
+  let running = false
+  let pending: { job: T } | null = null
+  let waiters: (() => void)[] = []
+  const settle = () => { if (!running && !pending) { const done = waiters; waiters = []; done.forEach((resolve) => resolve()) } }
+  const start = (job: T) => {
+    running = true
+    void run(job).catch(() => {}).finally(() => {
+      running = false
+      const next = pending
+      pending = null
+      if (next) start(next.job)
+      else settle()
+    })
+  }
+  return {
+    push(job: T) { if (running) pending = { job }; else start(job) },
+    /** Drops what waits (the final pass is about to run). */
+    clear() { pending = null; settle() },
+    idle(): Promise<void> { return running || pending ? new Promise((resolve) => waiters.push(resolve)) : Promise.resolve() },
+  }
+}
+
+/** Every few seconds while dictating live, the audio so far is transcribed again. */
+export const LIVE_CHUNK_MS = 2500

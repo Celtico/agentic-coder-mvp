@@ -101,7 +101,58 @@ function parseDictationOutput(stdout) {
   return value.text.trim();
 }
 
+/**
+ * A warm Whisper process for live dictation (mlx_dictation.py --serve): `transcribe(file)` sends one audio
+ * file and resolves with its text, one at a time in order; `stop()` closes it. `child` is the spawned
+ * process (stdin, stdout, events); the first line it prints says it is ready (or why not).
+ */
+function createLiveTranscriber(child, { readyTimeoutMs = 60_000 } = {}) {
+  let buffer = '';
+  let nextId = 1;
+  const pending = new Map();
+  let settleReady;
+  const ready = new Promise((resolve, reject) => { settleReady = { resolve, reject }; });
+  const timer = setTimeout(() => settleReady.reject(new Error('El dictat en directe no s’ha pogut preparar a temps.')), readyTimeoutMs);
+  const fail = (error) => {
+    clearTimeout(timer);
+    settleReady.reject(error);
+    for (const job of pending.values()) job.reject(error);
+    pending.clear();
+  };
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      let value;
+      try { value = JSON.parse(line); } catch { continue; }
+      if (value.ready) { clearTimeout(timer); settleReady.resolve(); continue; }
+      if (value.id === undefined && value.error) { fail(new Error(value.error)); continue; }
+      const job = pending.get(value.id);
+      if (!job) continue;
+      pending.delete(value.id);
+      if (typeof value.error === 'string') job.reject(new Error(value.error)); else job.resolve(String(value.text || '').trim());
+    }
+  });
+  child.once('error', fail);
+  child.once('exit', () => fail(new Error('El dictat en directe s’ha aturat.')));
+  return {
+    ready,
+    transcribe(file) {
+      return new Promise((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        child.stdin.write(JSON.stringify({ id, file }) + '\n');
+      });
+    },
+    stop() { try { child.stdin.end(); } catch { /* already closed */ } },
+  };
+}
+
 module.exports = {
+  createLiveTranscriber,
   DICTATION_MODELS, DEFAULT_DICTATION_MODEL, DICTATION_LANGUAGES, MAX_AUDIO_BYTES,
   defaultDictationPreferences, normalizeDictationPreferences, dictationModelDirectory, dictationModelInstalled,
   validateDictationAudio, writeDictationAudio, createDictationQueue, parseDictationOutput,

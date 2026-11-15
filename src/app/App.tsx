@@ -25,7 +25,7 @@ import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneIcon, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
-import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
+import { appendDictation, createLatestQueue, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
 import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image-attachments';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
@@ -254,7 +254,9 @@ export function App(): React.JSX.Element {
   const [chatImages, setChatImages] = useState<ChatImage[]>([]);
   // Dictation (src/app/dictation.ts): record, then the text is transcribed on this Mac and added to the box.
   const [dictation, setDictation] = useState<'idle' | 'recording' | 'transcribing'>('idle');
-  const recorderRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const recorderRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; timer: ReturnType<typeof setTimeout>; live: boolean } | null>(null);
+  // Live dictation: what Whisper has heard so far, shown muted under the message box until the final pass.
+  const [dictationPartial, setDictationPartial] = useState('');
   const [trainingPrefs, setTrainingPrefs] = useState<Awaited<ReturnType<typeof window.agentic.trainingPreferences>> | null>(null);
   const [dictationInfo, setDictationInfo] = useState<Awaited<ReturnType<typeof window.agentic.dictationInfo>> | null>(null);
   const [chatDropActive, setChatDropActive] = useState(false);
@@ -925,35 +927,51 @@ export function App(): React.JSX.Element {
     if (dictation === 'recording' && current) { current.recorder.stop(); return; }
     try {
       if (!await window.agentic.askMicrophone()) { setStatus('Cal permís per al micròfon: Configuració del Sistema › Privadesa i seguretat › Micròfon.'); return; }
+      // Live when it can be (a warm Whisper, text while you speak); otherwise the text comes when you stop.
+      const live = await window.agentic.startLiveDictation?.().catch(() => ({ live: false, reason: '' })) ?? { live: false, reason: '' };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       const chunks: Blob[] = [];
-      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      // Partial passes over the audio so far, one at a time; the newest replaces one that waits.
+      const partials = createLatestQueue(async (audio: Blob) => {
+        const { text } = await window.agentic.liveDictationPartial!({ data: toBase64(await recordingToWav(audio)) });
+        if (recorderRef.current?.recorder === recorder) setDictationPartial(text);
+      });
+      recorder.ondataavailable = (event) => {
+        if (!event.data.size) return;
+        chunks.push(event.data);
+        if (live.live && recorder.state === 'recording') partials.push(new Blob(chunks, { type: recorder.mimeType }));
+      };
       recorder.onstop = () => {
         const recording = recorderRef.current;
         recorderRef.current = null;
         if (recording) clearTimeout(recording.timer);
         stream.getTracks().forEach((track) => track.stop());
-        void transcribeRecording(new Blob(chunks, { type: recorder.mimeType }));
+        partials.clear();
+        void partials.idle().then(() => transcribeRecording(new Blob(chunks, { type: recorder.mimeType }), live.live));
       };
-      recorderRef.current = { recorder, stream, chunks, timer: setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, MAX_RECORDING_MS) };
-      recorder.start();
+      recorderRef.current = { recorder, stream, chunks, live: live.live, timer: setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, MAX_RECORDING_MS) };
+      if (live.live) recorder.start(LIVE_CHUNK_MS); else recorder.start();
       setDictation('recording');
-      setStatus('Gravant… torna a clicar el micròfon per acabar.');
+      setDictationPartial('');
+      setStatus(live.live ? 'Escoltant… el text surt mentre parles; torna a clicar el micròfon per acabar.' : `Gravant… torna a clicar el micròfon per acabar.${live.reason ? ` (${live.reason})` : ''}`);
     } catch (error) {
+      void window.agentic.stopLiveDictation?.();
       setDictation('idle');
       setStatus(error instanceof DOMException && error.name === 'NotAllowedError' ? 'No hi ha permís per fer servir el micròfon.' : `No s’ha pogut gravar: ${errorText(error)}`);
     }
   }
-  async function transcribeRecording(blob: Blob) {
+  async function transcribeRecording(blob: Blob, live = false) {
     setDictation('transcribing');
     setStatus('Transcrivint en local…');
     try {
-      const { text } = await window.agentic.transcribe({ data: toBase64(await recordingToWav(blob)) });
+      const audio = { data: toBase64(await recordingToWav(blob)) };
+      // Live: the final pass over the whole recording with the warm Whisper (it then stops); otherwise one pass.
+      const { text } = live && window.agentic.liveDictationFinal ? await window.agentic.liveDictationFinal(audio) : await window.agentic.transcribe(audio);
       if (text) { setDraft((current) => appendDictation(current, text)); setStatus('Dictat afegit al quadre de text: revisa’l abans d’enviar.'); promptRef.current?.focus(); }
       else setStatus('No s’ha entès cap paraula.');
-    } catch (error) { setStatus(`Dictat: ${errorText(error)}`); }
-    finally { setDictation('idle'); }
+    } catch (error) { setStatus(`Dictat: ${errorText(error)}`); if (live) void window.agentic.stopLiveDictation?.(); }
+    finally { setDictation('idle'); setDictationPartial(''); }
   }
   useEffect(() => () => { const recording = recorderRef.current; if (recording) { clearTimeout(recording.timer); recording.stream.getTracks().forEach((track) => track.stop()); } }, []);
 
@@ -1687,6 +1705,8 @@ export function App(): React.JSX.Element {
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
         <Box bg="bg.muted" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="2xl" px="3" py="2.5" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
+          {/* Live dictation: what has been heard so far, muted, until the final pass puts it in the box. */}
+          {dictationPartial && <Text px="2" pb="1.5" fontSize={appearance.chatFontSize} color="fg.muted" whiteSpace="pre-wrap" aria-live="polite" data-dictation-partial>{dictationPartial}</Text>}
           {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="bg.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
           {chatImages.length > 0 && <Flex wrap="wrap" gap="2" px="2" pb="2">{chatImages.map((image) => <Box key={image.id} position="relative" flex="none">
             <Image src={image.thumbnail} alt={image.name} title={`${image.name} · ${image.width}×${image.height}`} boxSize="14" objectFit="cover" borderRadius="md" borderWidth="1px" borderColor="border"/>

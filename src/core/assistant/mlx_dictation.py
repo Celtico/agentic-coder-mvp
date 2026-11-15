@@ -1,6 +1,11 @@
 """Dictation: transcribes one WAV on this Mac with mlx-whisper, then ends (src/electron/dictation.cjs).
 
     python mlx_dictation.py <model folder> <audio.wav> <language: auto | ca | es | en>
+    python mlx_dictation.py --serve <model folder> <language>
+
+The second form keeps the model loaded while the user dictates (live dictation): it prints {"ready": true}
+and then reads one JSON line per audio file ({"id": n, "file": "...wav"}) and prints {"id": n, "text": "..."}
+(or {"id": n, "error": "..."}) for each, until its input closes.
 
 Prints one JSON line: {"text": "..."} or {"error": "..."}. It takes the GPU lock like any model process
 (mlx_lock.py) and frees it when it ends. The WAV (16 kHz, mono, 16 bits) is read with the standard library,
@@ -38,7 +43,38 @@ def emit(value):
     sys.stdout.flush()
 
 
+def serve(model_dir, language):
+    """Live dictation: the model stays loaded (and the GPU lock held) until stdin closes."""
+    try:
+        import mlx_whisper
+    except ImportError:
+        emit({"error": "Falta mlx-whisper al runtime MLX: el dictat no funcionarà fins que s’instal·li."})
+        return 1
+    import mlx_lock
+
+    try:
+        lock = mlx_lock.acquire()  # noqa: F841 — kept until this process ends
+    except RuntimeError as error:
+        emit({"error": str(error)})
+        return 1
+    emit({"ready": True})
+    for line in sys.stdin:
+        try:
+            job = json.loads(line)
+        except ValueError:
+            continue
+        job_id = job.get("id")
+        try:
+            result = mlx_whisper.transcribe(read_wav(job["file"]), path_or_hf_repo=model_dir, language=language_option(language), task="transcribe", verbose=None)
+            emit({"id": job_id, "text": str(result.get("text", "")).strip()})
+        except Exception as error:  # noqa: BLE001 — the window shows what went wrong
+            emit({"id": job_id, "error": f"No s’ha pogut transcriure: {error}"})
+    return 0
+
+
 def main(argv):
+    if len(argv) == 4 and argv[1] == "--serve":
+        return serve(argv[2], argv[3])
     if len(argv) != 4:
         emit({"error": "Ús: mlx_dictation.py <model> <àudio.wav> <idioma>"})
         return 2

@@ -1665,6 +1665,42 @@ ipcMain.handle('preferences:set-dictation', async (_event, change) => {
 });
 // macOS asks the user once for the microphone; the answer is the system's.
 ipcMain.handle('dictation:microphone', async () => process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true);
+// Live dictation: a warm Whisper while the user speaks (partial text every few seconds), then the final
+// pass over the whole recording. Only while the chat is not answering: one model on the GPU at a time.
+let liveDictation = null;
+async function dictationModelReady() {
+  const model = dictation.DICTATION_MODELS.find((item) => item.id === dictationPreferences.model);
+  if (!await dictation.dictationModelInstalled(model, projectModelsDirectory())) throw new Error(`Falta el model de dictat ${model.label} (${model.repo}, ${Math.round(model.bytes / 1e6)} MB) a models/whisper/${model.folder}.`);
+  return model;
+}
+function stopLiveDictation() { if (liveDictation) { liveDictation.stop(); liveDictation = null; } }
+ipcMain.handle('dictation:live-start', async () => {
+  if (trainingRun || benchmarkRun) return { live: false, reason: 'Hi ha un entrenament o una avaluació en marxa.' };
+  if (activeModelRequestId !== null) return { live: false, reason: 'El xat està responent: el text sortirà quan acabis de parlar.' };
+  const model = await dictationModelReady();
+  stopLiveDictation();
+  await stopModelWorker();
+  const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
+  const child = spawn(mlxPythonPath(), ['-u', script, '--serve', dictation.dictationModelDirectory(model, projectModelsDirectory()), dictationPreferences.language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder' }, stdio: ['pipe', 'pipe', 'ignore'] });
+  child.stdout.setEncoding('utf8');
+  const live = dictation.createLiveTranscriber(child);
+  liveDictation = live;
+  try { await live.ready; } catch (error) { if (liveDictation === live) stopLiveDictation(); return { live: false, reason: error.message }; }
+  return { live: true };
+});
+async function liveTranscribe(audio) {
+  if (!liveDictation) throw new Error('El dictat en directe no està en marxa.');
+  const { buffer } = dictation.validateDictationAudio(audio);
+  const file = await dictation.writeDictationAudio(path.join(app.getPath('userData'), 'dictation'), buffer);
+  try { return await liveDictation.transcribe(file); }
+  finally { await fs.rm(file, { force: true }).catch(() => {}); }
+}
+ipcMain.handle('dictation:live-partial', async (_event, audio) => ({ text: await liveTranscribe(audio) }));
+ipcMain.handle('dictation:live-final', async (_event, audio) => {
+  try { return { text: await liveTranscribe(audio) }; }
+  finally { stopLiveDictation(); }
+});
+ipcMain.handle('dictation:live-stop', async () => { stopLiveDictation(); return true; });
 ipcMain.handle('dictation:transcribe', async (_event, audio) => {
   if (trainingRun || benchmarkRun) throw new Error('Hi ha un entrenament o una avaluació en marxa: el dictat pot esperar que acabi.');
   const { buffer } = dictation.validateDictationAudio(audio);

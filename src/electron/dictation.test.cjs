@@ -98,3 +98,26 @@ test('the recording is written for the transcription, readable only by the user'
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   assert.deepEqual(fs.readFileSync(file), buffer);
 });
+
+test('the warm transcriber: ready first, then one answer per file in order; a crash fails what waits', async () => {
+  const { createLiveTranscriber } = require('./dictation.cjs');
+  const { EventEmitter } = require('node:events');
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  const sent = [];
+  child.stdin = { write: (line) => sent.push(JSON.parse(line)), end: () => sent.push('end') };
+  const live = createLiveTranscriber(child);
+  child.stdout.emit('data', '{"ready": true}\n');
+  await live.ready;
+  const first = live.transcribe('/tmp/a.wav');
+  const second = live.transcribe('/tmp/b.wav');
+  assert.deepEqual(sent, [{ id: 1, file: '/tmp/a.wav' }, { id: 2, file: '/tmp/b.wav' }]);
+  child.stdout.emit('data', '{"id": 1, "text": " Hola "}\n{"id": 2, "te');
+  child.stdout.emit('data', 'xt": "què tal"}\n');
+  assert.deepEqual(await Promise.all([first, second]), ['Hola', 'què tal']);
+  const third = live.transcribe('/tmp/c.wav');
+  child.emit('exit', 1);
+  await assert.rejects(third, /s’ha aturat/);
+  live.stop();
+  assert.equal(sent.at(-1), 'end');
+});

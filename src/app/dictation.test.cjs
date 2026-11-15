@@ -35,3 +35,27 @@ test('the dictated text is added to what is written, never sent by itself', () =
   assert.equal(dictation.appendDictation('Ja escrit', '   '), 'Ja escrit');
   assert.equal(dictation.MAX_RECORDING_MS, 300000);
 });
+
+test('live dictation: never two partial passes at once; one that waits is replaced by the newest; clear and idle', async () => {
+  const ran = [];
+  let release;
+  const queue = dictation.createLatestQueue((job) => { ran.push(job); return new Promise((resolve) => { release = resolve; }); });
+  queue.push('a');
+  queue.push('b');
+  queue.push('c');
+  assert.deepEqual(ran, ['a'], 'one at a time');
+  release();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ran, ['a', 'c'], 'b was replaced by the newer c');
+  queue.push('d');
+  queue.clear();
+  const idle = queue.idle();
+  release();
+  await idle;
+  assert.deepEqual(ran, ['a', 'c'], 'd dropped by clear (the final pass runs instead)');
+  assert.equal(dictation.LIVE_CHUNK_MS, 2500);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /if \(live\.live\) recorder\.start\(LIVE_CHUNK_MS\); else recorder\.start\(\);/);
+  assert.match(app, /partials\.clear\(\);\n\s*void partials\.idle\(\)\.then\(\(\) => transcribeRecording\(/, 'the final pass waits for the partial in flight');
+  assert.match(app, /\{dictationPartial && <Text [^>]*color="fg\.muted"[^>]*data-dictation-partial>/);
+});
