@@ -145,3 +145,11 @@ test('the logprobs switch: no visible label (it wrapped), the text in a tooltip 
   assert.match(panel, /<Tooltip\.Content maxW="280px">\{LOGPROBS_LABEL\}<\/Tooltip\.Content>/);
   assert.doesNotMatch(panel, /<Switch\.Label/);
 });
+
+test('the toolbar’s buttons: only their icons, their names in a tooltip and as aria-label; Esborra still asks twice', () => {
+  const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
+  assert.match(panel, /<Button aria-label=\{label\} size="xs" variant="ghost" px="2" \{\.\.\.props\}>\{children\}<\/Button>/);
+  for (const label of ['Actualitza', 'Mostra el fitxer al Finder', 'Esborra el log', 'Segur? Torna-hi a fer clic per esborrar el log']) assert.ok(panel.includes(`<ToolButton label="${label}"`), label);
+  assert.doesNotMatch(panel, /<\/(?:RefreshCw|FolderOpen|Trash)[^>]*>|size=\{14\}\/>(?:Actualitza|Fitxer|Esborra)/);
+  assert.match(panel, /setConfirmClear\(true\); setTimeout\(\(\) => setConfirmClear\(false\), 4000\)/);
+});

@@ -17,6 +17,14 @@ type Live = { id: string; source: string; model: string; text: string }
 
 const PANE_ACCORDION = "pane" as unknown as "plain"
 const LOGPROBS_LABEL = "Probabilitat de cada token (més lent)"
+
+/** A toolbar button: only its icon, its name in a tooltip and for screen readers (like the other panes' toolbars). */
+function ToolButton({ label, children, ...props }: { label: string; children: ReactNode } & React.ComponentProps<typeof Button>) {
+  return <Tooltip.Root openDelay={250} closeDelay={0} positioning={{ gutter: 6 }}>
+    <Tooltip.Trigger asChild><Button aria-label={label} size="xs" variant="ghost" px="2" {...props}>{children}</Button></Tooltip.Trigger>
+    <Portal><Tooltip.Positioner><Tooltip.Content maxW="280px">{label}</Tooltip.Content></Tooltip.Positioner></Portal>
+  </Tooltip.Root>
+}
 const mono = { fontFamily: "mono", fontSize: "xs", whiteSpace: "pre-wrap", overflowWrap: "anywhere", bg: "bg.subtle", borderRadius: "md", px: "2", py: "1.5", maxH: "80", ...scrollArea } as const
 const number = (value: number | null | undefined, suffix = "") => value === null || value === undefined ? "—" : `${value.toLocaleString("ca")}${suffix}`
 const sourcePalette = (source: string) => source === "revisor" ? "purple" : source.startsWith("avalua") || source.startsWith("benchmark") ? "orange" : source === "agent delegat" ? "blue" : "agentic"
@@ -120,11 +128,11 @@ export function LlmLogPane() {
         <Portal><Tooltip.Positioner><Tooltip.Content maxW="280px">{LOGPROBS_LABEL}</Tooltip.Content></Tooltip.Positioner></Portal>
       </Tooltip.Root>
     </HStack>
-    <Button size="xs" variant="ghost" onClick={() => void reload()}><RefreshCw size={14}/>Actualitza</Button>
-    <Button size="xs" variant="ghost" onClick={() => void window.agentic.revealLlmCalls()}><FolderOpen size={14}/>Fitxer</Button>
+    <ToolButton label="Actualitza" onClick={() => void reload()}><RefreshCw size={16}/></ToolButton>
+    <ToolButton label="Mostra el fitxer al Finder" onClick={() => void window.agentic.revealLlmCalls()}><FolderOpen size={16}/></ToolButton>
     {confirmClear
-      ? <Button size="xs" colorPalette="red" variant="subtle" onClick={() => { setConfirmClear(false); void window.agentic.clearLlmCalls().then(() => setCalls([])) }}><Trash size={14}/>Segur? Esborra el log</Button>
-      : <Button size="xs" variant="ghost" onClick={() => { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 4000) }}><Trash size={14}/>Esborra</Button>}
+      ? <ToolButton label="Segur? Torna-hi a fer clic per esborrar el log" colorPalette="red" variant="subtle" onClick={() => { setConfirmClear(false); void window.agentic.clearLlmCalls().then(() => setCalls([])) }}><Trash size={16}/></ToolButton>
+      : <ToolButton label="Esborra el log" onClick={() => { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 4000) }}><Trash size={16}/></ToolButton>}
   </PaneToolbar>
 
   return <Pane label="Log del model" header={<PaneHeader icon={ScrollText} title="Log del model" subtitle="El que entra i surt del model a cada crida"/>} toolbar={toolbar}>
