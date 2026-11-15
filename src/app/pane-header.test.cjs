@@ -50,7 +50,7 @@ test('a header with a subtitle (truncated, with its full text on hover), a badge
 test('the look is the theme’s slot recipes, with the three tones; the component has no colour of its own', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   const system = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe \}/);
+  assert.match(system, /slotRecipes: \{ paneHeader: paneHeaderRecipe, paneToolbar: paneToolbarRecipe, card: paneCardRecipe, dialog: dialogRecipe, floatingPanel: floatingPanelRecipe \}/);
   assert.match(recipes, /slots: \["root", "icon", "title", "subtitle", "actions"\]/);
   assert.match(recipes, /slots: \["root", "field", "action"\]/);
   assert.match(recipes, /brand: \{ root: \{ bg: "transparent" \}, icon: \{ color: "colorPalette\.solid" \}, title: \{ color: "fg" \} \}/);
@@ -141,7 +141,7 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
 test('every dialog has Chakra’s panel background, from the theme’s dialog recipe', () => {
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /content: \{ \.\.\.chakraDialog\.base\.content, bg: "bg\.panel", color: "fg", borderWidth: "1px", borderColor: "border"/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe \}/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe, floatingPanel: floatingPanelRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
   assert.equal(contents.length, 10);

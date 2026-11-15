@@ -121,7 +121,7 @@ test('Fons de les finestres reaches every window-like surface: bg and bg.panel r
   const contents = app.match(/<Dialog\.Content\b[^>]*>/g) || [];
   assert.ok(contents.length >= 10);
   for (const tag of contents) assert.match(tag, /\{\.\.\.surfaceText\}/, tag);
-  assert.match(app, /<FloatingPanel\.Content \{\.\.\.surfaceText\}/);
+  assert.match(app, /<FloatingPanel\.Content [^>]*color="fg" \{\.\.\.surfaceText\}/);
   // The swatches say their values like Chakra's docs.
   assert.match(app, /\{mode === '_light' \? 'light' : 'dark'\}: \{tokenValue\(chakraSystem, token, mode\)\}/);
 });

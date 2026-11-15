@@ -109,3 +109,18 @@ export const dialogRecipe = defineSlotRecipe({
   },
   defaultVariants: { ...chakraDialog.defaultVariants, material: "glass" },
 } as unknown as Parameters<typeof defineSlotRecipe>[0])
+
+// The floating windows (Historial local) are Chakra's floating panel with a Mac window's rounder corners,
+// and a header that is the window's own surface (Chakra paints it bg.subtle; ours draws its own line and
+// follows «Fons de les finestres» like the body).
+const chakraFloatingPanel = defaultConfig.theme?.slotRecipes?.floatingPanel as unknown as CardRecipe
+
+export const floatingPanelRecipe = defineSlotRecipe({
+  ...chakraFloatingPanel,
+  slots: [...chakraFloatingPanel.slots],
+  base: {
+    ...chakraFloatingPanel.base,
+    content: { ...chakraFloatingPanel.base.content, borderRadius: "xl" },
+    header: { ...chakraFloatingPanel.base.header, bg: "transparent", borderBottomWidth: "0" },
+  },
+} as Parameters<typeof defineSlotRecipe>[0])

@@ -69,3 +69,10 @@ test('the colours and sizes come from the theme, not from the component', () => 
   const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
   for (const token of ['"window.close"', '"window.minimize"', '"window.maximize"', 'windowTitleBar: { value: "28px" }', 'windowLight: { value: "12px" }', 'windowLights: { value: "52px" }', 'windowLightGap: { value: "8px" }', 'windowLightInset: { value: "12px" }']) assert.ok(theme.includes(token), token);
 });
+
+test('the floating window: a Mac window’s rounder corners and a header of the window’s own colour', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  assert.match(recipes, /content: \{ \.\.\.chakraFloatingPanel\.base\.content, borderRadius: "xl" \}/);
+  assert.match(recipes, /header: \{ \.\.\.chakraFloatingPanel\.base\.header, bg: "transparent", borderBottomWidth: "0" \}/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /floatingPanel: floatingPanelRecipe/);
+});
