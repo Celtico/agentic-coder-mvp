@@ -1,6 +1,6 @@
 # Agentic Coder MVP (macOS Apple Silicon, 16 GB RAM)
 
-![Agentic Coder: un agent de programació que viu al teu Mac](docs/cover.png)
+![Agentic Coder](docs/cover.png)
 
 Prototip local-first d'escriptori amb Electron + TypeScript. El model s'executa dins de l'app amb MLX d'Apple, en un procés local aïllat de la interfície. El model base és **MiMo V2.6 9B**: al [benchmark](#benchmark) fa 9 de 10 tasques obertes, a prop de Gemma 4 12B (10/10), en gairebé la meitat de temps per tasca. Gemma 4 12B i Qwen2.5-Coder 7B continuen seleccionables a la barra de dalt si se'n descarreguen els pesos. Només hi ha un model a la GPU alhora. No utilitza Ollama, llama.cpp ni un servidor LLM separat.
 
