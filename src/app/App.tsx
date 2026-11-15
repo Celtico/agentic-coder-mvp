@@ -6,14 +6,14 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
-  Accordion, useChakraContext, Badge, Field, Separator, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
+  Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
-  LuBrain as Brain, LuBoxes as Boxes, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
@@ -1967,9 +1967,12 @@ export function App(): React.JSX.Element {
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="4">
               {!learningVersions?.base && <Notice tone="warning">Tria un model base al selector del xat per entrenar-ne versions.</Notice>}
               {learningVersions?.base && <Text fontSize="xs" color="fg.muted">Sempre des de l’original: {learningVersions.base.label}, amb tots els casos vàlids ({learningVersions.cases}). Mai sobre una altra beta.</Text>}
+              {/* Dataset, Beta and Estable: each one an accordion item (open by default), like Preferències › Aparença. */}
+              <Accordion.Root multiple collapsible defaultValue={['dataset', 'beta', 'stable']} size="sm" variant={PANE_ACCORDION} data-training-sections>
               {/* Dataset: what a beta would be trained with; see it in the app or download it (neither trains anything). */}
-              <Box>
-                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Dataset</Text>
+              <Accordion.Item value="dataset">
+                <Accordion.ItemTrigger>{rowHeader('Dataset', undefined, Database)}</Accordion.ItemTrigger>
+                <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas' : 'casos'} · {datasetPreview.examples ?? datasetPreview.counts.included} exemples ({datasetPreview.counts.input - datasetPreview.counts.included + (datasetPreview.droppedExamples ?? 0)} descartats)</Text>
                   <ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
@@ -1977,10 +1980,11 @@ export function App(): React.JSX.Element {
                   {datasetExport && <ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.revealLearningExport()}><FolderOpen size={14}/>Mostra al Finder</ChakraButton>}
                 </HStack>
                 <Text mt="1" fontSize="xs" color="fg.muted">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Text>
-              </Box>
-              <Separator data-training-separator/>
-              <Box>
-                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Beta</Text>
+                </Accordion.ItemBody></Accordion.ItemContent>
+              </Accordion.Item>
+              <Accordion.Item value="beta">
+                <Accordion.ItemTrigger>{rowHeader('Beta', undefined, FlaskConical)}</Accordion.ItemTrigger>
+                <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   {trainingRunning
                     ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
@@ -1997,10 +2001,11 @@ export function App(): React.JSX.Element {
                   </Stack>
                   {index > 0 && <IconButton icon={Trash} label={`Esborra la beta ${beta.number}`} disabled={trainingRunning} onClick={() => void deleteBeta(beta.folder)}/>}
                 </HStack>)}</Stack>}
-              </Box>
-              <Separator data-training-separator/>
-              <Box>
-                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Estable</Text>
+                </Accordion.ItemBody></Accordion.ItemContent>
+              </Accordion.Item>
+              <Accordion.Item value="stable">
+                <Accordion.ItemTrigger>{rowHeader('Estable', undefined, BadgeCheck)}</Accordion.ItemTrigger>
+                <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   <Button size="sm" flex="none" variant="outline" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
@@ -2018,7 +2023,9 @@ export function App(): React.JSX.Element {
                       <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions.buttons.promote.enabled || !stableName.trim()} onClick={() => void promoteStable()}><Check size={15}/>Promociona a estable</Button>
                     </HStack>}
                 </Box>}
-              </Box>
+                </Accordion.ItemBody></Accordion.ItemContent>
+              </Accordion.Item>
+              </Accordion.Root>
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
           {/* Gestiona els models (src/electron/model-manager.cjs): every model on this Mac, its switch for the

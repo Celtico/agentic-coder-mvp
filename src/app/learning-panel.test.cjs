@@ -69,7 +69,7 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.equal(app.indexOf('<Accordion.Item value="data">'), -1);
   const training = app.slice(app.indexOf('<Accordion.Item value="training">'));
-  assert.ok(training.indexOf('>Dataset</Text>') > -1 && training.indexOf('>Dataset</Text>') < training.indexOf('>Beta</Text>'), 'Dataset just above Beta');
+  assert.ok(training.indexOf("rowHeader('Dataset'") > -1 && training.indexOf("rowHeader('Dataset'") < training.indexOf("rowHeader('Beta'"), 'Dataset just above Beta');
   assert.match(training, /Mostra les dades<\/ChakraButton>/);
   assert.match(training, /Descarrega \(\.jsonl\)<\/ChakraButton>/);
   // The open sections are remembered, «manual» too.
@@ -85,6 +85,10 @@ test('a function the running main process does not have yet says «restart the a
   assert.match(app, /missingInMain\(error\) \? RESTART_NOTICE : errorText\(error\)/);
 });
 
-test('Entrenament: a separator (Chakra’s) between its sections, Dataset | Beta | Estable', () => {
-  for (const label of ['Beta', 'Estable']) assert.match(app, new RegExp(`<Separator data-training-separator/>\\n\\s*<Box>\\n\\s*<Text fontSize="2xs" color="fg\\.muted" textTransform="uppercase" letterSpacing="0\\.1em" mb="1\\.5">${label}</Text>`), label);
+test('Entrenament: its sections Dataset, Beta and Estable are accordion items, open by default, like Aparença', () => {
+  assert.match(app, /<Accordion\.Root multiple collapsible defaultValue=\{\['dataset', 'beta', 'stable'\]\} size="sm" variant=\{PANE_ACCORDION\} data-training-sections>/);
+  for (const [value, label, icon] of [['dataset', 'Dataset', 'Database'], ['beta', 'Beta', 'FlaskConical'], ['stable', 'Estable', 'BadgeCheck']]) {
+    assert.match(app, new RegExp(`<Accordion\\.Item value="${value}">\\n\\s*<Accordion\\.ItemTrigger>\\{rowHeader\\('${label}', undefined, ${icon}\\)\\}</Accordion\\.ItemTrigger>`), label);
+  }
+  assert.doesNotMatch(app, /data-training-separator/, 'the accordion replaces the separators');
 });
