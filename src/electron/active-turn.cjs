@@ -13,6 +13,11 @@ const CANCELLED_ERROR = 'Generació cancel·lada.';
 
 const TURN_ID = /^[A-Za-z0-9_-]{8,100}$/;
 
+/** An answer without the reviewer's note the app used to append to it («Revisor: …», its last paragraph). */
+function withoutReviewerNote(text) {
+  return String(text).replace(/\n*\s*Revisor: (?:ha demanat corregir això abans d’acabar|ha llegit els fitxers escrits i no hi ha trobat cap problema)[\s\S]*$/, '');
+}
+
 /** The plan in a status message, if it carries one (its own «plan» status or the activity that quotes it). */
 function planFromStatus(value) {
   if (!value || typeof value !== 'object' || typeof value.message !== 'string') return '';
@@ -53,7 +58,7 @@ function turnMessages(turn, outcome) {
   if (outcome && typeof outcome.answer === 'string') {
     // The plan is already its own message; the answer does not repeat it.
     const text = turn.plan ? outcome.answer.replace(/^Pla: [^\n]*\n\n(?=\S)/, '') : outcome.answer;
-    messages.push({ role: 'assistant', text, turn: turn.id });
+    messages.push({ role: 'assistant', text, turn: turn.id, ...(turn.review ? { review: turn.review } : {}) });
     return messages;
   }
   const error = String(outcome?.error || 'error desconegut');
@@ -93,7 +98,7 @@ function createActiveTurns({ now = () => new Date() } = {}) {
     start(value) {
       const turn = cleanTurn(value);
       if (!turn) return null;
-      active = { ...turn, startedAt: now().toISOString(), label: '', plan: '', draft: '' };
+      active = { ...turn, startedAt: now().toISOString(), label: '', plan: '', draft: '', review: '' };
       return active;
     },
     /** Follows the agent's status: the last activity, the plan and the reviewer's finished draft. */
@@ -101,6 +106,8 @@ function createActiveTurns({ now = () => new Date() } = {}) {
       if (!active || !value || typeof value !== 'object') return;
       if (value.type === 'progress') { const progress = cleanProgress(value); if (progress) active.progress = progress; return; }
       if (value.type === 'draft') { if (typeof value.message === 'string' && value.message) active.draft = value.message; return; }
+      // The reviewer's note: shown under the answer, never part of its text (so never sent back to the model).
+      if (value.type === 'review') { if (typeof value.message === 'string' && value.message) active.review = value.message.slice(0, 4000); return; }
       const plan = planFromStatus(value);
       if (plan) active.plan = active.plan || plan;
       if (typeof value.message === 'string' && value.message) active.label = value.message;
@@ -121,4 +128,4 @@ function createActiveTurns({ now = () => new Date() } = {}) {
   };
 }
 
-module.exports = { createActiveTurns, cleanTurn, cleanProgress, planFromStatus, turnMessages, withTurn, PLAN_PREFIX, STOPPED_WHILE_REVIEWING, CANCELLED_TEXT };
+module.exports = { createActiveTurns, cleanTurn, cleanProgress, withoutReviewerNote, planFromStatus, turnMessages, withTurn, PLAN_PREFIX, STOPPED_WHILE_REVIEWING, CANCELLED_TEXT };

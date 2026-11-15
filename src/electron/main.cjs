@@ -18,13 +18,13 @@ const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate
 const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
-const { createActiveTurns, withTurn } = require('./active-turn.cjs');
+const { createActiveTurns, withTurn, withoutReviewerNote } = require('./active-turn.cjs');
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const dictation = require('./dictation.cjs');
 const versions = require('./learning-versions.cjs');
 const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
 const menuLabels = require('./menu-labels.cjs');
-const { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory } = require('./preferences.cjs');
+const { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normalizeAgentPreferences, migrateAgentPreferences, limitHistory } = require('./preferences.cjs');
 const { searchWeb, readWebPage, publicWebUrl } = require('./web-search.cjs');
 const { McpConnection, readMcpConfig } = require('./mcp-client.cjs');
 const { executeProjectChecks } = require('./project-checks.cjs');
@@ -204,7 +204,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, dictation: dictationPreferences, training: trainingPreferences }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, agentPreferencesVersion: AGENT_PREFERENCES_VERSION, dictation: dictationPreferences, training: trainingPreferences }, null, 2), 'utf8');
 }
 
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
@@ -610,7 +610,9 @@ function cleanConversationHistory(value) {
     if (!message || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string') return [];
     // The window's notices (stopped, error) are not something the model said.
     if (isChatNotice(message)) return [];
-    const content = message.content.trim();
+    // Answers saved before the reviewer's note had a field of its own ended with it: it is the app's, so
+    // it is taken off (src/electron/active-turn.cjs).
+    const content = (message.role === 'assistant' ? withoutReviewerNote(message.content) : message.content).trim();
     if (!content || content.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) return [];
     if (message.role === 'assistant' && /(?:"type"\s*:\s*"tool_call"|<tool_call>|<\|tool_call\|>)/i.test(content)) return [];
     return [{ role: message.role, content }];
@@ -799,6 +801,7 @@ if (process.env.AGENT_SCREENSHOT) {
 app.whenReady().then(async () => {
   // Run from source there is no app bundle to carry the icon, so the Dock gets it here.
   if (process.platform === 'darwin' && app.dock) { try { app.dock.setIcon(path.join(__dirname, '..', '..', 'assets', 'icon.png')); } catch { /* keeps Electron's icon */ } }
+  let migratedSettings = false;
   try {
     const saved = JSON.parse(await fs.readFile(settingsFile(), 'utf8'));
     if (typeof saved.selectedProject === 'string' && (await fs.stat(saved.selectedProject)).isDirectory()) selectedProject = saved.selectedProject;
@@ -806,10 +809,14 @@ app.whenReady().then(async () => {
     const savedModel = saved.selectedModel === 'qwen-1.5b' ? mlxModels.DEFAULT_MODEL_ID : saved.selectedModel;
     if ((await allModels()).some((model) => model.id === savedModel)) selectedModel = savedModel;
     if (saved.permissionMode === 'auto' || saved.permissionMode === 'ask') permissionMode = saved.permissionMode;
-    agentPreferences = normalizeAgentPreferences(saved.agent);
+    // Saved with older defaults (history 100, reviewer on): moved to the current ones once, and saved.
+    const agentSettings = migrateAgentPreferences(saved.agent, saved.agentPreferencesVersion);
+    agentPreferences = normalizeAgentPreferences(agentSettings.agent);
+    if (agentSettings.migrated) migratedSettings = true;
     dictationPreferences = dictation.normalizeDictationPreferences(saved.dictation);
     trainingPreferences = versions.normalizeTrainingPreferences(saved.training);
   } catch {}
+  if (migratedSettings) await saveSettings().catch(() => {});
   if (!selectedProject) {
     // From the repository the app opens itself; installed, it starts in an empty folder of its own,
     // never in the home folder, because the agent writes in the selected folder without asking.

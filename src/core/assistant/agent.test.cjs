@@ -1364,7 +1364,8 @@ test('the reviewer profile sends the programmer back once, then the answer says 
     generateResponse: async (messages) => { systems.push(messages[0].content); return responses.shift(); },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
-  const agent = new LocalCodingAgent({ engine, onStatus: () => {} });
+  const reviews = [];
+  const agent = new LocalCodingAgent({ engine, onStatus: (status) => { if (status.type === 'review') reviews.push(status.message); } });
   agent.historyDir = path.join(tempRoot, 'history');
   agent.reviewChanges = true;
   const written = [];
@@ -1378,7 +1379,10 @@ test('the reviewer profile sends the programmer back once, then the answer says 
   assert.equal(systems.filter((system) => /Ets el REVISOR/.test(system)).length, 1, 'one review, not a loop');
   assert.equal(written.length, 2);
   assert.match(answer, /amb el botó/);
-  assert.match(answer, /Revisor: ha demanat corregir/);
+  // The reviewer's note goes to the window on its own, never inside the answer (so never back to the model).
+  assert.doesNotMatch(answer, /Revisor:/);
+  assert.equal(reviews.length, 1);
+  assert.match(reviews[0], /^Revisor: ha demanat corregir/);
 });
 
 test('SKILLS.md: titles are always listed, a skill\'s text only when the message calls for it', async (t) => {

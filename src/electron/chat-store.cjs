@@ -17,7 +17,9 @@ function cleanSession(value) {
     const images = Array.isArray(message.images) ? message.images.filter((image) => image && typeof image.name === 'string' && typeof image.thumbnail === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image.thumbnail) && image.thumbnail.length <= 80_000).slice(0, 4).map((image) => ({ name: image.name.slice(0, 120), thumbnail: image.thumbnail })) : [];
     // `turn`: the id of the chat turn that wrote it (src/electron/active-turn.cjs), so it is written once.
     const turn = typeof message.turn === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(message.turn) ? { turn: message.turn } : {};
-    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}), ...(message.notice === true ? { notice: true } : {}), ...(images.length ? { images } : {}), ...turn }];
+    // `review`: the reviewer's note, shown under an answer; it is the app's, not part of what the model said.
+    const review = message.role === 'assistant' && typeof message.review === 'string' && message.review.trim() ? { review: message.review.slice(0, 4000) } : {};
+    return [{ role: message.role, text: message.text, ...(message.error === true ? { error: true } : {}), ...(message.notice === true ? { notice: true } : {}), ...(images.length ? { images } : {}), ...turn, ...review }];
   });
   return {
     id: value.id,

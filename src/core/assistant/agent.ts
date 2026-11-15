@@ -11,7 +11,7 @@ import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperien
  * What the agent tells the window while it works: an activity, its plan, the reviewer's finished draft, or
  * its progress (the iteration it is on, 1-based, of the limit in force, and the tool it runs, if any).
  */
-export type AgentStatus = { type: 'status' | 'plan' | 'draft'; message: string } | { type: 'progress'; iteration: number; maxIterations: number; tool?: string };
+export type AgentStatus = { type: 'status' | 'plan' | 'draft' | 'review'; message: string } | { type: 'progress'; iteration: number; maxIterations: number; tool?: string };
 export type AgentToolCall =
   | { name: 'list_files' | 'run_tests' }
   | { name: 'create_git_commit'; arguments: { message: string } }
@@ -154,6 +154,14 @@ export function withoutToolCalls(text: string): string {
     }
   }
   return rest.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+/**
+ * Whether an answer says the work is done without any tool having run in the turn: a request for work, no
+ * tool call yet, and an answer (prose or «final») instead of a call. Marked in the turn log.
+ */
+export function claimedDoneWithoutTools({ toolCallsRun, requestedWork, action }: { toolCallsRun: number; requestedWork: boolean; action: { type: string } | null }): boolean {
+  return requestedWork && toolCallsRun === 0 && (!action || action.type === 'final');
 }
 
 function parseAction(raw: string): AgentAction | null {
@@ -828,6 +836,8 @@ export class LocalCodingAgent {
     let checkPassed = false;
     let failedCheckToRetry: AgentToolCall | null = null;
     let lastToolActivity = '';
+    // Tool calls run in this turn: an answer that says it is done before any is a «claimed done» (turn log).
+    let toolCallsRun = 0;
     let planPublished = false;
     const appliedProjectFiles = new Set<string>();
     let lastPageVerdict = '';
@@ -938,7 +948,10 @@ export class LocalCodingAgent {
       const startedAt = Date.now();
       const raw = await this.engine.generateResponse(messages, { max_new_tokens: answerTokens, temperature: 0.2, do_sample: false, images: imageInput, tools: describedTools(availableTools) });
       const action = parseAction(raw);
-      await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed' });
+      // An answer with no call while no tool has run yet in a turn that asks for work: it says it is done
+      // without having done anything. Marked in the log, so the evaluation and the history can count it.
+      const claimedWithoutTools = claimedDoneWithoutTools({ toolCallsRun, requestedWork: requestedAction || requestedCodeChange, action });
+      await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed', ...(claimedWithoutTools ? { claimedDoneWithoutTools: true } : {}) });
       if (!action) {
         const rawProse = withoutToolCalls(raw);
         if (requestedCodeChange && !planPublished && /\b(?:pla|passos|pass|primer|abans de|per completar|plan|steps|first|to complete)\b/i.test(rawProse)) {
@@ -1085,6 +1098,7 @@ export class LocalCodingAgent {
       if (tool.name === 'write_file') writeFileAttempted = true;
       const activity: Record<string, string> = { list_files: 'Llegint l’estructura del projecte…', read_file: `Llegint ${args.path || 'un fitxer'}…`, search_text: `Cercant «${args.query || ''}»…`, install_dependencies: 'Instal·lant les dependències de package.json…', run_npx: `Executant npx ${args.packageName || ''} ${Array.isArray(args.args) ? args.args.join(' ') : ''}…`, web_search: `Cercant a Internet «${args.query || ''}»…`, read_web_page: `Llegint ${String(args.url || 'una pàgina').slice(0, 80)}…`, call_mcp_tool: `Consultant ${args.server || 'MCP'}: ${args.tool || ''}…`, list_mcp_tools: 'Mirant els servidors MCP del projecte…', delegate_tasks: `Preparant ${Array.isArray(args.tasks) ? args.tasks.length : ''} agents delegats…`, write_file: `Aplicant el canvi a ${args.path || 'un fitxer'}…`, delete_file: `Preparant l’eliminació de ${args.path || 'un fitxer'} per revisar-la…`, run_tests: 'Executant les proves…', run_project_script: `Executant l’script ${args.script || ''}…`, start_project: `Iniciant l’app (${args.script || ''})…`, stop_project: 'Aturant l’app…', create_git_commit: 'Creant el commit de Git…', install_package: `Preparant la instal·lació de ${args.packageName || 'la llibreria'} per revisar-la…`, inspect_browser: `Inspeccionant ${args.url || 'la pàgina local'}…` };
       lastToolActivity = activity[tool.name] || `Executant ${tool.name}`;
+      toolCallsRun += 1;
       this.onStatus({ type: 'progress', iteration: Math.min(iteration + 1, maxIterations), maxIterations, tool: tool.name });
       this.onStatus({ type: 'status', message: lastToolActivity });
       let result: unknown;
@@ -1202,7 +1216,10 @@ export class LocalCodingAgent {
       }
     }
     if (!answer) answer = missingWork() ? incompleteAnswer() : 'He arribat al límit de consultes d’eines. Resumeixo la informació disponible sense afirmar canvis no executats.';
-    if (reviewNote) answer = `${answer}\n\n${reviewNote}`;
+    // The reviewer's note is the app's, not the model's: it goes to the window on its own (shown under the
+    // answer, src/electron/active-turn.cjs) and is never part of the answer, so it never goes back to the
+    // model with the history nor into a verified case.
+    if (reviewNote) this.onStatus({ type: 'review', message: reviewNote });
     if (plan && !answer.toLowerCase().includes(plan.toLowerCase())) answer = `Pla: ${plan}\n\n${answer}`;
     if (options.recordHistory !== false) {
       await fs.mkdir(this.historyDir, { recursive: true });

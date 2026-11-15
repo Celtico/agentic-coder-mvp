@@ -4,7 +4,7 @@ export type ProjectFile = { path: string; directory: boolean };
 export type ProjectInfo = { path: string; files: ProjectFile[] };
 /** `notice`: a message of the window itself (stopped, error), not sent to the model as history. */
 /** `images`: small thumbnails of the images sent with the message (the images themselves are not kept). */
-export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean; images?: { name: string; thumbnail: string }[]; turn?: string };
+export type ChatMessage = { role: 'user' | 'assistant'; text: string; error?: boolean; notice?: boolean; images?: { name: string; thumbnail: string }[]; turn?: string; review?: string };
 /** A chat turn as the window sends it; the main process keeps it while it runs (src/electron/active-turn.cjs). */
 export type ChatTurnRequest = { id: string; sessionId: string; projectPath?: string; userMessage: ChatMessage };
 /** Where the agent is in its turn: the iteration (1-based) of the limit in force, and the tool it runs. */

@@ -601,6 +601,8 @@ export function App(): React.JSX.Element {
     const offStatus = window.agentic.onStatus((s) => {
       const progress = progressFromStatus(s);
       if (progress) { setTurnProgress(progress); return; }
+      // The reviewer's note comes with the end of the turn (src/electron/active-turn.cjs), not as an activity.
+      if (s.type === 'review') return;
       if (s.type === 'draft') {
         if (inFlightConversationRef.current && s.message) inFlightConversationRef.current.draft = s.message;
         return;
@@ -1597,6 +1599,8 @@ export function App(): React.JSX.Element {
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
+            {/* The reviewer's note: the app's, under the answer, never part of what is sent to the model. */}
+            {message.review && <Text mt="2" fontSize="xs" color="fg.muted" data-review-note>{message.review}</Text>}
             {message.images && message.images.length > 0 && <Flex wrap="wrap" gap="2" mt="2">{message.images.map((image, imageIndex) => <Image key={imageIndex} src={image.thumbnail} alt={image.name} title={image.name} maxH="32" maxW="48" objectFit="contain" borderRadius="md" borderWidth="1px" borderColor="border"/>)}</Flex>}
             {previousUser && !isWindowNotice(message) && !message.text.startsWith('Pla abans de començar:\n') && <Button mt="2" size="xs" variant="ghost" colorPalette={verifiedExperienceKeys.has(experienceKey) ? 'agentic' : 'gray'} disabled={verifiedExperienceKeys.has(experienceKey)} onClick={() => { const turns = messages.slice(0, index + 1).filter((item) => !isWindowNotice(item) && (item.role === 'user' || item.role === 'assistant')).map((item) => ({ role: item.role as 'user' | 'assistant', content: item.text })); setVerifiedEvidence(''); setVerifiedTask(turns.find((item) => item.role === 'user')?.content || previousUser.text); setVerifiedExperienceDraft({ turns, prompt: previousUser.text, answer: message.text, key: experienceKey }); }}>{verifiedExperienceKeys.has(experienceKey) ? <Check size={14}/> : <Brain size={14}/>} {verifiedExperienceKeys.has(experienceKey) ? 'Cas verificat desat' : 'Desa com a cas verificat'}</Button>}
           </Box>;

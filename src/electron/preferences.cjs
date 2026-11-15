@@ -4,7 +4,7 @@
 const AGENT_LIMITS = {
   answerTokens: { min: 256, max: 8192, default: 2400 },
   maxIterations: { min: 1, max: 60, default: 28 },
-  historyMessages: { min: 0, max: 100, default: 100 },
+  historyMessages: { min: 0, max: 100, default: 20 },
 };
 
 /** The values the app had before there were preferences (the reviewer and web search could be set by environment). */
@@ -13,7 +13,9 @@ function defaultAgentPreferences(env = process.env) {
     answerTokens: AGENT_LIMITS.answerTokens.default,
     maxIterations: AGENT_LIMITS.maxIterations.default,
     historyMessages: AGENT_LIMITS.historyMessages.default,
-    review: env.AGENT_REVIEW !== '0',
+    // The reviewer is opt-in (Preferències › Agent): the same small model reviewing its own work invented
+    // and contradicted demands, and its note taught the model to answer «done» before doing anything.
+    review: env.AGENT_REVIEW === '1',
     webSearch: env.AGENT_WEB_SEARCH === '1',
   };
 }
@@ -30,10 +32,29 @@ function normalizeAgentPreferences(value, base = defaultAgentPreferences()) {
   return result;
 }
 
+/**
+ * The version of the agent's defaults. Version 2 (15-11-2026): history 20 messages (was 100) and the
+ * reviewer off (was on).
+ */
+const AGENT_PREFERENCES_VERSION = 2;
+
+/**
+ * Saved preferences brought to the current defaults, once: a value that is still the old default moves to
+ * the new one; a value the user chose is kept. After this the settings are saved with the current version,
+ * so a value changed later is never moved again.
+ */
+function migrateAgentPreferences(value, version) {
+  const saved = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+  if (Number(version) >= AGENT_PREFERENCES_VERSION) return { agent: saved, migrated: false };
+  if (saved.historyMessages === 100) saved.historyMessages = AGENT_LIMITS.historyMessages.default;
+  if (saved.review === true) saved.review = false;
+  return { agent: saved, migrated: true };
+}
+
 /** The last `count` messages of the chat (none with 0). */
 function limitHistory(history, count) {
   if (!Array.isArray(history) || count <= 0) return [];
   return history.slice(-count);
 }
 
-module.exports = { AGENT_LIMITS, defaultAgentPreferences, normalizeAgentPreferences, limitHistory };
+module.exports = { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normalizeAgentPreferences, migrateAgentPreferences, limitHistory };

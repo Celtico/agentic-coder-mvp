@@ -91,3 +91,26 @@ test('the wiring: main keeps the turn and writes its end; the window reconnects 
   assert.doesNotMatch(reconnect, /window\.agentic\.ask\(|makeSession\(/, 'a reloaded window neither sends the request again nor makes a new conversation');
   assert.match(app, /turn: \{ id: turnId, sessionId: requestSessionId, projectPath: project\.path, userMessage: pendingMessages\[pendingMessages\.length - 1\] \}/);
 });
+
+test('the reviewer’s note is a field of the answer, shown in the chat but never part of its text', () => {
+  const turns = createActiveTurns();
+  turns.start(request);
+  turns.status({ type: 'review', message: 'Revisor: ha llegit els fitxers escrits i no hi ha trobat cap problema.' });
+  const ended = turns.finish(TURN, { answer: 'He afegit el botó.' });
+  assert.deepEqual(ended.messages, [{ role: 'assistant', text: 'He afegit el botó.', turn: TURN, review: 'Revisor: ha llegit els fitxers escrits i no hi ha trobat cap problema.' }]);
+  // Kept by the chat store.
+  const { cleanSession } = require('./chat-store.cjs');
+  assert.equal(cleanSession({ id: 'x', messages: ended.messages }).messages[0].review, 'Revisor: ha llegit els fitxers escrits i no hi ha trobat cap problema.');
+});
+
+test('answers saved with the reviewer’s note at the end lose it before going back to the model', () => {
+  const { withoutReviewerNote } = require('./active-turn.cjs');
+  assert.equal(withoutReviewerNote('He aplicat el canvi.\n\nRevisor: ha demanat corregir això abans d’acabar: src/App.jsx: falta X · src/a.css: Y'), 'He aplicat el canvi.');
+  assert.equal(withoutReviewerNote('Fet.\n\nRevisor: ha llegit els fitxers escrits i no hi ha trobat cap problema.'), 'Fet.');
+  assert.equal(withoutReviewerNote('El Revisor de codi és una eina.'), 'El Revisor de codi és una eina.', 'only the app’s own note');
+  const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /const content = \(message\.role === 'assistant' \? withoutReviewerNote\(message\.content\) : message\.content\)\.trim\(\);/);
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, /\{message\.review && <Text mt="2" fontSize="xs" color="fg\.muted" data-review-note>\{message\.review\}<\/Text>\}/);
+  assert.match(app, /if \(s\.type === 'review'\) return;/);
+});

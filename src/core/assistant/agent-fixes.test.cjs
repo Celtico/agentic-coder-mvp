@@ -178,3 +178,14 @@ test('withoutToolCalls keeps the prose and drops every call, tag and action obje
   assert.equal(withoutToolCalls('Primer miro el projecte. {"type":"tool_call","name":"list_files"}'), 'Primer miro el projecte.');
   assert.equal(withoutToolCalls('Faré servir {"a": 1} com a exemple.'), 'Faré servir {"a": 1} com a exemple.', 'an object that is not a call stays');
 });
+
+test('an answer that says it is done before any tool ran is marked «claimed done without tools» in the turn log', () => {
+  const { claimedDoneWithoutTools } = require('./agent-runtime.cjs');
+  assert.equal(claimedDoneWithoutTools({ toolCallsRun: 0, requestedWork: true, action: null }), true, 'prose, no call');
+  assert.equal(claimedDoneWithoutTools({ toolCallsRun: 0, requestedWork: true, action: { type: 'final' } }), true);
+  assert.equal(claimedDoneWithoutTools({ toolCallsRun: 0, requestedWork: true, action: { type: 'tool_call' } }), false);
+  assert.equal(claimedDoneWithoutTools({ toolCallsRun: 2, requestedWork: true, action: null }), false, 'after doing something it may finish');
+  assert.equal(claimedDoneWithoutTools({ toolCallsRun: 0, requestedWork: false, action: null }), false, 'a question needs no tool');
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, 'agent.ts'), 'utf8');
+  assert.match(source, /\.\.\.\(claimedWithoutTools \? \{ claimedDoneWithoutTools: true \} : \{\}\)/);
+});
