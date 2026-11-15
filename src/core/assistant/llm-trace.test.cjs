@@ -137,3 +137,11 @@ test('the panel over an app started before it: a clear message, not a spinner th
   assert.match(app, /catch \(error\) \{ setModelManageError\(ipcErrorText\(error\)\); setManaged\(\(current\) => current \?\? \{ models: \[\], download: null \}\); \}/);
   assert.match(panel, /catch \(caught\) \{ setError\(errorMessage\(caught\)\); setCalls\(\(current\) => current \?\? \[\]\) \}/);
 });
+
+test('the logprobs switch: no visible label (it wrapped), the text in a tooltip and as its accessible name', () => {
+  const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
+  assert.match(panel, /const LOGPROBS_LABEL = "Probabilitat de cada token \(més lent\)"/);
+  assert.match(panel, /<Switch\.HiddenInput aria-label=\{LOGPROBS_LABEL\}\/><Switch\.Control\/>/);
+  assert.match(panel, /<Tooltip\.Content maxW="280px">\{LOGPROBS_LABEL\}<\/Tooltip\.Content>/);
+  assert.doesNotMatch(panel, /<Switch\.Label/);
+});

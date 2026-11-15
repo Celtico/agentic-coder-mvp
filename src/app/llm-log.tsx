@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react"
-import { Accordion, Badge, Box, Button, chakra, Grid, HStack, Progress, Spinner, Stack, Switch, Tabs, Text } from "@chakra-ui/react"
+import { Accordion, Badge, Box, Button, chakra, Grid, HStack, Portal, Progress, Spinner, Stack, Switch, Tabs, Text, Tooltip } from "@chakra-ui/react"
 import { LuCopy as Copy, LuFolderOpen as FolderOpen, LuRefreshCw as RefreshCw, LuScrollText as ScrollText, LuTrash2 as Trash } from "react-icons/lu"
 import type { LlmCallRecord, LlmToolRecord, LlmTraceEvent } from "../core/assistant/llm-trace"
 import { Pane, PaneHeader, PaneToolbar } from "./pane-header"
@@ -16,6 +16,7 @@ export type LlmCall = LlmCallRecord & { tools: LlmToolRecord[] }
 type Live = { id: string; source: string; model: string; text: string }
 
 const PANE_ACCORDION = "pane" as unknown as "plain"
+const LOGPROBS_LABEL = "Probabilitat de cada token (més lent)"
 const mono = { fontFamily: "mono", fontSize: "xs", whiteSpace: "pre-wrap", overflowWrap: "anywhere", bg: "bg.subtle", borderRadius: "md", px: "2", py: "1.5", maxH: "80", ...scrollArea } as const
 const number = (value: number | null | undefined, suffix = "") => value === null || value === undefined ? "—" : `${value.toLocaleString("ca")}${suffix}`
 const sourcePalette = (source: string) => source === "revisor" ? "purple" : source.startsWith("avalua") || source.startsWith("benchmark") ? "orange" : source === "agent delegat" ? "blue" : "agentic"
@@ -109,9 +110,15 @@ export function LlmLogPane() {
 
   const toolbar = <PaneToolbar>
     <HStack flex="1" gap="2" minW="0">
-      <Switch.Root size="sm" colorPalette="agentic" checked={logprobs} onCheckedChange={({ checked }) => void window.agentic.setLlmTrace({ logprobs: checked }).then((state) => setLogprobs(state.logprobs))}>
-        <Switch.HiddenInput/><Switch.Control/><Switch.Label fontSize="xs" color="fg.muted">Probabilitat de cada token (més lent)</Switch.Label>
-      </Switch.Root>
+      {/* The switch alone, its meaning in a tooltip (a visible label wrapped over several lines). */}
+      <Tooltip.Root openDelay={250} closeDelay={0} positioning={{ gutter: 6 }}>
+        <Tooltip.Trigger asChild>
+          <Switch.Root size="sm" colorPalette="agentic" checked={logprobs} onCheckedChange={({ checked }) => void window.agentic.setLlmTrace({ logprobs: checked }).then((state) => setLogprobs(state.logprobs))}>
+            <Switch.HiddenInput aria-label={LOGPROBS_LABEL}/><Switch.Control/>
+          </Switch.Root>
+        </Tooltip.Trigger>
+        <Portal><Tooltip.Positioner><Tooltip.Content maxW="280px">{LOGPROBS_LABEL}</Tooltip.Content></Tooltip.Positioner></Portal>
+      </Tooltip.Root>
     </HStack>
     <Button size="xs" variant="ghost" onClick={() => void reload()}><RefreshCw size={14}/>Actualitza</Button>
     <Button size="xs" variant="ghost" onClick={() => void window.agentic.revealLlmCalls()}><FolderOpen size={14}/>Fitxer</Button>
