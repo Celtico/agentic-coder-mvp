@@ -96,7 +96,8 @@ test('with the blue accent the panes’ palette is blue (a tinted header: blue.s
 });
 
 test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s own) by default, kept when saved', () => {
-  assert.deepEqual([...prefs.PANE_BACKGROUNDS], ['auto', 'bg', 'bg.subtle', 'bg.muted', 'bg.emphasized', 'bg.inverted', 'bg.panel']);
+  assert.deepEqual([...prefs.PANE_BACKGROUNDS], ['auto', 'bg', 'bg.subtle', 'bg.muted', 'bg.emphasized']);
+  assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.inverted' }).paneBg, 'auto', 'no longer offered');
   assert.equal(prefs.defaultAppearance().paneBg, 'auto');
   assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.muted' }).paneBg, 'bg.muted');
   assert.equal(prefs.normalizeAppearance({ paneBg: '#ff0000' }).paneBg, 'auto', 'only the tokens');

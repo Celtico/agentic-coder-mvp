@@ -21,7 +21,8 @@ export const PANE_STYLES: PaneStyle[] = ["subtle", "outline", "elevated"]
  * The panes' background, one of Chakra's bg tokens; «auto» is the one of the chosen panel style.
  * (bg.inverted turns the text to fg.inverted too, src/app/pane-header.tsx.)
  */
-export const PANE_BACKGROUNDS = ["auto", "bg", "bg.subtle", "bg.muted", "bg.emphasized", "bg.inverted", "bg.panel"] as const
+// bg.panel is the same colour as bg in this theme, and bg.inverted made the panes unreadable: not offered.
+export const PANE_BACKGROUNDS = ["auto", "bg", "bg.subtle", "bg.muted", "bg.emphasized"] as const
 export type PaneBackground = (typeof PANE_BACKGROUNDS)[number]
 /** What dialogs and floating windows are made of (src/theme/pane-recipes.ts). */
 export const DIALOG_MATERIAL_OPTIONS: DialogMaterial[] = ["solid", "glass"]
