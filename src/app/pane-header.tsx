@@ -14,13 +14,16 @@ export const PaneToneContext = createContext<PaneHeaderTone>("brand")
 /** Chakra's Card variants for the panes (src/theme/pane-recipes.ts), chosen in Preferències › Aparença. */
 export type PaneStyle = "subtle" | "outline" | "elevated"
 export const PaneStyleContext = createContext<PaneStyle>("subtle")
+/** The panes' background chosen in Preferències (a Chakra bg token), or «auto»: the panel style's own. */
+export const PaneBgContext = createContext<string>("auto")
 
 /** One pane: a Chakra Card with its header, and a body (an optional second row, then the content). */
 export const Pane = ({ header, toolbar, children, label, variant }: { header: ReactNode; toolbar?: ReactNode; children: ReactNode; label?: string; variant?: PaneStyle }) => {
   const contextVariant = useContext(PaneStyleContext)
   const chosen = variant ?? contextVariant
+  const paneBg = useContext(PaneBgContext)
   return (
-    <Card.Root variant={chosen} aria-label={label} data-pane data-pane-style={chosen}>
+    <Card.Root variant={chosen} aria-label={label} data-pane data-pane-style={chosen} bg={paneBg === "auto" ? undefined : paneBg} color={paneBg === "bg.inverted" ? "fg.inverted" : undefined}>
       <Card.Header>{header}</Card.Header>
       <Card.Body>{toolbar}<Box flex="1" minH="0" minW="0" display="flex" flexDirection="column" overflow="hidden">{children}</Box></Card.Body>
     </Card.Root>

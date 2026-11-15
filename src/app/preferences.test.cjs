@@ -17,11 +17,11 @@ fs.rmSync(dir, { recursive: true, force: true });
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the default appearance is the app as it was: dark, normal sizes, its own green', () => {
-  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', dialogs: 'glass' });
+  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', paneBg: 'auto', dialogs: 'glass' });
 });
 
 test('a saved appearance keeps only valid values', () => {
-  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', dialogs: 'solid' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', dialogs: 'solid' });
+  assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid' }), { colorMode: 'system', chatFontSize: 'lg', editorFontSize: 14, accent: 'blue', paneTone: 'tinted', paneStyle: 'elevated', paneBg: 'bg.muted', dialogs: 'solid' });
   assert.deepEqual(prefs.normalizeAppearance({ colorMode: 'sepia', chatFontSize: '3xl', editorFontSize: 15, accent: '#ff0000', paneTone: 'neon', paneStyle: 'glass', dialogs: 'frosted' }), prefs.defaultAppearance());
   assert.deepEqual(prefs.normalizeAppearance(null), prefs.defaultAppearance());
 });
@@ -38,8 +38,8 @@ test('«system» follows the operating system; sizes move one step and stay in t
 
 test('the appearance is kept with the view state', () => {
   const storage = memoryStorage();
-  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', dialogs: 'solid' }; });
-  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', dialogs: 'solid' });
+  view.updateViewState(storage, (state) => { state.appearance = { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', paneBg: 'bg.subtle', dialogs: 'solid' }; });
+  assert.deepEqual(view.loadViewState(storage).appearance, { colorMode: 'light', chatFontSize: 'md', editorFontSize: 13, accent: 'purple', paneTone: 'mono', paneStyle: 'outline', paneBg: 'bg.subtle', dialogs: 'solid' });
   assert.deepEqual(view.loadViewState(memoryStorage()).appearance, prefs.defaultAppearance());
 });
 
@@ -93,4 +93,17 @@ test('with the blue accent the panes’ palette is blue (a tinted header: blue.s
   // The rail's mark alone stays in the fixed brand green.
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<Mark size=\{28\} gradient\/>/);
+});
+
+test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s own) by default, kept when saved', () => {
+  assert.deepEqual([...prefs.PANE_BACKGROUNDS], ['auto', 'bg', 'bg.subtle', 'bg.muted', 'bg.emphasized', 'bg.inverted', 'bg.panel']);
+  assert.equal(prefs.defaultAppearance().paneBg, 'auto');
+  assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.muted' }).paneBg, 'bg.muted');
+  assert.equal(prefs.normalizeAppearance({ paneBg: '#ff0000' }).paneBg, 'auto', 'only the tokens');
+  const pane = require('node:fs').readFileSync(require('node:path').join(__dirname, 'pane-header.tsx'), 'utf8');
+  assert.match(pane, /bg=\{paneBg === "auto" \? undefined : paneBg\} color=\{paneBg === "bg\.inverted" \? "fg\.inverted" : undefined\}/);
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<PaneBgContext\.Provider value=\{appearance\.paneBg\}>/);
+  assert.match(app, /aria-label="Fons de les finestres"/);
+  assert.match(app, /theme: \{ background: tokenColor\(paneSurface\)/, 'the terminal follows it');
 });

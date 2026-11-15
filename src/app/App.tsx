@@ -21,7 +21,7 @@ import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
 import { PaneRow } from './pane-row';
-import { Pane as PaneCard, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
+import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
 import { appendDictation, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
@@ -29,7 +29,7 @@ import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
 import { applyColorMode } from './color-mode';
-import { CHAT_FONT_SIZES, DIALOG_MATERIAL_OPTIONS, EDITOR_FONT_SIZES, PANE_STYLES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
+import { CHAT_FONT_SIZES, DIALOG_MATERIAL_OPTIONS, EDITOR_FONT_SIZES, PANE_BACKGROUNDS, PANE_STYLES, PANE_TONES, defaultAppearance, resolveColorMode, stepSize, type Appearance, type ColorMode } from './preferences';
 import { ACCENTS, type Accent } from '../theme/accent';
 import { DIALOG_MATERIALS, type DialogMaterial } from '../theme/pane-recipes';
 import { defaultRailLayout, moveRailPanel, panelsInRow, sameRailLayout, sideColumnsShown, type Pane, type RailGroup, type RailLayout, type RailPanel } from './rail-layout';
@@ -131,6 +131,11 @@ const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: strin
 const focusDialogContent = () => document.querySelector<HTMLElement>('[data-scope="dialog"][data-part="content"][data-state="open"] [data-initial-focus]');
 /** The app's mark as a pane header's icon (the chat's), the size of the other icons. */
 const ChatMark: IconType = ({ size }) => <Mark size={typeof size === 'number' ? size : 16} color="currentColor"/>;
+/**
+ * An error from a call the main process does not know yet (it was started before the update): Electron
+ * says «No handler registered», and an older preload has no such function at all.
+ */
+const missingInMain = (error: unknown) => error instanceof TypeError && /is not a function/.test(error.message) || /No handler registered/i.test(String((error as Error)?.message ?? error));
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -311,6 +316,9 @@ export function App(): React.JSX.Element {
   const [agentPreferences, setAgentPreferencesState] = useState<Awaited<ReturnType<typeof window.agentic.agentPreferences>> | null>(null);
   const [preferencesError, setPreferencesError] = useState('');
   const [appearance, setAppearance] = useState<Appearance>(() => initialView.appearance);
+  // The panes' background as a token (Preferències › Aparença › Fons de les finestres); «auto» is the
+  // panel style's own: bg.panel for «Amb ombra», bg for the others. The terminal follows it.
+  const paneSurface = appearance.paneBg !== 'auto' ? appearance.paneBg : appearance.paneStyle === 'elevated' ? 'bg.panel' : 'bg';
   const setAccent = useSetAccent();
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true);
   useEffect(() => {
@@ -1206,17 +1214,24 @@ export function App(): React.JSX.Element {
     finally { setTestsBusy(false); }
   }
 
+  // A function added after the app was started: the window has it, the main process not yet. Said plainly
+  // (in the panel and in the status bar) instead of failing without a word.
+  const learningError = (error: unknown) => {
+    const text = missingInMain(error) ? 'Cal reiniciar l’app per activar aquesta funció: tanca-la (⌘Q) i torna-la a obrir.' : errorText(error);
+    setLearningStatus(text);
+    setStatus(text);
+  };
   async function showPreparedData() {
     setLearningBusy(true);
     try { setDatasetView(await window.agentic.learningDatasetView()); }
-    catch (error) { setLearningStatus(errorText(error)); }
+    catch (error) { learningError(error); }
     finally { setLearningBusy(false); }
   }
   async function downloadPreparedData() {
     try {
       const result = await window.agentic.exportLearningDataset();
       if (result.saved && result.path) { setDatasetExport(result.path); setLearningStatus(`Dades descarregades: ${result.path} (${result.examples} casos).`); }
-    } catch (error) { setLearningStatus(errorText(error)); }
+    } catch (error) { learningError(error); }
   }
 
   async function saveManualCase() {
@@ -1233,7 +1248,7 @@ export function App(): React.JSX.Element {
       setStatus('Cas desat: comptarà per a la propera beta.');
       void refreshLearningCounts();
     } catch (error) {
-      setManualCaseErrors({ form: errorText(error) });
+      setManualCaseErrors({ form: missingInMain(error) ? 'Cal reiniciar l’app per activar aquesta funció: tanca-la (⌘Q) i torna-la a obrir.' : errorText(error) });
     } finally { setManualCaseBusy(false); }
   }
 
@@ -1525,7 +1540,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!terminalOpen || !terminalContainer) return;
-    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor('bg'), foreground: tokenColor('fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
+    const terminal = new Terminal({ allowProposedApi: false, convertEol: true, cursorBlink: true, fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, scrollback: 5000, theme: { background: tokenColor(paneSurface), foreground: tokenColor(appearance.paneBg === 'bg.inverted' ? 'fg.inverted' : 'fg'), cursor: tokenColor('fg'), selectionBackground: tokenColor('border') } });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(terminalContainer);
@@ -1567,7 +1582,7 @@ export function App(): React.JSX.Element {
       terminalInstanceRef.current = null;
       terminalCommandBufferRef.current = '';
     };
-  }, [terminalOpen, terminalContainer, colorMode]);
+  }, [terminalOpen, terminalContainer, colorMode, appearance.paneBg, appearance.paneStyle]);
 
   function startTerminalResize(event: { clientY: number; preventDefault(): void }) {
     event.preventDefault();
@@ -1687,7 +1702,7 @@ export function App(): React.JSX.Element {
     <PaneCard header={<PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>}>
       {/* The margin round the text has the terminal's own colour (bg, as xterm's theme), so it shows no frame of
           the panel's colour whatever the panel style. */}
-      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" bg="bg" aria-label="Terminal del projecte" data-terminal/>
+      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" bg={paneSurface} aria-label="Terminal del projecte" data-terminal/>
     </PaneCard>
   );
 
@@ -2251,7 +2266,7 @@ export function App(): React.JSX.Element {
   const topRow = topItems.length === 1 ? chatPane : <PaneRow items={topItems} flexId="chat" widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila superior de panells"/>;
 
   return (
-    <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}>
+    <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}><PaneBgContext.Provider value={appearance.paneBg}>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
     {ownTitleBar && <Flex flex="none" h="appTitleBar" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
@@ -2623,6 +2638,13 @@ export function App(): React.JSX.Element {
                     </Grid>
                   </Box>
                   <Box>
+                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Fons de les finestres</Text>
+                    <NativeSelect.Root size="sm" maxW="xs"><NativeSelect.Field aria-label="Fons de les finestres" value={appearance.paneBg} onChange={(event) => { const value = event.target.value as Appearance['paneBg']; setAppearance((current) => ({ ...current, paneBg: value })); }}>
+                      {PANE_BACKGROUNDS.map((value) => <option key={value} value={value}>{value === 'auto' ? 'Segons l’estil del panell' : value}</option>)}
+                    </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
+                    <Text mt="1" fontSize="xs" color="fg.muted">Els tokens de fons de Chakra; s’aplica a tots els panells, també al xat i al terminal.</Text>
+                  </Box>
+                  <Box>
                     <Text fontSize="sm" fontWeight="medium" mb="1.5">Diàlegs</Text>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Diàlegs">
                       {DIALOG_MATERIAL_OPTIONS.map((material) => <Box key={material} as="button" role="radio" aria-checked={appearance.dialogs === material} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.dialogs === material ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, dialogs: material }))}>
@@ -2730,7 +2752,7 @@ export function App(): React.JSX.Element {
       </FloatingPanel.Positioner>
       </Portal>
     </FloatingPanel.Root>
-    </PaneStyleContext.Provider></PaneToneContext.Provider>
+    </PaneBgContext.Provider></PaneStyleContext.Provider></PaneToneContext.Provider>
   );
 }
 
