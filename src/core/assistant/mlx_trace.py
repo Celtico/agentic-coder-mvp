@@ -80,6 +80,12 @@ def traced_generate(stream_generate, model, tokenizer, prompt, max_tokens, sampl
     }
 
 
+def read_rate(tokens, seconds):
+    """Prompt tokens read per second: the new ones (not the cached) over the time to the first token.
+    mlx_lm's own prompt_tps counts only the last stretch it read, not the checkpoints read before it."""
+    return round(tokens / seconds, 2) if tokens and seconds else None
+
+
 def metrics(result, started):
     """The figures mlx_lm and mlx-vlm give with their last response, and the total time."""
     def value(name):

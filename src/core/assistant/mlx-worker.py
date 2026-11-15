@@ -145,7 +145,10 @@ class CachedStream:
         global STABLE_PROMPT
         shared = min(common_prefix(tokens, LAST_PROMPT), len(tokens) - 1)
         LAST_PROMPT = tokens
-        boundaries = {first_turn_end(tokens), shared}
+        # The end of the prompt too (all but its last token, which generation reads): the next call of a tool
+        # loop starts with this whole prompt, whatever way the history writes back what the model answered
+        # («<function=x>{}</function>» comes back without the «{}»), and this cache cannot be cut back.
+        boundaries = {first_turn_end(tokens), shared, len(tokens) - 1}
         if STABLE_PROMPT is None:
             STABLE_PROMPT = tokens[:]
         else:
@@ -274,7 +277,7 @@ for line in sys.stdin:
                 logprobs=bool(request.get("logprobs")),
             )
             trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")),
-                         promptTokens=stream.total, cachedTokens=stream.reused)
+                         promptTokens=stream.total, cachedTokens=stream.reused, promptTps=mlx_trace.read_rate(stream.total - stream.reused, trace.get("firstTokenSeconds")))
             emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "trace": trace})
             continue
         # generate() is stream_generate's text joined: the same, here through the prompt cache.

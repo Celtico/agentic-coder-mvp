@@ -174,8 +174,22 @@ test('the prompt cache keeps a checkpoint where a prompt stops being the previou
 
 test('the prompt cache also keeps the start every chat prompt shares and the first turn, beside the latest checkpoint', () => {
   const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
-  assert.match(worker, /boundaries = \{first_turn_end\(tokens\), shared\}/);
+  assert.match(worker, /boundaries = \{first_turn_end\(tokens\), shared, len\(tokens\) - 1\}/, 'the end of the prompt, for the next step of a tool loop');
   assert.match(worker, /stable = common_prefix\(tokens, STABLE_PROMPT\)\n\s*if stable >= CHECKPOINT_MIN:\n\s*STABLE_PROMPT = STABLE_PROMPT\[:stable\]\n\s*boundaries\.add\(stable\)/, 'only shorter, and not for prompts of another kind');
   assert.match(worker, /if boundary - position >= CHECKPOINT_MIN and not stored\(tokens\[:boundary\]\):/);
   assert.match(worker, /PROMPT_CACHE = LRUPromptCache\(max_size=8,/);
+});
+
+test('Mètriques reads the prompt rate over the new tokens and the time to the first token, not mlx_lm’s last stretch', () => {
+  const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
+  assert.match(worker, /promptTps=mlx_trace\.read_rate\(stream\.total - stream\.reused, trace\.get\("firstTokenSeconds"\)\)/);
+  const { execFileSync } = require('node:child_process');
+  const out = execFileSync('python3', ['-c', 'import sys; sys.path.insert(0, sys.argv[1]); import mlx_trace; print(mlx_trace.read_rate(3487, 21.078), mlx_trace.read_rate(0, 1.0), mlx_trace.read_rate(10, None))', __dirname], { encoding: 'utf8' });
+  assert.equal(out.trim(), '165.43 None None');
+});
+
+test('the automatic look at the folder goes in the history as the model’s own calls do, not as a JSON action', () => {
+  const agent = fs.readFileSync(path.join(__dirname, 'agent.ts'), 'utf8');
+  assert.match(agent, /content: `<tool_call>\$\{JSON\.stringify\(\{ name: 'list_files', arguments: \{\} \}\)\}<\/tool_call>`/);
+  assert.doesNotMatch(agent, /JSON\.stringify\(\{ type: 'tool_call', name: 'list_files' \}\)/);
 });
