@@ -66,9 +66,9 @@ export const paneCardRecipe = defineSlotRecipe({
     variant: {
       subtle: { root: { bg: "bg" } },
       outline: { root: { bg: "bg", borderWidth: "1px", borderColor: "border" } },
-      // In dark mode a shadow on the dark canvas does not show: there a raised pane is a lighter surface
-      // with a faint light edge, as dark interfaces show height.
-      elevated: { root: { bg: "bg", boxShadow: "md", _dark: { bg: "bg.subtle", boxShadow: "xl", borderWidth: "1px", borderColor: "whiteAlpha.200" } } },
+      // Chakra's own elevated card, as its docs show it: the panel colour and its «md» shadow (in dark mode
+      // a soft shadow and a faint light inset edge), nothing of our own on top.
+      elevated: { root: { bg: "bg.panel", boxShadow: "md" } },
     },
     size: { ...(chakraCard.variants.size as Record<string, unknown>), pane: { root: { "--card-padding": "0" } } },
   },

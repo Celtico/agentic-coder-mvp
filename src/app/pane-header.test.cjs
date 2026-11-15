@@ -1,5 +1,6 @@
 // The header every pane shares (src/app/pane-header.tsx), rendered with the app's theme.
 const test = require('node:test');
+const chakraCardElevated = () => require('@chakra-ui/react').defaultConfig.theme.slotRecipes.card.variants.variant.elevated;
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -107,7 +108,9 @@ test('every pane is a Chakra Card with its header and body, in Chakra’s three 
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /subtle: \{ root: \{ bg: "bg" \} \}/);
   assert.match(recipes, /outline: \{ root: \{ bg: "bg", borderWidth: "1px", borderColor: "border" \} \}/);
-  assert.match(recipes, /elevated: \{ root: \{ bg: "bg", boxShadow: "md", _dark: \{ bg: "bg\.subtle", boxShadow: "xl", borderWidth: "1px", borderColor: "whiteAlpha\.200" \} \} \}/, 'in dark mode the shadow alone does not show: a lighter surface and a faint edge');
+  // «Amb ombra» is Chakra's own elevated card (bg.panel and the md shadow), as in its docs.
+  assert.match(recipes, /elevated: \{ root: \{ bg: "bg\.panel", boxShadow: "md" \} \}/);
+  assert.deepEqual(chakraCardElevated(), { root: { bg: 'bg.panel', boxShadow: 'md' } });
   assert.match(recipes, /defaultVariants: \{ \.\.\.chakraCard\.defaultVariants, variant: "subtle", size: "pane" \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.equal((app.match(/<PaneCard[ >]/g) || []).length, 8, 'terminal, the two frames, evaluation, the two columns, the chat, and the preview in Preferències');
