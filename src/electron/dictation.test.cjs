@@ -163,7 +163,7 @@ test('the resident Whisper: kept after a dictation, released after the idle time
   assert.match(main, /if \(!shared && !residentWhisper\.resident\) await stopModelWorker\(\);/);
   assert.match(main, /residentWhisper\.release\(\);\n\s*benchmarkRun = \{/);
   assert.match(main, /residentWhisper\.release\(\);\n\s*trainingRun = \{/);
-  assert.match(main, /stopMcpServers\(\); residentWhisper\.release\(\); \}\);/);
+  assert.match(main, /stopMcpServers\(\); residentWhisper\.release\(\);\n/);
   assert.match(main, /finally \{ liveDictation = null; residentWhisper\.idle\(\); \}/);
   const python = fs.readFileSync(path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py'), 'utf8');
   const serve = python.slice(python.indexOf('def serve('), python.indexOf('def main('));

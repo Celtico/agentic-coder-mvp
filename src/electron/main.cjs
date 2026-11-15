@@ -851,7 +851,12 @@ app.whenReady().then(async () => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); residentWhisper.release(); });
+app.on('before-quit', () => {
+  if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); residentWhisper.release();
+  // An evaluation or a training runs in a process group of its own (runStreaming, detached): without this it
+  // outlives the app with its model on the GPU, and the reopened app does not know it is there.
+  benchmarkRun?.controller.abort(); trainingRun?.controller.abort();
+});
 
 ipcMain.handle('project:open', async () => {
   const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
