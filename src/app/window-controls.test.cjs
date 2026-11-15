@@ -43,7 +43,9 @@ test('the three traffic lights are on the left, then the title, left-aligned, an
   // Left-aligned, 40 px like the panes' headers, with nothing to keep it centred.
   assert.doesNotMatch(html, /text-align:\s*center|text-align_center/);
   const source = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
-  assert.match(source, /<FloatingPanel\.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border">/);
+  assert.match(source, /<FloatingPanel\.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border" colorPalette="agentic" bg=\{\(styles\.root as \{ bg\?: string \}\)\.bg\}>/);
+  // Painted like the panes' headers for the tone chosen.
+  assert.match(source, /useSlotRecipe\(\{ recipe: paneHeaderRecipe \}\)\(\{ tone: useContext\(PaneToneContext\) \}\)/);
   // The same box as the panes' header (src/theme/pane-recipes.ts).
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /root: \{ colorPalette: "agentic", display: "flex", flex: "none", h: "10", alignItems: "center", gap: "2", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" \}/);

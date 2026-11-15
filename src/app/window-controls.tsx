@@ -1,6 +1,8 @@
-import { FloatingPanel, IconButton, useFloatingPanelContext, type IconButtonProps } from "@chakra-ui/react"
+import { FloatingPanel, IconButton, useFloatingPanelContext, useSlotRecipe, type IconButtonProps } from "@chakra-ui/react"
 import { LuMinus as Minus, LuPlus as Plus, LuX as X } from "react-icons/lu"
-import { useEffect, type ReactNode } from "react"
+import { useContext, useEffect, type ReactNode } from "react"
+import { paneHeaderRecipe } from "../theme/pane-recipes"
+import { PaneToneContext } from "./pane-header"
 
 export type WindowStage = "default" | "minimized" | "maximized"
 
@@ -45,10 +47,12 @@ function Light({ color, label, children, ...trigger }: Omit<IconButtonProps, "co
 export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage: WindowStage; name: string }) {
   const minimized = stage === "minimized"
   const maximized = stage === "maximized"
+  // The bar is painted like the panes' headers for the tone chosen (tinted: the accent's subtle colour).
+  const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: useContext(PaneToneContext) })
   return (
     <FloatingPanel.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0">
       {/* The pane header's box: 40 px, centred vertically, its padding and its line underneath. */}
-      <FloatingPanel.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border">
+      <FloatingPanel.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border" colorPalette="agentic" bg={(styles.root as { bg?: string }).bg}>
         <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic">
           <FloatingPanel.CloseTrigger asChild>
             <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
