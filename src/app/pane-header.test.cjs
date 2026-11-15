@@ -143,7 +143,7 @@ test('every dialog has Chakra’s panel background, from the theme’s dialog re
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /dialog: dialogRecipe, floatingPanel: floatingPanelRecipe, accordion: accordionRecipe \}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const contents = app.match(/<Dialog\.Content[^>]*>/g) || [];
-  assert.equal(contents.length, 10);
+  assert.equal(contents.length, 12);
   for (const tag of contents) assert.doesNotMatch(tag, /bg=|borderColor=|boxShadow=/, 'no dialog sets its own background');
   const html = built.renderDialog().replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
   assert.match(html, /chakra-dialog__content/);
@@ -153,12 +153,12 @@ test('every dialog and the floating Historial local window speak the panes’ la
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   // Dialogs: the panes' header with the close button, the title kept for screen readers, ghost secondary buttons.
   assert.match(app, /const DialogHeading = [\s\S]*?<Dialog\.Title srOnly>\{title\}<\/Dialog\.Title>\s*<PaneHeader icon=\{icon\} title=\{title\} subtitle=\{subtitle\} actions=\{<Dialog\.CloseTrigger asChild><IconButton icon=\{X\} label="Tanca"\/><\/Dialog\.CloseTrigger>\}\/>/);
-  assert.equal((app.match(/<DialogHeading /g) || []).length, 10);
+  assert.equal((app.match(/<DialogHeading /g) || []).length, 12);
   assert.doesNotMatch(app, /<Dialog\.Header><Dialog\.Title>/);
   for (const title of ['Desa com a cas verificat', 'Edita el cas desat', 'Esborra el cas desat', 'Detall del cas', 'Preferències']) assert.match(app, new RegExp(`<DialogHeading icon=\\{\\w+\\} title="${title}"\\/>`), title);
   const footers = app.match(/<Dialog\.Footer>[\s\S]*?<\/Dialog\.Footer>/g) || [];
   // Preferències has no footer: it closes with the ✕ of its header and Esc.
-  assert.equal(footers.length, 9);
+  assert.equal(footers.length, 11);
   // Footer buttons are all size sm: the secondary one outlined (visible, not bare text), the main one solid.
   for (const footer of footers) {
     assert.doesNotMatch(footer, /<Button /, 'no xs buttons in a footer');
@@ -195,9 +195,9 @@ test('dialogs are solid or frosted (glaçat): the dialog recipe’s material var
   assert.match(glass, /backdrop-filter:blur\(16px\) saturate\(1\.2\)/);
   assert.doesNotMatch(solid, /backdrop-filter:blur\(16px\)/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/<Dialog\.Root \{\.\.\.dialogMaterial\} /g) || []).length, 10);
+  assert.equal((app.match(/<Dialog\.Root \{\.\.\.dialogMaterial\} /g) || []).length, 12);
   // The backdrop is the recipe's too: no dialog sets its own.
-  assert.equal((app.match(/<Dialog\.Backdrop\/>/g) || []).length, 10);
+  assert.equal((app.match(/<Dialog\.Backdrop\/>/g) || []).length, 12);
   assert.doesNotMatch(app, /<Dialog\.Backdrop [^/]/);
   assert.match(app, /const dialogMaterial = \{ material: appearance\.dialogs \} as Record<string, string>;/);
   assert.match(app, /DIALOG_MATERIAL_OPTIONS\.map\(\(material\) => <Box key=\{material\}[^>]*onClick=\{\(\) => setAppearance\(\(current\) => \(\{ \.\.\.current, dialogs: material \}\)\)\}>/);

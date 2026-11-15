@@ -45,6 +45,17 @@ contextBridge.exposeInMainWorld('agentic', {
   setPermissionMode: (mode) => ipcRenderer.invoke('permissions:set', mode),
   listModels: () => ipcRenderer.invoke('models:list'),
   selectModel: (modelId) => ipcRenderer.invoke('models:select', modelId),
+  manageModels: () => ipcRenderer.invoke('models:manage'),
+  setModelShown: (id, shown) => ipcRenderer.invoke('models:set-shown', id, shown),
+  removeModel: (id) => ipcRenderer.invoke('models:remove', id),
+  checkModelRepository: (repo) => ipcRenderer.invoke('models:check', repo),
+  addModel: (request) => ipcRenderer.invoke('models:add', request),
+  cancelModelDownload: () => ipcRenderer.invoke('models:add-cancel'),
+  onModelDownload: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('models:download-progress', listener);
+    return () => ipcRenderer.removeListener('models:download-progress', listener);
+  },
   cancel: () => ipcRenderer.invoke('agent:cancel'),
   gitSnapshot: () => ipcRenderer.invoke('git:snapshot'),
   gitHistory: () => ipcRenderer.invoke('git:history'),

@@ -45,6 +45,15 @@ export type TrainingPreferences = { maxTokens: number; numLayers: number; learni
 export type AdapterVersion = { folder: string; number: number; cases: number; createdAt: string; durationSeconds: number; finalLoss: number | null; truncated: number; dropped: number; comparison: { base: { passed: number; runs: number }; candidate: { passed: number; runs: number } } | null; promoted: { folder: string; label: string } | null };
 export type LearningVersions = { cases: number; base: { id: string; label: string } | null; betas: AdapterVersion[]; candidate: AdapterVersion | null; buttons: Record<'beta' | 'stable' | 'promote', { enabled: boolean; reason: string | null; fewCases?: boolean }>; running: { kind: string } | null; fewCases: number };
 export type LocalModelOption = { id: string; label: string; modelId: string; available: boolean; reason?: string; vision?: boolean };
+/** A model in Aprenentatge local › Gestiona els models (src/electron/model-manager.cjs). */
+export type ManagedModel = {
+  id: string; label: string; repo: string; installed: boolean; kind: 'text' | 'visió' | 'dictat' | 'beta' | 'estable'; source: string;
+  baseId?: string | null; number?: number | null; cases?: number | null; createdAt?: string | null; downloadable: boolean;
+  shown: boolean | null; selected: boolean; isDefault: boolean; loaded: boolean; bytes: number; removeBlock: string | null; shownBlock: string | null;
+};
+export type ModelDownload = { id: string; label: string; done: number; total: number };
+export type ModelDownloadEvent = { step: 'progress' | 'finished' | 'failed'; id?: string; label: string; done?: number; total?: number; message?: string };
+export type ManagedModels = { models: ManagedModel[]; download: ModelDownload | null };
 
 export interface AgenticBridge {
   openProject(): Promise<ProjectInfo | null>;
@@ -91,6 +100,13 @@ export interface AgenticBridge {
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
+  manageModels(): Promise<ManagedModels>;
+  setModelShown(id: string, shown: boolean): Promise<ManagedModels>;
+  removeModel(id: string): Promise<ManagedModels>;
+  checkModelRepository(repo: string): Promise<{ repo: string; ok: boolean; problem?: string; bytes?: number; size?: string | null; vision?: boolean }>;
+  addModel(request: { repo: string; label: string } | { id: string }): Promise<{ started: boolean }>;
+  cancelModelDownload(): Promise<{ cancelled: boolean }>;
+  onModelDownload(callback: (event: ModelDownloadEvent) => void): () => void;
   cancel(): Promise<{ cancelled: boolean; reason?: string }>;
   gitSnapshot(): Promise<GitSnapshot>;
   gitHistory(): Promise<GitHistory>;

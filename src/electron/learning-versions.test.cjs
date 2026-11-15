@@ -134,9 +134,12 @@ test('the chat offers the newest beta as «<base> beta · N casos»; older ones 
   const first = await versions.trainAdapter({ kind: 'beta', base: base(root), prepared: prepare(1), preferences: prefs, modelsRoot: root, python: 'py', run: fakeRun([]) });
   const second = await versions.trainAdapter({ kind: 'beta', base: base(root), prepared: prepare(5), preferences: prefs, modelsRoot: root, python: 'py', run: fakeRun([]) });
   const models = await versions.betaModels([{ id: 'mimo-9b-mlx', label: 'MiMo V2.6 9B · MLX', modelId: 'x', runtime: 'mlx', folder: 'mimo', aliases: ['mimo'] }, { id: 'other', label: 'Other', modelId: 'y', runtime: 'mlx', folder: 'o', aliases: [] }], root);
-  assert.equal(models.length, 1);
-  assert.equal(models[0].label, 'MiMo V2.6 9B · MLX beta · 5 casos');
+  // Every beta, newest first; only the newest is `latest` (the one the selector offers by default).
+  assert.equal(models.length, 2);
+  assert.equal(models[0].label, 'MiMo V2.6 9B · MLX beta 2 · 5 casos');
   assert.equal(models[0].id, `mimo-9b-mlx@${second.folder}`);
+  assert.deepEqual(models.map((model) => model.latest), [true, false]);
+  assert.equal(models[1].label, 'MiMo V2.6 9B · MLX beta 1 · 1 cas');
   assert.equal(models[0].adapterPath, second.adapterPath);
   assert.equal(models[0].folder, 'mimo', 'the base’s weights');
   await assert.rejects(versions.deleteBeta(root, 'mimo-9b-mlx', second.folder), /només es poden esborrar les anteriors/);

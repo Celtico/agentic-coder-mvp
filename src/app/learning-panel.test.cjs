@@ -51,7 +51,7 @@ test('the model list has the newest beta of a base, with the base’s weights an
   const models = await mlxModels.listModels(root);
   const entry = models.find((model) => model.beta);
   assert.equal(entry.id, 'mimo-9b-mlx@beta-1-2026-11-14T22-00-00-000Z');
-  assert.equal(entry.label, 'MiMo V2.6 9B · MLX beta · 1 cas');
+  assert.equal(entry.label, 'MiMo V2.6 9B · MLX beta 1 · 1 cas');
   assert.equal(entry.adapterPath, beta);
   assert.equal(entry.folder, 'mimo-v2.6-distill-qwen-9b-4bit');
   assert.ok(models.some((model) => model.id === 'mimo-9b-mlx' && !model.adapterPath), 'the base stays available');

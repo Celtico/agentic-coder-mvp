@@ -7,6 +7,6 @@ const path = require('node:path');
 
 test('before-quit aborts the evaluation and the training, which kill their whole process group', () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
-  assert.match(main, /app\.on\('before-quit', \(\) => \{[^]*?benchmarkRun\?\.controller\.abort\(\); trainingRun\?\.controller\.abort\(\);\n\}\);/);
+  assert.match(main, /app\.on\('before-quit', \(\) => \{[^]*?benchmarkRun\?\.controller\.abort\(\); trainingRun\?\.controller\.abort\(\); modelDownload\?\.controller\.abort\(\);\n\}\);/);
   assert.match(main, /const stop = \(\) => \{ try \{ process\.kill\(-child\.pid, 'SIGTERM'\); \} catch \{\} \};/);
 });

@@ -164,13 +164,17 @@ async function nextNumber(modelsRoot, baseId, kind) {
   return highest + 1;
 }
 
-/** The chat's entry for the newest beta of each base: the base with that adapter. */
+/**
+ * The chat's entries for the betas of each base, newest first: the base with that adapter. The newest is
+ * `latest` (offered in the selector by default; the others only when switched on in Gestiona els models).
+ */
 async function betaModels(baseModels, modelsRoot) {
   const entries = [];
   for (const base of baseModels) {
-    const [latest] = await listBetas(modelsRoot, base.id);
-    if (!latest) continue;
-    entries.push({ ...base, id: `${base.id}@${latest.folder}`, label: `${base.label} beta · ${latest.cases} ${latest.cases === 1 ? 'cas' : 'casos'}`, adapterPath: latest.adapterPath, beta: true, baseId: base.id, aliases: [] });
+    (await listBetas(modelsRoot, base.id)).forEach((beta, index) => entries.push({
+      ...base, id: `${base.id}@${beta.folder}`, label: `${base.label} beta ${beta.number} · ${beta.cases} ${beta.cases === 1 ? 'cas' : 'casos'}`,
+      adapterPath: beta.adapterPath, beta: true, latest: index === 0, number: beta.number, cases: beta.cases, createdAt: beta.createdAt, baseId: base.id, aliases: [],
+    }));
   }
   return entries;
 }

@@ -4,16 +4,16 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Separator, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
+  Spinner, Progress, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuExternalLink as ExternalLink, LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
-  LuBrain as Brain, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
+  LuBrain as Brain, LuBoxes as Boxes, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
@@ -119,6 +119,8 @@ const Tip = ({ label, children }: { label: string; children: React.ReactElement 
 );
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Tip label={label}><Button aria-label={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button></Tip>;
 /** Every dialog's header: the panes' header (icon, title, subtitle) with its close button as the action. */
+/** A model's size on disk, as Gestiona els models shows it. */
+const formatModelBytes = (bytes: number) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB` : `${Math.max(bytes ? 1 : 0, Math.round(bytes / 1e6))} MB`;
 const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: string; subtitle?: React.ReactNode }) => (
   <Dialog.Header>
     <Dialog.Title srOnly>{title}</Dialog.Title>
@@ -416,6 +418,31 @@ export function App(): React.JSX.Element {
   const [trainingLog, setTrainingLog] = useState<TrainingProgress[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<number | null>(null);
   const [learningVersions, setLearningVersions] = useState<Awaited<ReturnType<typeof window.agentic.learningVersions>> | null>(null);
+  // Aprenentatge local › Gestiona els models: the list, the model being removed, the add dialog and the download.
+  const [managed, setManaged] = useState<ManagedModels | null>(null);
+  const [modelToRemove, setModelToRemove] = useState<ManagedModel | null>(null);
+  const [modelAdd, setModelAdd] = useState<{ repo: string; label: string; check?: Awaited<ReturnType<typeof window.agentic.checkModelRepository>>; busy?: boolean } | null>(null);
+  const [modelManageError, setModelManageError] = useState('');
+  const [modelManageNote, setModelManageNote] = useState('');
+  const refreshManaged = useCallback(async () => {
+    try { setManaged(await window.agentic.manageModels()); } catch (error) { setModelManageError(error instanceof Error ? error.message : String(error)); }
+  }, []);
+  useEffect(() => { void refreshManaged(); }, [refreshManaged]);
+  useEffect(() => window.agentic.onModelDownload((event) => {
+    if (event.step === 'progress') setManaged((current) => current && { ...current, download: { id: event.id || '', label: event.label, done: event.done || 0, total: event.total || 0 } });
+    else {
+      setModelManageError(event.step === 'failed' ? event.message || '' : '');
+      setModelManageNote(event.step === 'finished' ? event.message || '' : '');
+      void refreshManaged();
+      void window.agentic.listModels().then((available) => setModelOptions(available.models));
+    }
+  }), [refreshManaged]);
+  // After a change the selector reads the list again (it offers only the models switched on).
+  const afterModelsChange = (next: ManagedModels) => { setManaged(next); setModelManageError(''); void window.agentic.listModels().then((available) => setModelOptions(available.models)); };
+  const modelAction = async (action: () => Promise<ManagedModels | unknown>) => {
+    try { const next = await action(); if (next && typeof next === 'object' && 'models' in next) afterModelsChange(next as ManagedModels); else void refreshManaged(); }
+    catch (error) { setModelManageError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(error)); }
+  };
   const refreshLearningVersions = useCallback(async () => {
     try { setLearningVersions(await window.agentic.learningVersions()); } catch { /* the panel keeps what it showed */ }
   }, []);
@@ -1972,6 +1999,36 @@ export function App(): React.JSX.Element {
               </Box>
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
+          {/* Gestiona els models (src/electron/model-manager.cjs): every model on this Mac, its switch for the
+              chat's selector, adding one from Hugging Face and removing one to the Trash. */}
+          <Accordion.Item value="models">
+            <Accordion.ItemTrigger>{rowHeader('Gestiona els models', managed?.models.filter((model) => model.installed).length ?? 0, Boxes)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
+              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" disabled={Boolean(managed?.download)} onClick={() => { setModelManageError(''); setModelAdd({ repo: '', label: '' }); }}><Plus size={14}/>Afegeix un model</ChakraButton></HStack>
+              {modelManageError && <Notice tone="warning">{modelManageError}</Notice>}
+              {modelManageNote && <Notice tone="success">{modelManageNote}</Notice>}
+              {managed?.download && <Box px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
+                <HStack gap="2"><Spinner size="xs"/><Text flex="1" minW="0" fontSize="sm" truncate>Baixant {managed.download.label}</Text><Text fontSize="xs" color="fg.muted">{formatModelBytes(managed.download.done)} de {formatModelBytes(managed.download.total)}</Text><ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.cancelModelDownload()}><X size={14}/>Cancel·la</ChakraButton></HStack>
+                <Progress.Root mt="2" size="xs" colorPalette="agentic" value={managed.download.total ? Math.round(managed.download.done / managed.download.total * 100) : null}><Progress.Track><Progress.Range/></Progress.Track></Progress.Root>
+              </Box>}
+              {managed?.models.map((model) => <HStack key={model.id} gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="bg.muted" minW="0" opacity={model.installed ? undefined : 0.7} data-managed-model={model.kind}>
+                <Stack flex="1" minW="0" gap="0.5">
+                  <HStack gap="1.5" minW="0" flexWrap="wrap">
+                    <Text fontSize="sm" fontWeight="medium" truncate>{model.kind === 'beta' ? `Beta ${model.number} de ${managed.models.find((base) => base.id === model.baseId)?.label || model.baseId}` : model.label}</Text>
+                    <Badge size="xs" variant="subtle" colorPalette={model.kind === 'visió' ? 'purple' : model.kind === 'dictat' ? 'blue' : model.kind === 'beta' || model.kind === 'estable' ? 'orange' : 'gray'}>{model.kind}</Badge>
+                    {model.isDefault && <Badge size="xs" variant="subtle" colorPalette="agentic">per defecte</Badge>}
+                    {model.loaded && <Badge size="xs" variant="solid" colorPalette="agentic">carregat ara</Badge>}
+                    {model.selected && model.kind !== 'dictat' && <Badge size="xs" variant="outline" colorPalette="agentic">triat al xat</Badge>}
+                  </HStack>
+                  <Text fontSize="2xs" color="fg.muted" truncate title={model.repo}>{model.installed ? formatModelBytes(model.bytes) : 'No és en aquest Mac'} · {model.source}{model.cases ? ` · ${model.cases} ${model.cases === 1 ? 'cas' : 'casos'}` : ''}{model.createdAt ? ` · ${new Date(model.createdAt).toLocaleDateString()}` : ''}{model.kind !== 'beta' && model.kind !== 'estable' ? ` · ${model.repo}` : ''}</Text>
+                </Stack>
+                {model.shown !== null && model.installed && <Tip label={model.shownBlock || (model.shown ? 'Surt al selector del xat' : 'No surt al selector del xat')}><Switch.Root size="sm" colorPalette="agentic" checked={model.shown} disabled={Boolean(model.shownBlock)} onCheckedChange={({ checked }) => void modelAction(() => window.agentic.setModelShown(model.id, checked))}><Switch.HiddenInput aria-label={`${model.label} al selector`}/><Switch.Control/><Switch.Label fontSize="xs" color="fg.muted">Al selector</Switch.Label></Switch.Root></Tip>}
+                {model.downloadable && <IconButton icon={Download} label={`Baixa ${model.label}`} disabled={Boolean(managed.download)} onClick={() => void modelAction(() => window.agentic.addModel({ id: model.id }))}/>}
+                {model.installed && <IconButton icon={Trash} label={model.removeBlock || `Treu ${model.label}`} disabled={Boolean(model.removeBlock) || Boolean(managed.download)} onClick={() => { setModelManageError(''); setModelToRemove(model); }}/>}
+              </HStack>)}
+              <Text fontSize="xs" color="fg.muted">Treure un model el mou a la Paperera: es pot recuperar des del Finder. Afegir-ne o treure’n no carrega cap model.</Text>
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
         </Accordion.Root>}
     </Stack></Box>
   );
@@ -2531,6 +2588,58 @@ export function App(): React.JSX.Element {
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" disabled={caseBusy !== null} onClick={() => setCaseEdit(null)}>Cancel·la</ChakraButton>
               <ChakraButton size="sm" colorPalette="agentic" disabled={!caseEdit?.task.trim() || !caseEdit?.evidence.trim() || caseBusy !== null} onClick={() => void saveCaseEdit()}>{caseBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa</ChakraButton>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    {/* Gestiona els models › Treu: what goes to the Trash, with its size. */}
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} role="alertdialog" open={modelToRemove !== null} onOpenChange={({ open }) => { if (!open) setModelToRemove(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content>
+            <DialogHeading icon={Trash} title="Treu el model"/>
+            <Dialog.Body>
+              <Text fontSize="sm" fontWeight="medium">{modelToRemove?.label}</Text>
+              <Text mt="2" fontSize="sm" color="fg.muted">Es mourà a la Paperera ({formatModelBytes(modelToRemove?.bytes || 0)}) i deixarà de sortir al selector. Es pot recuperar des del Finder fins que buidis la Paperera.</Text>
+              {modelManageError && <Box mt="3"><Notice tone="warning">{modelManageError}</Notice></Box>}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" onClick={() => setModelToRemove(null)}>Cancel·la</ChakraButton>
+              <ChakraButton size="sm" colorPalette="red" data-initial-focus onClick={() => { const model = modelToRemove; setModelToRemove(null); if (model) void modelAction(() => window.agentic.removeModel(model.id)); }}><Trash size={14}/>Mou a la Paperera</ChakraButton>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    {/* Gestiona els models › Afegeix: a model from Hugging Face, checked (MLX, size) before anything is downloaded. */}
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={modelAdd !== null} onOpenChange={({ open }) => { if (!open) setModelAdd(null); }}>
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content>
+            <DialogHeading icon={Boxes} title="Afegeix un model" subtitle="De Hugging Face, en format MLX"/>
+            <Dialog.Body><Stack gap="3">
+              <Field.Root>
+                <Field.Label>Model a Hugging Face</Field.Label>
+                <Input size="sm" data-initial-focus value={modelAdd?.repo || ''} placeholder="mlx-community/nom-del-model-4bit" onChange={(event) => setModelAdd((current) => current && { ...current, repo: event.target.value, check: undefined })}/>
+                <Field.HelperText>Organització/nom, com surt a l’adreça del model.</Field.HelperText>
+              </Field.Root>
+              <Field.Root>
+                <Field.Label>Nom al selector</Field.Label>
+                <Input size="sm" maxLength={80} value={modelAdd?.label || ''} placeholder="Opcional" onChange={(event) => setModelAdd((current) => current && { ...current, label: event.target.value })}/>
+              </Field.Root>
+              {modelAdd?.check && (modelAdd.check.ok
+                ? <Notice tone="success">És un model MLX{modelAdd.check.vision ? ' amb visió' : ''}. Ocupa {modelAdd.check.size}.</Notice>
+                : <Notice tone="warning">{modelAdd.check.problem}</Notice>)}
+              {modelManageError && <Notice tone="warning">{modelManageError}</Notice>}
+            </Stack></Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" onClick={() => setModelAdd(null)}>Cancel·la</ChakraButton>
+              {modelAdd?.check?.ok
+                ? <ChakraButton size="sm" colorPalette="agentic" onClick={() => { const request = { repo: modelAdd.repo.trim(), label: modelAdd.label.trim() }; setModelAdd(null); void modelAction(() => window.agentic.addModel(request)); }}><Download size={14}/>Baixa ({modelAdd.check.size})</ChakraButton>
+                : <ChakraButton size="sm" colorPalette="agentic" disabled={!modelAdd?.repo.trim() || modelAdd?.busy} onClick={() => { const repo = modelAdd?.repo.trim() || ''; setModelAdd((current) => current && { ...current, busy: true }); setModelManageError(''); window.agentic.checkModelRepository(repo).then((check) => setModelAdd((current) => current && { ...current, check, busy: false }), (error) => { setModelManageError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(error)); setModelAdd((current) => current && { ...current, busy: false }); }); }}>{modelAdd?.busy ? <Spinner size="xs"/> : <Check size={14}/>}Comprova</ChakraButton>}
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>

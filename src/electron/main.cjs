@@ -22,6 +22,7 @@ const { createActiveTurns, withTurn, withoutReviewerNote } = require('./active-t
 const { validateChatImages, writeChatImages, removeChatImages } = require('./chat-images.cjs');
 const dictation = require('./dictation.cjs');
 const versions = require('./learning-versions.cjs');
+const modelManager = require('./model-manager.cjs');
 const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
 const menuLabels = require('./menu-labels.cjs');
 const { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normalizeAgentPreferences, migrateAgentPreferences, limitHistory } = require('./preferences.cjs');
@@ -119,6 +120,8 @@ const activeModelToolCalls = new Set();
 let activeModelRequestId = null;
 let selectedProject = null;
 let selectedModel = mlxModels.DEFAULT_MODEL_ID;
+// Which chat models the selector offers (Aprenentatge local › Gestiona els models, src/electron/model-manager.cjs).
+let modelVisibility = {};
 /** 'ask': the agent asks before installing packages. 'auto': it never asks. The user's choice, kept between sessions. */
 let permissionMode = 'ask';
 /** Preferències › Model and Agent (src/electron/preferences.cjs): sent to the agent with each request. */
@@ -204,7 +207,7 @@ app.on('before-quit', () => {
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 async function saveSettings() {
   await fs.mkdir(path.dirname(settingsFile()), { recursive: true });
-  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, agentPreferencesVersion: AGENT_PREFERENCES_VERSION, dictation: dictationPreferences, training: trainingPreferences }, null, 2), 'utf8');
+  await fs.writeFile(settingsFile(), JSON.stringify({ selectedProject, selectedModel, permissionMode, agent: agentPreferences, agentPreferencesVersion: AGENT_PREFERENCES_VERSION, dictation: dictationPreferences, training: trainingPreferences, modelVisibility }, null, 2), 'utf8');
 }
 
 // Run from the repository, the models live in its models/ folder. An installed app cannot carry
@@ -223,7 +226,7 @@ async function getAvailableModels() {
     const directory = await mlxModels.modelDirectory(model, projectModelsDirectory());
     const available = Boolean(directory && mlxPythonReady);
     const reason = available ? undefined : !directory ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.';
-    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, vision: await mlxModels.hasVision(directory), ...(reason ? { reason } : {}) });
+    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, vision: await mlxModels.hasVision(directory), shown: modelManager.shownInSelector(model, modelVisibility, selectedModel), ...(reason ? { reason } : {}) });
   }
   return result;
 }
@@ -508,6 +511,8 @@ function stopProjectProcess() {
 
 /** The chat models loaded in this app session (their workers may have been stopped since). */
 const loadedModels = new Set();
+/** The model the running chat worker has (or is loading). */
+let modelWorkerModelId = null;
 async function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
   const nodeExecutable = findNodeExecutable();
@@ -538,7 +543,8 @@ async function startModelWorker() {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   });
   modelWorker = child;
-  loadedModels.add((await currentModel()).id);
+  modelWorkerModelId = (await currentModel()).id;
+  loadedModels.add(modelWorkerModelId);
   child.on('message', (message) => {
     if (message?.type === 'status') { activeTurns.status(message.value); win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
@@ -824,6 +830,7 @@ app.whenReady().then(async () => {
     if (agentSettings.migrated) migratedSettings = true;
     dictationPreferences = dictation.normalizeDictationPreferences(saved.dictation);
     trainingPreferences = versions.normalizeTrainingPreferences(saved.training);
+    modelVisibility = modelManager.normalizeVisibility(saved.modelVisibility);
   } catch {}
   if (migratedSettings) await saveSettings().catch(() => {});
   if (!selectedProject) {
@@ -855,7 +862,7 @@ app.on('before-quit', () => {
   if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); residentWhisper.release();
   // An evaluation or a training runs in a process group of its own (runStreaming, detached): without this it
   // outlives the app with its model on the GPU, and the reopened app does not know it is there.
-  benchmarkRun?.controller.abort(); trainingRun?.controller.abort();
+  benchmarkRun?.controller.abort(); trainingRun?.controller.abort(); modelDownload?.controller.abort();
 });
 
 ipcMain.handle('project:open', async () => {
@@ -1421,7 +1428,7 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
   const controller = new AbortController();
   // A training or an evaluation needs the memory: the resident Whisper goes first.
   residentWhisper.release();
-  benchmarkRun = { controller, label: model.label };
+  benchmarkRun = { controller, label: model.label, modelId: model.id };
   (async () => {
     let result = null;
     try {
@@ -1533,7 +1540,7 @@ async function startVersionRun(kind) {
   const controller = new AbortController();
   // A training or an evaluation needs the memory: the resident Whisper goes first.
   residentWhisper.release();
-  trainingRun = { controller, name: kind, base: base.label };
+  trainingRun = { controller, name: kind, base: base.label, baseId: base.id };
   (async () => {
     try {
       const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming, onProgress: sendTraining, signal: controller.signal });
@@ -1753,7 +1760,9 @@ ipcMain.handle('permissions:set', async (_event, mode) => {
   await saveSettings();
   return permissionMode;
 });
-ipcMain.handle('models:list', async () => ({ selectedModel, models: await getAvailableModels() }));
+// The selector offers only the models switched on in Gestiona els models (and always the chosen one).
+const selectorModels = async () => (await getAvailableModels()).filter((model) => model.shown);
+ipcMain.handle('models:list', async () => ({ selectedModel, models: await selectorModels() }));
 ipcMain.handle('models:select', async (_e, modelId) => {
   if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans de canviar de model.');
   const model = (await allModels()).find((candidate) => candidate.id === modelId);
@@ -1765,8 +1774,148 @@ ipcMain.handle('models:select', async (_e, modelId) => {
   if (selectedModel !== model.id) await stopModelWorker();
   selectedModel = model.id;
   await saveSettings();
-  return { selectedModel, models: await getAvailableModels() };
+  return { selectedModel, models: await selectorModels() };
 });
+
+// Aprenentatge local › Gestiona els models (src/electron/model-manager.cjs): every model on this Mac with
+// its size, its switch for the selector, adding one from Hugging Face and removing one to the Trash.
+// Nothing here loads a model.
+async function managedModels() {
+  const root = projectModelsDirectory();
+  const loadedId = modelWorker?.connected ? modelWorkerModelId : null;
+  const rows = [];
+  for (const model of await allModels()) {
+    const directory = model.beta ? model.adapterPath : await mlxModels.modelDirectory(model, root);
+    // What goes to the Trash: a beta's adapter, a cached model's whole cache entry, or the model's folder.
+    const folder = model.beta ? model.adapterPath : model.hfCache ? path.join(root, '.hf', 'hub', `models--${model.hfCache.replace('/', '--')}`) : directory;
+    let meta = null;
+    if (model.own) { try { meta = JSON.parse(await fs.readFile(path.join(root, 'mlx', model.folder, 'agentic-model.json'), 'utf8')); } catch {} }
+    const vision = !model.beta && await mlxModels.hasVision(directory);
+    rows.push({
+      id: model.id, label: model.label, repo: model.modelId, installed: Boolean(directory), folder,
+      kind: model.beta ? 'beta' : meta?.stable ? 'estable' : vision ? 'visió' : 'text',
+      source: model.beta || meta?.stable ? 'entrenat aquí' : meta?.source === 'huggingface' ? 'Hugging Face' : model.own ? 'local' : 'app',
+      baseId: model.beta ? model.baseId : meta?.base?.id || null, number: model.number ?? meta?.version ?? null, cases: model.cases ?? meta?.cases ?? null, createdAt: model.createdAt || meta?.createdAt || null,
+      // A built-in model that is not here can be downloaded again from its repository (not the Hugging Face cache one).
+      downloadable: !directory && !model.beta && !model.own && Boolean(model.folder),
+      shown: modelManager.shownInSelector(model, modelVisibility, selectedModel), selected: model.id === selectedModel,
+      isDefault: model.id === mlxModels.DEFAULT_MODEL_ID, loaded: model.id === loadedId,
+      bytes: directory ? await modelManager.folderBytes(folder) : 0,
+    });
+  }
+  for (const model of dictation.DICTATION_MODELS) {
+    const directory = dictation.dictationModelDirectory(model, root);
+    const installed = await dictation.dictationModelInstalled(model, root);
+    rows.push({ id: model.id, label: model.label, repo: model.repo, installed, folder: directory, kind: 'dictat', source: 'app', downloadable: !installed, shown: null, selected: dictationPreferences.model === model.id, isDefault: model.id === dictation.DEFAULT_DICTATION_MODEL, loaded: residentWhisper.resident && dictationPreferences.model === model.id, bytes: installed ? await modelManager.folderBytes(directory) : 0 });
+  }
+  const state = {
+    selectedId: selectedModel, loadedId, defaultId: mlxModels.DEFAULT_MODEL_ID,
+    betaBases: new Set(rows.filter((row) => row.kind === 'beta').map((row) => row.baseId)),
+    busyIds: new Set([benchmarkRun?.modelId, trainingRun?.baseId].filter(Boolean)),
+    dictationLoadedId: residentWhisper.resident ? dictationPreferences.model : null,
+  };
+  return rows.map((row) => ({ ...row, removeBlock: modelManager.removalBlock(row, state), shownBlock: row.kind === 'dictat' ? null : row.selected ? 'És el model triat al xat: no es pot amagar.' : !row.installed ? 'No és en aquest Mac.' : null }));
+}
+// The renderer gets everything but the folders.
+const managedModelsView = async () => ({ models: (await managedModels()).map(({ folder, ...row }) => row), download: modelDownload ? { id: modelDownload.id, label: modelDownload.label, done: modelDownload.done, total: modelDownload.total } : null });
+ipcMain.handle('models:manage', async () => managedModelsView());
+
+ipcMain.handle('models:set-shown', async (_event, id, shown) => {
+  const chat = (await getAvailableModels()).filter((model) => model.available);
+  const models = (await allModels()).filter((model) => chat.some((item) => item.id === model.id));
+  modelVisibility = modelManager.setShown(modelVisibility, String(id), Boolean(shown), { selectedId: selectedModel, models });
+  await saveSettings();
+  return managedModelsView();
+});
+
+ipcMain.handle('models:remove', async (_event, id) => {
+  const row = (await managedModels()).find((item) => item.id === id);
+  if (!row) throw new Error('Aquest model ja no hi és.');
+  if (row.removeBlock) throw new Error(row.removeBlock);
+  // To the Trash, never deleted: it can be put back from the Finder.
+  await shell.trashItem(row.folder);
+  if (id in modelVisibility) { const { [id]: _removed, ...rest } = modelVisibility; modelVisibility = rest; await saveSettings(); }
+  return managedModelsView();
+});
+
+// The listing of a repository on Hugging Face (files and sizes); null when there is no such public model.
+async function huggingFaceListing(repo) {
+  const [org, name] = repo.split('/');
+  const response = await fetch(`https://huggingface.co/api/models/${encodeURIComponent(org)}/${encodeURIComponent(name)}?blobs=true`, { signal: AbortSignal.timeout(20_000) });
+  if (response.status === 401 || response.status === 404) return null;
+  if (!response.ok) throw new Error(`Hugging Face ha respost ${response.status}.`);
+  return response.json();
+}
+
+ipcMain.handle('models:check', async (_event, repo) => {
+  const clean = String(repo || '').trim();
+  if (!modelManager.validRepoId(clean)) throw new Error('Escriu el nom del model com a Hugging Face: organització/nom.');
+  const result = modelManager.checkRepository(await huggingFaceListing(clean), clean);
+  return { repo: clean, ...result, size: result.bytes ? modelManager.formatBytes(result.bytes) : null };
+});
+
+let modelDownload = null;
+const sendModelDownload = (event) => { if (win && !win.isDestroyed()) win.webContents.send('models:download-progress', event); };
+// Starts a download (only from a click in Gestiona els models): a model from Hugging Face, or a model the
+// app knows that is not on this Mac. It goes to a hidden partial folder, renamed when complete.
+ipcMain.handle('models:add', async (_event, request) => {
+  if (modelDownload) throw new Error('Ja s’està baixant un model; espera que acabi.');
+  const root = projectModelsDirectory();
+  const rows = await managedModels();
+  let repo, label, target, meta = null, total;
+  if (request?.id) {
+    const row = rows.find((item) => item.id === request.id);
+    if (!row?.downloadable) throw new Error('Aquest model no es pot baixar d’aquí.');
+    const info = await huggingFaceListing(row.repo);
+    if (!info) throw new Error('El model ja no és a Hugging Face.');
+    ({ repo, label, folder: target } = row);
+    if (row.kind !== 'dictat') target = path.join(root, 'mlx', (await allModels()).find((model) => model.id === row.id).folder);
+    total = modelManager.downloadBytes(info);
+  } else {
+    repo = String(request?.repo || '').trim();
+    if (!modelManager.validRepoId(repo)) throw new Error('Escriu el nom del model com a Hugging Face: organització/nom.');
+    const checked = modelManager.checkRepository(await huggingFaceListing(repo), repo);
+    if (!checked.ok) throw new Error(checked.problem);
+    const added = modelManager.addedModel({ repo, label: request?.label, modelsRoot: root });
+    if (rows.some((row) => row.id === added.meta.id || row.repo === repo)) throw new Error('Aquest model ja és a la llista.');
+    ({ directory: target, meta } = added);
+    label = meta.label;
+    total = checked.bytes;
+  }
+  if (fsSync.existsSync(target)) throw new Error('Ja hi ha una carpeta amb aquest nom a models/.');
+  const partial = path.join(path.dirname(target), `.${path.basename(target)}.partial`);
+  await fs.rm(partial, { recursive: true, force: true });
+  await fs.mkdir(partial, { recursive: true });
+  const controller = new AbortController();
+  modelDownload = { id: request?.id || meta.id, label, done: 0, total, controller };
+  const timer = setInterval(async () => {
+    if (!modelDownload) return;
+    modelDownload.done = Math.min(await modelManager.folderBytes(partial), total);
+    sendModelDownload({ step: 'progress', id: modelDownload.id, label, done: modelDownload.done, total });
+  }, 1000);
+  (async () => {
+    let result = null;
+    try {
+      result = await runStreaming(mlxPythonPath(), [path.join(__dirname, '..', 'core', 'assistant', 'mlx_download.py'), repo, partial, ...modelManager.DOWNLOAD_PATTERNS], { signal: controller.signal, env: { AGENT_MLX_LOCK_LABEL: 'una baixada' } });
+      if (result.code === 0 && !controller.signal.aborted) {
+        await fs.rm(path.join(partial, '.cache'), { recursive: true, force: true });
+        if (meta) await fs.writeFile(path.join(partial, 'agentic-model.json'), JSON.stringify({ ...meta, addedAt: new Date().toISOString() }, null, 2));
+        await fs.rename(partial, target);
+      }
+    } catch (error) { result = { code: -1, output: error.message }; }
+    finally {
+      clearInterval(timer);
+      const ok = result?.code === 0 && !controller.signal.aborted && fsSync.existsSync(target);
+      if (!ok) await fs.rm(partial, { recursive: true, force: true }).catch(() => {});
+      modelDownload = null;
+      sendModelDownload(ok
+        ? { step: 'finished', label, message: `${label} ja és en aquest Mac.` }
+        : { step: 'failed', label, message: controller.signal.aborted ? 'Baixada cancel·lada.' : `No s’ha pogut baixar ${label}: ${(result?.output || '').trim().split('\n').pop()?.slice(0, 200) || `codi ${result?.code}`}` });
+    }
+  })();
+  return { started: true };
+});
+ipcMain.handle('models:add-cancel', async () => { modelDownload?.controller.abort(); return { cancelled: Boolean(modelDownload) }; });
 
 ipcMain.handle('agent:cancel', async () => cancelModelRequest());
 
