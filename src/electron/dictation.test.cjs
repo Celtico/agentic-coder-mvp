@@ -175,3 +175,17 @@ test('the resident Whisper: kept after a dictation, released after the idle time
   assert.match(python, /if is_silent\(samples\):\n\s*return ""/);
   assert.match(python, /condition_on_previous_text=False/);
 });
+
+test('a silent recording says which setting to change, and for which app (from a terminal it is the terminal)', () => {
+  assert.equal(dictation.launcherName('Apple_Terminal'), 'Terminal');
+  assert.equal(dictation.launcherName('iTerm.app'), 'iTerm');
+  assert.equal(dictation.launcherName(undefined, 'com.anthropic.claudefordesktop'), 'Claude');
+  assert.equal(dictation.launcherName(undefined, undefined), null);
+  assert.match(dictation.silentRecordingNotice({ status: 'denied', launcher: 'Terminal' }), /Privadesa i seguretat › Micròfon › activa «Terminal» \(és des d’on obres l’app amb npm start\)/);
+  assert.match(dictation.silentRecordingNotice({ status: 'denied', launcher: null }), /activa «Electron»/);
+  const granted = dictation.silentRecordingNotice({ status: 'granted', launcher: 'Terminal' });
+  assert.match(granted, /So › Entrada que el micròfon triat és el bo/);
+  assert.match(granted, /«Terminal» hi és activat/);
+  const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /dictation\.launcherName\(process\.env\.TERM_PROGRAM, process\.env\.__CFBundleIdentifier\)/);
+});

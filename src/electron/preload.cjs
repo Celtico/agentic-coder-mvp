@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('agentic', {
   dictationInfo: () => ipcRenderer.invoke('dictation:info'),
   setDictationPreferences: (change) => ipcRenderer.invoke('preferences:set-dictation', change),
   askMicrophone: () => ipcRenderer.invoke('dictation:microphone'),
+  microphoneStatus: () => ipcRenderer.invoke('dictation:microphone-status'),
   transcribe: (audio) => ipcRenderer.invoke('dictation:transcribe', audio),
   startLiveDictation: () => ipcRenderer.invoke('dictation:live-start'),
   liveDictationPartial: (audio) => ipcRenderer.invoke('dictation:live-partial', audio),
