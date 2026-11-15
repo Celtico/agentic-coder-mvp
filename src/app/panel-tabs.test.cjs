@@ -41,7 +41,7 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   // and made it spill over the first icon.
   assert.match(fs.readFileSync(path.join(__dirname, 'mark.tsx'), 'utf8'), /<chakra\.svg viewBox="0 0 24 24" width=\{`\$\{size\}px`\} height=\{`\$\{size\}px`\}/);
   assert.match(app, /<PaneHeader icon=\{Conversations\} title="Converses" actions=\{<><IconButton icon=\{Trash\} label="Paperera de converses" onClick=\{\(\) => void openChatTrash\(\)\}\/><IconButton icon=\{Plus\} label="Nova conversa" onClick=\{\(\) => void newChat\(\)\}\/><\/>\}\/>/);
-  assert.match(app, /<PaneHeader icon=\{FileText\} title="Fitxers" subtitle=/);
+  assert.match(app, /<PaneHeader icon=\{FolderClosed\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // The visible side columns are the first panes of the top row's one splitter, in the order of their icons.
   assert.match(app, /\.\.\.sideColumns\.map\(\(column\) => \(\{ id: `nav-\$\{column\}`, node: column === 'conversations' \? conversationsColumn : filesColumn \}\)\),\n\s*\.\.\.sideItems,\n\s*\{ id: 'chat', node: chatPane \},/);
@@ -51,7 +51,7 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /const conversationsColumn = \(\n\s*<PaneCard label="Converses"/);
   assert.match(app, /const filesColumn = \(\n\s*<PaneCard label="Fitxers"/);
   assert.match(app, /conversations: \{ icon: Conversations, label: [^\n]*palette: conversationsOpen \? 'agentic'/);
-  assert.match(app, /files: \{ icon: FileText, label: [^\n]*palette: filesOpen \? 'agentic'/);
+  assert.match(app, /files: \{ icon: FolderClosed, label: [^\n]*palette: filesOpen \? 'agentic'/);
   // With both hidden, they are simply not in the row.
   assert.match(app, /const navigationOpen = navigationColumns > 0;/);
   assert.doesNotMatch(app, /recent-conversations|recentConversationsExpanded/);

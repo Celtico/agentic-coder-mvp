@@ -89,7 +89,7 @@ test('the second row: 36 px, its field (an address, a path) and its actions, in 
 
 test('every pane uses it', () => {
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  for (const [icon, title] of [['Conversations', 'Converses'], ['FileText', 'Fitxers'], ['ChartBar', 'Avaluació'], ['TerminalIcon', 'Terminal']]) assert.match(app, new RegExp(`<PaneHeader icon=\\{${icon}\\} title="${title}"`), title);
+  for (const [icon, title] of [['Conversations', 'Converses'], ['FolderClosed', 'Fitxers'], ['ChartBar', 'Avaluació'], ['TerminalIcon', 'Terminal']]) assert.match(app, new RegExp(`<PaneHeader icon=\\{${icon}\\} title="${title}"`), title);
   for (const [icon, title] of [['FileCode', 'Editor'], ['Globe2', 'Navegador web'], ['GitBranch', 'Git'], ['Brain', 'Aprenentatge local'], ['Bug', 'Consola']]) assert.match(app, new RegExp(`frame\\(${icon}, '${title}'`), title);
   assert.match(app, /<PaneHeader icon=\{icon\} title=\{title\} \{\.\.\.extras\}\/>/);
   assert.doesNotMatch(app, /navigationHeader|<Card\.Header/);

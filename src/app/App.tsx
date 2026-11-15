@@ -2241,7 +2241,7 @@ export function App(): React.JSX.Element {
   const filesColumn = (
             <PaneCard label="Fitxers" header={<>
               {/* The header says which project the files are of; its folder button chooses another. */}
-              <PaneHeader icon={FileText} title="Fitxers" subtitle={project ? `${project.path.split(/[\\/]/).filter(Boolean).at(-1)} · ${project.path}` : 'Cap projecte'} subtitleTitle={project?.path} actions={<>
+              <PaneHeader icon={FolderClosed} title="Fitxers" subtitle={project ? `${project.path.split(/[\\/]/).filter(Boolean).at(-1)} · ${project.path}` : 'Cap projecte'} subtitleTitle={project?.path} actions={<>
                 <IconButton icon={FolderOpen} label={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'} onClick={() => void selectProject()}/>
                 <Menu.Root>
                 <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
@@ -2308,7 +2308,7 @@ export function App(): React.JSX.Element {
   // The icon of each pane in the left bar: what it shows and what a click does (open or close it).
   const railButtons: Record<RailPanel, { icon: IconType; label: string; palette: string; onClick: () => void }> = {
     conversations: { icon: Conversations, label: conversationsOpen ? 'Amaga les converses' : 'Mostra les converses', palette: conversationsOpen ? 'agentic' : 'gray', onClick: () => setConversationsOpen((open) => !open) },
-    files: { icon: FileText, label: filesOpen ? 'Amaga els fitxers' : 'Mostra els fitxers', palette: filesOpen ? 'agentic' : 'gray', onClick: () => setFilesOpen((open) => !open) },
+    files: { icon: FolderClosed, label: filesOpen ? 'Amaga els fitxers' : 'Mostra els fitxers', palette: filesOpen ? 'agentic' : 'gray', onClick: () => setFilesOpen((open) => !open) },
     browser: { icon: Globe2, label: browserOpen ? 'Tanca el navegador' : 'Obre el navegador', palette: browserOpen ? 'agentic' : 'gray', onClick: () => setBrowserOpen((current) => !current) },
     evaluation: { icon: ChartBar, label: evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models', palette: evaluationOpen ? 'agentic' : 'gray', onClick: () => void openEvaluationPanel() },
     console: { icon: Bug, label: consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola', palette: consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray', onClick: () => setConsoleOpen((open) => !open) },
