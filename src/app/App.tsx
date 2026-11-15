@@ -2319,9 +2319,10 @@ export function App(): React.JSX.Element {
           {railGroup('top')}
           {railGroup('bottom')}
         </Flex>
-        {/* Only clipped sideways, so the panes' shadow («amb ombra») shows below them too. */}
-        <Flex direction="column" h="full" minH="0" minW="0" overflowX="clip" pt={ownTitleBar ? '0' : '6px'} pr="6px">
-        <Box flex="1" minH="0" minW="0" overflowX="clip">
+        {/* Nothing here clips: the rows always fit the width (src/app/row-sizes.ts), so the panes' shadow
+            («amb ombra») shows at the outer sides too; only the window itself clips. */}
+        <Flex direction="column" h="full" minH="0" minW="0" pt={ownTitleBar ? '0' : '6px'} pr="6px">
+        <Box flex="1" minH="0" minW="0">
         {topRow}
         </Box>
         {bottomDock}

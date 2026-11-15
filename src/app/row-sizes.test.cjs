@@ -127,14 +127,15 @@ test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing sta
 
 test('nothing round the rows clips them vertically, so a pane’s shadow shows below it too', () => {
   const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
-  assert.match(row, /<Flex ref=\{rowRef\} h="full" w="full" minW="0" minH="0" overflowX="clip"/);
+  assert.match(row, /<Flex ref=\{rowRef\} h="full" w="full" minW="0" minH="0" aria-label/);
+  assert.doesNotMatch(row, /overflowX="clip"/, 'the row does not clip the panes’ shadow at its sides');
   // Never hidden: in a narrow window the panes go under their minimum (the flexible one too) instead.
   assert.match(row, /minW=\{`\$\{minOf\(item\.id\)\}px`\}/);
   const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
   assert.match(recipes, /title: \{ flex: "0 1 auto", minW: "0"[^}]*textOverflow: "ellipsis" \}/);
   assert.match(recipes, /subtitle: \{ flex: "0 100 auto", minW: "0"/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" overflowX="clip" pt=\{ownTitleBar \? '0' : '6px'\} pr="6px">\n\s*<Box flex="1" minH="0" minW="0" overflowX="clip">/);
+  assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" pt=\{ownTitleBar \? '0' : '6px'\} pr="6px">\n\s*<Box flex="1" minH="0" minW="0">/);
 });
 
 test('the panes fit the row: wider than the window, each gives up a share of the excess above its minimum', () => {
