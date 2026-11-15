@@ -95,3 +95,32 @@ export function normalizePaneWidths(value: unknown): Record<string, number> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter((entry): entry is [string, number] => ROW_PANE_ID.test(entry[0]) && entry[0] !== "chat" && typeof entry[1] === "number" && Number.isFinite(entry[1]) && entry[1] >= paneMinWidth(entry[0]) && entry[1] <= 4000))
 }
+
+/**
+ * A divider dragged `delta` pixels from where it started, pushing like an IDE: the two panes beside it
+ * exchange width; when the one that shrinks reaches its minimum and the drag goes on, the next pane on
+ * that side starts to shrink, and so on to the end of the row (on the right, last of all the flexible
+ * pane, down to `flexMin`). The pane that grows is always the one beside the divider. `order` is the
+ * row's panes with their own width, left to right; the divider is on the right of `order[index]`;
+ * `widths` are the widths when the drag started. Returns the new widths of the panes in `order`.
+ */
+export function pushDividers({ order, widths, index, delta, flexWidth, flexMin }: { order: string[]; widths: Record<string, number>; index: number; delta: number; flexWidth: number; flexMin: number }): Record<string, number> {
+  const next = Object.fromEntries(order.map((id) => [id, widths[id]]))
+  const room = (id: string) => Math.max(0, next[id] - paneMinWidth(id))
+  let wanted = Math.round(Math.abs(delta))
+  if (delta > 0) {
+    // To the right: the pane on the left grows; the panes on the right give, nearest first, then the flexible one.
+    let given = 0
+    for (let i = index + 1; i < order.length && given < wanted; i += 1) { const take = Math.min(room(order[i]), wanted - given); next[order[i]] -= take; given += take }
+    given += Math.min(Math.max(0, flexWidth - flexMin), wanted - given)
+    next[order[index]] += given
+  } else if (delta < 0) {
+    // To the left: the panes on the left give, nearest first; the pane on the right of the divider grows
+    // (the flexible one takes it by itself when it is the one there).
+    let given = 0
+    for (let i = index; i >= 0 && given < wanted; i -= 1) { const take = Math.min(room(order[i]), wanted - given); next[order[i]] -= take; given += take }
+    if (index + 1 < order.length) next[order[index + 1]] += given
+    wanted = given
+  }
+  return next
+}

@@ -171,7 +171,7 @@ test('the work area does not clip the bottom row and sits above the status bar, 
 test('dragging starts from the widths on screen: if the saved ones were squeezed to fit, no other pane moves at a limit', () => {
   const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
   assert.match(row, /const onScreen = Object\.fromEntries\(fixedIds\.map\(\(paneId\) => \[paneId, fitted\[paneId\]\]\)\)/);
-  assert.match(row, /changes = \{ \.\.\.onScreen, \.\.\.pair\(id, moved\.clientX - startX, starts\) \}/);
+  assert.match(row, /changes = push\(id, moved\.clientX - startX, onScreen, room\)/);
   // With the on-screen widths saved, the row fits and the fit leaves them as they are.
   const ids = ['dock-console', 'dock-terminal', 'dock-evaluation'];
   const squeezed = rows.fitPaneWidths(ids, { 'dock-console': 520, 'dock-terminal': 520, 'dock-evaluation': 720 }, { rowWidth: 1600, flexMin: 140, handles: 3 });
@@ -185,4 +185,26 @@ test('a drag exchanges width only inside its pair: the pair’s sum stays the sa
     assert.ok(pair['dock-terminal'] >= 140 && pair['dock-evaluation'] >= 140, String(delta));
     assert.deepEqual(Object.keys(pair).sort(), ['dock-evaluation', 'dock-terminal'], 'no other pane');
   }
+});
+
+test('a divider pushes like an IDE: only its pair until a minimum, then the next pane on that side, and back the same way', () => {
+  const order = ['dock-console', 'dock-terminal', 'dock-evaluation', 'dock-learning'];
+  const start = { 'dock-console': 300, 'dock-terminal': 300, 'dock-evaluation': 300, 'dock-learning': 300 };
+  const drag = (index, delta, flexWidth = 400) => rows.pushDividers({ order, widths: start, index, delta, flexWidth, flexMin: 140 });
+  const sum = (widths, flex) => Object.values(widths).reduce((n, w) => n + w, 0) + flex;
+  // (a) Above the minimum only the pair changes (divider between Terminal and Avaluació, pushed left 100).
+  assert.deepEqual(drag(1, -100), { 'dock-console': 300, 'dock-terminal': 200, 'dock-evaluation': 400, 'dock-learning': 300 });
+  // (b) Past Terminal's minimum (160 to give) the Consola gives the rest; Avaluació takes it all; the sum stays.
+  const far = drag(1, -250);
+  assert.deepEqual(far, { 'dock-console': 210, 'dock-terminal': 140, 'dock-evaluation': 550, 'dock-learning': 300 });
+  assert.equal(sum(far, 400), sum(start, 400));
+  // Every pane on that side at its minimum: it goes no further.
+  assert.deepEqual(drag(1, -1000), { 'dock-console': 140, 'dock-terminal': 140, 'dock-evaluation': 620, 'dock-learning': 300 });
+  // To the right: Avaluació, then Aprenentatge, then the flexible pane give way; Terminal takes it.
+  const right = drag(1, 500);
+  assert.deepEqual(right, { 'dock-console': 300, 'dock-terminal': 800, 'dock-evaluation': 140, 'dock-learning': 140 });
+  assert.equal(sum(right, 400 - 180), sum(start, 400), 'the flexible pane gave the last 180');
+  // (c) Back: from the start widths each time, so returning restores them exactly.
+  assert.deepEqual(drag(1, 0), start);
+  assert.deepEqual(drag(1, -250 + 250), start);
 });

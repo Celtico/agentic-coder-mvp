@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { Box, Flex } from "@chakra-ui/react"
-import { draggedPair, fitPaneWidths, narrowShare, paneMinWidth } from "./row-sizes"
+import { fitPaneWidths, narrowShare, paneMinWidth, pushDividers } from "./row-sizes"
 
 export type RowItem = { id: string; node: ReactNode }
 
@@ -45,10 +45,10 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   const fitted = fitPaneWidths(fixedIds, widths, { rowWidth, flexMin: paneMinWidth(flexId), handles: fixedIds.length })
   const paneWidth = (id: string, _widths: Record<string, number>) => fitted[id]
   const minOf = (id: string) => (tooNarrow ? Math.min(paneMinWidth(id), fitted[id] ?? paneMinWidth(id)) : paneMinWidth(id))
-  // The pane on the right of a pane's divider, and how wide each one is when a drag starts.
-  const rightOf = (id: string) => items[items.findIndex((item) => item.id === id) + 1]?.id ?? flexId
-  const pair = (id: string, delta: number, starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }) =>
-    draggedPair({ left: id, right: rightOf(id), startLeft: starts.left, startRight: starts.right, delta, rightIsFlex: rightOf(id) === flexId, flexMin })
+  // A divider pushes (src/app/row-sizes.ts, pushDividers): its two panes exchange width, and past a pane's
+  // minimum the next one on that side gives way, and so on; from the widths on screen when the drag started.
+  const push = (id: string, delta: number, starts: Record<string, number>, room: number) =>
+    pushDividers({ order: fixedIds, widths: starts, index: fixedIds.indexOf(id), delta, flexWidth: room, flexMin })
 
   const startDrag = (id: string) => (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -56,15 +56,15 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     const handle = event.currentTarget
     handle.setPointerCapture(event.pointerId)
     const startX = event.clientX
-    const starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }
-    // The widths as they are on screen (fitted to the window) become the saved ones for the whole row: if
-    // the saved widths did not fit, the squeeze no longer redistributes while dragging, so no other pane moves.
+    // The widths as they are on screen (fitted to the window) are where the drag starts, and are saved for
+    // the whole row: a row squeezed to fit no longer redistributes while dragging.
     const onScreen = Object.fromEntries(fixedIds.map((paneId) => [paneId, fitted[paneId]]))
-    let changes = { ...onScreen, ...pair(id, 0, starts) }
+    const room = flexWidth()
+    let changes = push(id, 0, onScreen, room)
     setDragging(id)
     window.getSelection()?.removeAllRanges()
     const move = (moved: globalThis.PointerEvent) => {
-      changes = { ...onScreen, ...pair(id, moved.clientX - startX, starts) }
+      changes = push(id, moved.clientX - startX, onScreen, room)
       onWidth(changes)
     }
     // The drag ends however the pointer is let go: on the divider, anywhere in the window, when the
@@ -98,7 +98,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     const step = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0
     if (!step) return
     event.preventDefault()
-    onCommit({ ...Object.fromEntries(fixedIds.map((paneId) => [paneId, fitted[paneId]])), ...pair(id, step) })
+    onCommit(push(id, step, Object.fromEntries(fixedIds.map((paneId) => [paneId, fitted[paneId]])), flexWidth()))
   }
 
   return (
