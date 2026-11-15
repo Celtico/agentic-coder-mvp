@@ -10,11 +10,12 @@
     "start": "npm run typecheck && npm run build:agent && npm run build:ui && electron .",
     "dist:mac": "npm run check && electron-builder --mac dmg --arm64",
     "dist:linux": "npm run check && electron-builder --linux AppImage deb --x64",
+    "dist:win": "npm run check && electron-builder --win nsis --x64",
     "check": "node --check src/electron/main.cjs && node --check src/electron/preload.cjs && node --check src/electron/git-tools.cjs && node --check src/core/assistant/agent-worker.cjs && npm run typecheck && npm run build:agent && node --check src/core/assistant/agent-runtime.cjs && npm run build:ui",
     "test": "npm run build:agent && node --test",
     "evaluate:memory": "npm run build:agent && node scripts/evaluate-memory.cjs",
     "evaluate:agent": "npm run build:agent && node scripts/evaluate-agent.cjs",
-    "build:ui": "esbuild src/app/index.tsx --bundle --format=iife --platform=browser --target=chrome130 --jsx=automatic --define:process.env.NODE_ENV='\"production\"' --outfile=src/app.bundle.js",
+    "build:ui": "esbuild src/app/index.tsx --bundle --format=iife --platform=browser --target=chrome130 --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\" --outfile=src/app.bundle.js",
     "build:agent": "esbuild src/core/assistant/agent.ts --bundle --format=cjs --platform=node --target=node20 --packages=external --outfile=src/core/assistant/agent-runtime.cjs",
     "typecheck": "tsc --noEmit"
   },
@@ -64,6 +65,14 @@
       "!scripts/agent-benchmark/*.test.cjs",
       "prompts/**"
     ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Development",

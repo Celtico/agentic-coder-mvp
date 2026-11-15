@@ -1,7 +1,7 @@
 # Publishing a version, as GesProd numbers them: the version is the count of commits of main (v322…), with
 # nothing to bump by hand. Actions › «Publica una versió» › Run workflow: it creates the Release vN with its
 # notes (the commits since the previous version) and attaches the app built on GitHub's machines: a .dmg
-# for Macs with Apple Silicon and an AppImage and a .deb for Linux. Nothing is signed (no secrets).
+# for Macs with Apple Silicon, an AppImage and a .deb for Linux, and an installer (.exe) for Windows. Nothing is signed (no secrets).
 # docs/publicar.md explains it.
 name: Publica una versió
 
@@ -62,6 +62,9 @@ jobs:
           - os: ubuntu-24.04
             dist: dist:linux
             files: dist/*.AppImage dist/*.deb
+          - os: windows-2025
+            dist: dist:win
+            files: dist/*.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -79,6 +82,7 @@ jobs:
 
       # The installed app carries its version (0.0.<count>, the count shown as vN) and its commit (src/electron/app-version.cjs).
       - name: Build
+        shell: bash
         run: npm run ${{ matrix.dist }} -- --publish never -c.extraMetadata.version=0.0.${{ needs.release.outputs.version }} -c.extraMetadata.appCommit=${{ needs.release.outputs.commit }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

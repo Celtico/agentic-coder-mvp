@@ -129,7 +129,7 @@ test('versions as in GesProd: the count of commits, the commit on hover; a relea
   assert.equal(workflow.jobs.release.steps[0].with['fetch-depth'], 0, 'the whole history, to count it');
   assert.match(run, /if gh release view "v\$\{VERSION\}" >\/dev\/null 2>&1; then/, 'a rerun reuses the Release');
   // Current runners and actions on Node 24 (macos-14 was retired; checkout@v4 ran on Node 20).
-  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => item.os), ['macos-15', 'ubuntu-24.04']);
+  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => item.os), ['macos-15', 'ubuntu-24.04', 'windows-2025']);
   const uses = [...workflow.jobs.release.steps, ...workflow.jobs.build.steps].map((step) => step.uses).filter(Boolean);
   assert.ok(uses.every((action) => /@v\d+\.\d+\.\d+$/.test(action)), 'every action pinned to a full version');
   assert.ok(uses.includes('actions/checkout@v7.0.1') && uses.includes('actions/setup-node@v7.1.0'));
@@ -137,4 +137,42 @@ test('versions as in GesProd: the count of commits, the commit on hover; a relea
   assert.match(app, /<Tip label=\{appVersion\.commit \? `commit \$\{appVersion\.commit\}` : 'dev'\}><Text [^>]*fontSize="2xs" color="fg\.subtle"[^>]*data-app-version>v\{appVersion\.version\}<\/Text><\/Tip>/);
   const pkg = JSON.parse(read('package.json'));
   assert.ok(!pkg.build.files.some((pattern) => /^(models|logs)\b/.test(pattern)), 'no models or local data in the package');
+});
+
+test('Windows: the CUDA engine with Scripts\\python.exe, npm/npx through their .cmd (arguments quoted or refused), stopping a whole tree', () => {
+  const mlxModels = require('./mlx-models.cjs');
+  assert.equal(mlxModels.engineFor('win32'), 'cuda');
+  assert.equal(mlxModels.enginePython('C:\\m', 'win32'), 'C:\\m\\.cuda-venv\\Scripts\\python.exe');
+  assert.equal(mlxModels.modelsFolder('win32'), 'hf');
+  const processes = require('./processes.cjs');
+  assert.deepEqual(processes.commandFor('npm', ['run', 'dev'], 'win32'), { command: 'npm.cmd', args: ['run', 'dev'], shell: true });
+  assert.deepEqual(processes.commandFor('npx', ['-y', 'create vite'], 'win32').args, ['-y', '"create vite"']);
+  assert.throws(() => processes.commandFor('npx', ['x & del /q *'], 'win32'), /no es pot passar a l’ordre a Windows/);
+  assert.deepEqual(processes.commandFor('npm', ['run', 'dev'], 'darwin'), { command: 'npm', args: ['run', 'dev'], shell: false }, 'the Mac as before');
+  assert.deepEqual(processes.commandFor('git', ['commit', '-m', 'a & b'], 'win32'), { command: 'git', args: ['commit', '-m', 'a & b'], shell: false }, 'not a .cmd: no shell, nothing to quote');
+  const calls = [];
+  processes.stopTree({ pid: 42 }, 'SIGTERM', 'win32', (...args) => calls.push(args));
+  assert.deepEqual(calls, [['taskkill', ['/PID', '42', '/T', '/F'], { stdio: 'ignore' }]]);
+  const killed = [];
+  processes.stopTree({ pid: 7, kill: (signal) => killed.push(signal) }, 'SIGTERM', 'linux', () => { throw new Error('not used'); });
+  assert.ok(killed.length <= 1, 'a group (or the process if there is no group)');
+  const main = read('src/electron/main.cjs');
+  assert.doesNotMatch(main, /process\.kill\(-child\.pid/, 'every stop goes through processes.stopTree');
+  assert.match(read('scripts/agent-benchmark/sandbox-tools.cjs'), /child = processes\.start\(command, args, \{ cwd: root, env, detached: false \}\)/);
+});
+
+test('Windows: the lock, links that become copies, the installer, its job in the release and its guide', () => {
+  const lock = read('src/core/assistant/mlx_lock.py');
+  assert.match(lock, /if os\.name == "nt":\n\s*import msvcrt/);
+  assert.match(read('src/core/assistant/mlx_text.py'), /def link_or_copy\(source, target\):[\s\S]*?shutil\.copyfile\(source, target\)/);
+  const pkg = JSON.parse(read('package.json'));
+  assert.equal(pkg.scripts['dist:win'], 'npm run check && electron-builder --win nsis --x64');
+  assert.deepEqual(pkg.build.win.target, ['nsis']);
+  assert.match(pkg.scripts['build:ui'], /--define:process\.env\.NODE_ENV=\\"production\\"/, 'quotes both sh and cmd.exe read');
+  const workflow = require('js-yaml').load(read('.github/workflows/release.yml'));
+  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => [item.os, item.files]), [['macos-15', 'dist/*.dmg'], ['ubuntu-24.04', 'dist/*.AppImage dist/*.deb'], ['windows-2025', 'dist/*.exe']]);
+  assert.ok(workflow.jobs.build.steps.filter((step) => step.run && /npm run|gh release upload/.test(step.run)).every((step) => step.shell === 'bash'), 'the same shell on the three machines');
+  const script = read('scripts/setup-windows.ps1');
+  assert.match(script, /Join-Path \$venv 'Scripts\\python\.exe'/);
+  assert.match(read('docs/windows.md'), /encara no s'ha\s+> executat en un Windows real/);
 });
