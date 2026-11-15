@@ -418,6 +418,8 @@ export function App(): React.JSX.Element {
   const [trainingProgress, setTrainingProgress] = useState<number | null>(null);
   const [learningVersions, setLearningVersions] = useState<Awaited<ReturnType<typeof window.agentic.learningVersions>> | null>(null);
   // Aprenentatge local › Gestiona els models: the list, the model being removed, the add dialog and the download.
+  // Avaluació › Comparativa: the run shown per model (its id, or «all»); unset, the newest complete one.
+  const [comparisonChoice, setComparisonChoice] = useState<Record<string, string>>({});
   const [managed, setManaged] = useState<ManagedModels | null>(null);
   const [modelToRemove, setModelToRemove] = useState<ManagedModel | null>(null);
   const [modelAdd, setModelAdd] = useState<{ repo: string; label: string; check?: Awaited<ReturnType<typeof window.agentic.checkModelRepository>>; busy?: boolean } | null>(null);
@@ -2136,18 +2138,34 @@ export function App(): React.JSX.Element {
             })}</Accordion.Root>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
-        {evaluationList && evaluationList.models.length > 0 && <Accordion.Item value="comparison">
-          <Accordion.ItemTrigger>{rowHeader('Comparativa', evaluationList.models.length, ChartBar)}</Accordion.ItemTrigger>
+        {evaluationList && (evaluationList.comparison?.length ?? 0) > 0 && <Accordion.Item value="comparison">
+          <Accordion.ItemTrigger>{rowHeader('Comparativa', evaluationList.comparison.length, ChartBar)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody pt="0">
-            {rowNote('Tasques superades per model, de totes les avaluacions.')}
-            <Stack gap="2">{evaluationList.models.map((model) => <Box key={model.model}>
-              <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
-              {([['Obertes', model.open, 'agentic.solid'], ['Apps', model.apps, 'orange.solid'], ['Dirigida', model.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="3.5">
-                <Text w="16" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
-                <Box flex="1" h="1.5" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
-                <Text w="10" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
-              </HStack>)}
-            </Box>)}</Stack>
+            {rowNote('Tasques superades per model: per defecte, la darrera avaluació completa de cada un.')}
+            <Stack gap="3">{evaluationList.comparison.map((model) => {
+              // The run shown: the one chosen, else the newest complete one; «all» adds every complete run.
+              const chosen = comparisonChoice[model.model] ?? model.latest ?? 'all';
+              const run = model.runs.find((item) => item.id === chosen);
+              const counts = chosen === 'all' ? model.all : run;
+              return <Box key={model.model}>
+                <HStack gap="2" mb="1" minW="0">
+                  <Text flex="1" minW="0" fontSize="xs" fontWeight="semibold" truncate>{model.label}</Text>
+                  <NativeSelect.Root size="xs" w="auto" maxW="56" flex="none">
+                    <NativeSelect.Field aria-label={`Avaluació de ${model.label} a la comparativa`} value={chosen} onChange={(event) => setComparisonChoice((current) => ({ ...current, [model.model]: event.target.value }))}>
+                      {model.runs.map((item, index) => <option key={item.id} value={item.id}>{new Date(item.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })} · {item.passed}/{item.total}{index === 0 ? ' · darrera' : ''}</option>)}
+                      {model.runs.length > 1 && <option value="all">Totes ({model.runs.length})</option>}
+                      {model.incomplete.map((item) => <option key={item.id} value={item.id} disabled>{new Date(item.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })} · incompleta</option>)}
+                    </NativeSelect.Field>
+                    <NativeSelect.Indicator/>
+                  </NativeSelect.Root>
+                </HStack>
+                {counts ? ([['Obertes', counts.open, 'agentic.solid'], ['Apps', counts.apps, 'orange.solid'], ['Dirigida', counts.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="3.5">
+                  <Text w="16" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
+                  <Box flex="1" h="1.5" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
+                  <Text w="10" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
+                </HStack>) : <Text fontSize="2xs" color="fg.muted">Cap avaluació completa encara.</Text>}
+              </Box>;
+            })}</Stack>
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>}
         <Accordion.Item value="evaluations">

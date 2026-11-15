@@ -32,3 +32,30 @@ test('the chart and the table show every model with its numbers', () => {
   assert.match(table, /\| Model <A> \| 1\/2 \(50 %\) \| 1\/2 \(50 %\) \| 1\/1 \(100 %\) \|/);
   assert.match(table, /\| org\/b \| 1\/1 \(100 %\) \| — \|/);
 });
+
+test('Comparativa: each complete run apart, newest first; the newest is shown by default, «Totes» adds them up; cut runs are never counted', () => {
+  const { comparisonByModel } = require('./benchmark-summary.cjs');
+  const result = (task, pass) => ({ task, pass, seconds: 1 });
+  const reports = [
+    { id: 'old', at: '2026-11-15T11:47:23.583Z', model: 'vl', results: [result('fix-failing-test', false), result('add-function', true), result('app-react-todo', false)] },
+    { id: 'new', at: '2026-11-15T16:51:36.725Z', model: 'vl', results: [result('fix-failing-test', true), result('add-function', true), result('fix-failing-test-directed', true)] },
+    { id: 'text', at: '2026-11-13T18:37:06.943Z', model: 'text', results: [result('add-function', true)] },
+  ];
+  const incomplete = [{ id: 'cut', at: '2026-11-15T11:39:45.115Z', model: 'vl' }, { id: 'cut-only', at: '2026-11-14T10:00:00.000Z', model: 'other' }];
+  const [vl, text, other] = comparisonByModel(reports, { labels: { vl: 'MiMo amb visió' }, incomplete });
+  assert.equal(vl.label, 'MiMo amb visió');
+  assert.equal(vl.latest, 'new');
+  assert.deepEqual(vl.runs.map((run) => [run.id, run.passed, run.total]), [['new', 3, 3], ['old', 1, 3]]);
+  assert.deepEqual(vl.runs[0].open, { runs: 2, passed: 2 });
+  assert.deepEqual(vl.runs[0].reference, { runs: 1, passed: 1 });
+  assert.deepEqual(vl.runs[1].apps, { runs: 1, passed: 0 });
+  // «Totes»: every complete run added up (the cut one is not a report and does not count).
+  assert.deepEqual(vl.all.open, { runs: 4, passed: 3 });
+  assert.deepEqual(vl.incomplete, [{ id: 'cut', at: '2026-11-15T11:39:45.115Z' }]);
+  assert.equal(text.latest, 'text');
+  // A model with only a cut run is listed, with nothing to show.
+  assert.deepEqual([other.model, other.latest, other.runs.length, other.all], ['other', null, 0, null]);
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, /const chosen = comparisonChoice\[model\.model\] \?\? model\.latest \?\? 'all';/);
+  assert.match(app, /<option key=\{item\.id\} value=\{item\.id\} disabled>[^\n]*incompleta<\/option>/);
+});

@@ -11,7 +11,7 @@ const { pageActionsScript } = require('./page-actions.cjs');
 const { ChatStore } = require('./chat-store.cjs');
 const mlxModels = require('./mlx-models.cjs');
 const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory.cjs');
-const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
+const { summarizeReports, comparisonByModel, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
 const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
 const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate, datasetView, datasetJsonl } = require('./learning-dataset.cjs');
@@ -1457,7 +1457,7 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
   const controller = new AbortController();
   // A training or an evaluation needs the memory: the resident Whisper goes first.
   residentWhisper.release();
-  benchmarkRun = { controller, label: model.label, modelId: model.id };
+  benchmarkRun = { controller, label: model.label, modelId: model.id, id };
   (async () => {
     let result = null;
     try {
@@ -1496,7 +1496,18 @@ ipcMain.handle('benchmark:list', async () => {
   const reports = await readBenchmarkReports();
   const labels = Object.fromEntries((await allModels()).map((model) => [model.modelId, model.label]));
   const models = summarizeReports(reports, { labels });
+  // Runs cut before their end: a turn log without a report, and not the one running now.
+  const names = await fs.readdir(benchmarksDirectory()).catch(() => []);
+  const incomplete = [];
+  for (const name of names.filter((item) => item.endsWith('.turns.jsonl'))) {
+    const id = name.replace(/\.turns\.jsonl$/, '');
+    if (names.includes(`${id}.json`) || (benchmarkRun && benchmarkRun.id === id)) continue;
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-(.+)$/.exec(id);
+    const known = match && (await allModels()).find((model) => model.id === match[6]);
+    if (known) incomplete.push({ id, at: `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`, model: known.modelId });
+  }
   return {
+    comparison: comparisonByModel(reports, { labels, incomplete }),
     runs: reports.map((report) => ({ id: report.id, at: report.at, model: labels[report.model] || report.model, adapter: report.adapter || null, summary: report.summary })).reverse(),
     models,
     chart: models.length ? renderBenchmarkSvg(models) : '',

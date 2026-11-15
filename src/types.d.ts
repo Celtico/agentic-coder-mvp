@@ -18,7 +18,10 @@ export type BenchmarkCurrent = { index: number; total: number; task: string; run
 export type BenchmarkProject = { id: string; index: number; at: string; model: string; task: string; run: number; pass: boolean; detail: string };
 export type BenchmarkCount = { runs: number; passed: number };
 export type BenchmarkModelSummary = { model: string; label: string; at: string; open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount; meanSeconds: number; tasks: Record<string, { runs: number; passed: number; meanSeconds: number; details: string[] }> };
-export type BenchmarkList = { runs: { id: string; at: string; model: string; adapter: string | null; summary: { runs: number; passed: number } }[]; models: BenchmarkModelSummary[]; chart: string };
+type BenchmarkCount = { runs: number; passed: number };
+/** Comparativa: per model, each completed run (newest first), all of them added up, and the runs cut before their end. */
+export type BenchmarkComparison = { model: string; label: string; latest: string | null; runs: { id: string; at: string; open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount; passed: number; total: number }[]; all: { open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount } | null; incomplete: { id: string; at: string }[] };
+export type BenchmarkList = { comparison: BenchmarkComparison[]; runs: { id: string; at: string; model: string; adapter: string | null; summary: { runs: number; passed: number } }[]; models: BenchmarkModelSummary[]; chart: string };
 export type BenchmarkTurn = { input: { role: string; content: string } | null; output: string; seconds: number };
 export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
 export type TrainingProgress = { step: string; message: string; progress?: number; published?: boolean; modelId?: string };

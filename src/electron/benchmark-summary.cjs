@@ -98,4 +98,31 @@ function renderBenchmarkTable(models) {
   return lines.join('\n');
 }
 
-module.exports = { summarizeReports, renderBenchmarkSvg, renderBenchmarkTable };
+/**
+ * The evaluation panel's Comparativa: per model, each completed run on its own (newest first) and all
+ * of them added up. The panel shows the newest one by default: an old run (one from before a fix, say)
+ * no longer weighs on the score unless «Totes» is chosen. A run cut before its end has no report and is
+ * listed apart (`incomplete`), never counted.
+ */
+function comparisonByModel(reports, { labels = {}, incomplete = [] } = {}) {
+  const byModel = new Map();
+  for (const report of reports) {
+    if (!report || !Array.isArray(report.results)) continue;
+    byModel.set(report.model, [...(byModel.get(report.model) || []), report]);
+  }
+  for (const run of incomplete) if (!byModel.has(run.model)) byModel.set(run.model, []);
+  return [...byModel.entries()].map(([model, list]) => {
+    const runs = [...list].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((report) => {
+      const [summary] = summarizeReports([report], { labels });
+      return { id: report.id, at: report.at, open: summary.open, apps: summary.apps, reference: summary.reference, passed: report.results.filter((result) => result.pass).length, total: report.results.length };
+    });
+    const [all] = summarizeReports(list, { labels });
+    return {
+      model, label: labels[model] || model, latest: runs[0]?.id || null, runs,
+      all: all ? { open: all.open, apps: all.apps, reference: all.reference } : null,
+      incomplete: incomplete.filter((run) => run.model === model).map(({ id, at }) => ({ id, at })),
+    };
+  }).filter((entry) => entry.runs.length || entry.incomplete.length);
+}
+
+module.exports = { summarizeReports, comparisonByModel, renderBenchmarkSvg, renderBenchmarkTable };
