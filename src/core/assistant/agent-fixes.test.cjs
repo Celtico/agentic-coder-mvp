@@ -201,3 +201,21 @@ test('<function=name>{json}</tool_call> without its closing </function> is read 
   const { calls } = await run(t, { request: 'busca bg.inverted', responses: ['Vull veure-ho.<tool_call><function=search_text>{"query": "bg.inverted"}</tool_call>'], tool: async () => ({ matches: [] }) });
   assert.deepEqual([calls[0]?.name, calls[0]?.arguments?.query], ['search_text', 'bg.inverted']);
 });
+
+test('arguments written as text are read in the type their tool declares, from the schema alone', async (t) => {
+  const { coerceArguments } = require('./agent-runtime.cjs');
+  assert.deepEqual(coerceArguments('install_package', { packageName: 'react', dev: 'false' }), { packageName: 'react', dev: false });
+  assert.deepEqual(coerceArguments('install_package', { packageName: 'vite', dev: ' TRUE ' }), { packageName: 'vite', dev: true });
+  assert.deepEqual(coerceArguments('install_package', { packageName: 'react', dev: 'nope' }), { packageName: 'react', dev: 'nope' }, 'ambiguous: left for the validation');
+  assert.deepEqual(coerceArguments('delegate_tasks', { tasks: '["a", "b"]' }), { tasks: ['a', 'b'] });
+  assert.deepEqual(coerceArguments('delegate_tasks', { tasks: '[broken' }), { tasks: '[broken' });
+  assert.deepEqual(coerceArguments('write_file', { path: 'a.json', content: '{"x": 1}' }), { path: 'a.json', content: '{"x": 1}' }, 'a string stays a string');
+  assert.deepEqual(coerceArguments('no_such_tool', { a: 'true' }), { a: 'true' });
+  // The loop of 15-11-2026: the call now runs, with dev as a boolean.
+  const { calls } = await run(t, {
+    request: 'instal·la react',
+    responses: ['<tool_call>{"name": "install_package", "arguments": {"packageName": "react", "dev": "false"}}</tool_call>'],
+    tool: async () => ({ code: 0, output: 'ok' }),
+  });
+  assert.deepEqual([calls[0]?.name, calls[0]?.arguments], ['install_package', { packageName: 'react', dev: false }]);
+});

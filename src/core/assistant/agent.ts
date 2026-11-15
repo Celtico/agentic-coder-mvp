@@ -370,10 +370,36 @@ function parseAction(raw: string): AgentAction | null {
   return null;
 }
 
+/**
+ * A call's arguments in the types its tool declares, where a model wrote them as text: «"false"» for a
+ * yes/no, «"3"» for a number, «"[…]"» / «"{…}"» for a list or an object (MiMo with vision looped on
+ * install_package with «"dev": "false"», 15-11-2026). Driven only by each tool's schema, the same for every
+ * tool and model; anything ambiguous is left as it is, for the validation to refuse. The call the model
+ * wrote is not changed: only what is checked and run.
+ */
+export function coerceArguments(name: string, args: Record<string, unknown>): Record<string, unknown> {
+  const schema = agentToolDefinitions.find((tool) => tool.function.name === name)?.function.parameters as { properties?: Record<string, { type?: string }> } | undefined;
+  const properties = schema?.properties;
+  if (!properties) return args;
+  const coerced: Record<string, unknown> = { ...args };
+  for (const [key, value] of Object.entries(args)) {
+    const type = properties[key]?.type;
+    if (typeof value !== 'string' || !type || type === 'string') continue;
+    const text = value.trim();
+    if (type === 'boolean' && /^(true|false)$/i.test(text)) coerced[key] = text.toLowerCase() === 'true';
+    else if (type === 'integer' && /^-?\d+$/.test(text)) coerced[key] = Number(text);
+    else if (type === 'number' && /^-?\d+(?:\.\d+)?$/.test(text)) coerced[key] = Number(text);
+    else if ((type === 'array' && text.startsWith('[')) || (type === 'object' && text.startsWith('{'))) {
+      try { const parsed: unknown = JSON.parse(text); if (type === 'array' ? Array.isArray(parsed) : parsed && typeof parsed === 'object' && !Array.isArray(parsed)) coerced[key] = parsed; } catch { /* left as it is */ }
+    }
+  }
+  return coerced;
+}
+
 function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): AgentToolCall | null {
   if (action.name === 'list_files' || action.name === 'run_tests' || action.name === 'stop_project') return { name: action.name };
   if (!action.arguments || typeof action.arguments !== 'object' || Array.isArray(action.arguments)) return null;
-  const args = action.arguments as Record<string, unknown>;
+  const args = coerceArguments(action.name, action.arguments as Record<string, unknown>);
   if (action.name === 'create_git_commit' && typeof args.message === 'string' && args.message.trim().length > 0 && args.message.length <= 200) return { name: 'create_git_commit', arguments: { message: args.message.trim() } };
   if (action.name === 'read_file' && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= 500) return { name: 'read_file', arguments: { path: args.path } };
   if (action.name === 'delete_file' && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= 500) return { name: 'delete_file', arguments: { path: args.path } };
