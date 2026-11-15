@@ -33,7 +33,7 @@ test('the rail’s logo is drawn with a linear gradient from brand.300 to brand.
   const stops = [...html.matchAll(/<stop offset="[^"]+" stop-color="([^"]*)"/g)].map((match) => match[1]);
   assert.equal(stops.length, 4);
   for (const stop of stops) assert.match(stop, /^#[0-9a-f]{6}$/i, stop);
-  assert.deepEqual(stops.slice(0, 2), ['#65c9ad', '#078565']);
+  assert.deepEqual(stops.slice(0, 2), ['#86efac', '#16a34a'], 'Chakra’s green.300 and green.600');
   assert.doesNotMatch(fs.readFileSync(path.join(__dirname, 'mark.tsx'), 'utf8'), /#[0-9a-f]{6}/i, 'no colour written by hand');
 });
 

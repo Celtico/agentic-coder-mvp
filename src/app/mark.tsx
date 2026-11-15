@@ -12,7 +12,14 @@ export const Mark = ({ size = 16, busy = false, color = "agentic.fg", gradient =
   // The brand's own tokens, as their real values: stop-color here is an SVG attribute, and an attribute
   // never resolves a CSS var() (the stop then falls back to black). If a shade were missing, brand.solid.
   const { token } = useChakraContext()
-  const shade = (path: string) => token(path, token("colors.brand.500", "currentColor"))
+  // A token that refers to another one (brand.300 is {colors.green.300}) comes back as its CSS variable:
+  // followed to the palette's own value.
+  const resolve = (path: string): string => {
+    const value = token(path, "") as string
+    const ref = /^var\(--chakra-colors-([a-z]+)-(\d+)\)$/.exec(value)
+    return ref ? resolve(`colors.${ref[1]}.${ref[2]}`) : value
+  }
+  const shade = (path: string) => resolve(path) || resolve("colors.brand.500") || "currentColor"
   const light = shade("colors.brand.300")
   const dark = shade("colors.brand.600")
   const paint = gradient ? `url(#${id})` : "currentColor"

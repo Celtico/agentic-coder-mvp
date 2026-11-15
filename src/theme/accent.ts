@@ -11,12 +11,10 @@ export const isAccent = (value: unknown): value is Accent => typeof value === "s
 type Token = { value: string | Record<string, string> }
 const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"] as const
 
-export const BRAND_TOKENS: Record<string, { value: string }> = {
-  50: { value: "#e6fff6" }, 100: { value: "#c5f7e5" }, 200: { value: "#91e9ca" },
-  300: { value: "#65c9ad" }, 400: { value: "#28b891" }, 500: { value: "#10a37f" },
-  600: { value: "#078565" }, 700: { value: "#08694f" }, 800: { value: "#09543f" },
-  900: { value: "#094534" }, 950: { value: "#04271d" },
-}
+// The app's green is Chakra's green palette (https://chakra-ui.com/docs/theming/colors), step by step.
+export const BRAND_TOKENS: Record<string, { value: string }> = Object.fromEntries(
+  ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"].map((step) => [step, { value: `{colors.green.${step}}` }]),
+)
 
 /** The semantic tokens of a palette built on `name`'s shades, as the app has always used them for its green. */
 export const brandSemantic = (name: string): Record<string, Token> => ({

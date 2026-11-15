@@ -60,8 +60,8 @@ test('the theme built for an accent gives «agentic» that palette, and «brand�
   const blue = theme.buildSystem('blue');
   const green = theme.buildSystem('agentic');
   assert.equal(blue.token('colors.agentic.500'), '#3b82f6');
-  assert.equal(green.token('colors.agentic.500'), '#10a37f');
-  assert.equal(blue.token('colors.brand.500'), '#10a37f');
+  assert.equal(green.token('colors.agentic.500'), 'var(--chakra-colors-green-500)', 'Chakra’s green.500');
+  assert.equal(blue.token('colors.brand.500'), 'var(--chakra-colors-green-500)');
   assert.ok(blue.token('colors.agentic.solid'), 'the semantic token the components use exists');
 });
 
@@ -89,7 +89,7 @@ test('with the blue accent the panes’ palette is blue (a tinted header: blue.s
   assert.deepEqual(accent.accentSemantic('blue').solid.value, { _light: '{colors.blue.600}', _dark: '{colors.blue.600}' });
   assert.equal(accent.accentSemantic('agentic').solid.value, '{colors.agentic.500}');
   assert.equal(theme.buildSystem('blue').token('colors.agentic.500'), '#3b82f6');
-  assert.equal(theme.buildSystem('agentic').token('colors.agentic.500'), '#10a37f');
+  assert.equal(theme.buildSystem('agentic').token('colors.agentic.500'), 'var(--chakra-colors-green-500)');
   // The rail's mark alone stays in the fixed brand green.
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<Mark size=\{28\} gradient\/>/);

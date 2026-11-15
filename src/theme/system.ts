@@ -77,9 +77,10 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         // untouched, as in its docs; Preferències › Aparença › Fons de les finestres chooses among the bg ones.
         accent: { value: "{colors.agentic.500}" },
         // The traffic lights of a floating window, like macOS (src/app/window-controls.tsx).
-        "window.close": { value: "#ff5f57" },
-        "window.minimize": { value: "#febc2e" },
-        "window.maximize": { value: "#28c840" },
+        // Chakra's red, yellow and green, as macOS's lights.
+        "window.close": { value: "{colors.red.500}" },
+        "window.minimize": { value: "{colors.yellow.400}" },
+        "window.maximize": { value: "{colors.green.500}" },
         "window.lightBorder": { value: "{colors.blackAlpha.200}" },
         "window.lightGlyph": { value: "{colors.blackAlpha.700}" },
       },
