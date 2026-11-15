@@ -116,7 +116,7 @@ test('the boxes of a row do not clip their pane, so a pane’s shadow shows roun
   // The terminal keeps its own colour (bg), and its margin has that same colour: no frame of another shade.
   assert.match(app, /theme: \{ background: tokenColor\(paneSurface\)/);
   assert.doesNotMatch(app, /allowTransparency/);
-  assert.match(app, /<Box ref=\{setTerminalContainer\} flex="1" minH="0" minW="0" px="2" py="1" aria-label/);
+  assert.match(app, /<Box ref=\{setTerminalContainer\} flex="1" minH="0" minW="0" px="2" py="1" mb="1px" overflow="hidden" aria-label/);
 });
 
 test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing stays blocked', () => {

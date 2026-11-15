@@ -1735,7 +1735,8 @@ export function App(): React.JSX.Element {
     <PaneCard header={<PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>}>
       {/* The margin round the text has the terminal's own colour (bg, as xterm's theme), so it shows no frame of
           the panel's colour whatever the panel style. */}
-      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte" data-terminal/>
+      {/* A pixel clear of the panel's bottom edge, and nothing of xterm past its box, so the edge always shows (also while resizing). */}
+      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" mb="1px" overflow="hidden" aria-label="Terminal del projecte" data-terminal/>
     </PaneCard>
   );
 
