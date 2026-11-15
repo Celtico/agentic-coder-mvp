@@ -2641,13 +2641,19 @@ export function App(): React.JSX.Element {
                   </>}
                 </Stack></Tabs.Content>
                 <Tabs.Content value="appearance"><Stack gap="4">
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Tema</Text>
+                  {/* In sections that open and close, so the tab does not scroll so much (the theme open). */}
+                  <Accordion.Root multiple collapsible defaultValue={['theme']} size="sm" variant={PANE_ACCORDION}>
+                  <Accordion.Item value="theme">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Tema</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     <SegmentGroup.Root size="sm" value={appearance.colorMode} onValueChange={({ value }) => { if (value === 'light' || value === 'dark' || value === 'system') setAppearance((current) => ({ ...current, colorMode: value })); }}>
                       <SegmentGroup.Indicator/><SegmentGroup.Items items={(['light', 'dark', 'system'] as const).map((value) => ({ value, label: COLOR_MODE_LABELS[value] }))}/>
                     </SegmentGroup.Root>
-                  </Box>
-                  <HStack gap="6" flexWrap="wrap" align="flex-start">
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="fonts">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Mida de lletra</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody><HStack gap="6" flexWrap="wrap" align="flex-start">
                     <Box>
                       <Text fontSize="sm" fontWeight="medium" mb="1.5">Mida de lletra del xat</Text>
                       <HStack gap="1">
@@ -2664,36 +2670,44 @@ export function App(): React.JSX.Element {
                         <IconButton icon={Plus} label="Més gran" variant="outline" disabled={appearance.editorFontSize === EDITOR_FONT_SIZES[EDITOR_FONT_SIZES.length - 1]} onClick={() => setAppearance((current) => ({ ...current, editorFontSize: stepSize(EDITOR_FONT_SIZES, current.editorFontSize as (typeof EDITOR_FONT_SIZES)[number], 1) }))}/>
                       </HStack>
                     </Box>
-                  </HStack>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Color d’accent</Text>
+                    </HStack>                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="accent">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Color d’accent</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="1.5" role="radiogroup" aria-label="Color d’accent">
                       {ACCENTS.map((accent) => <Button key={accent} role="radio" aria-checked={appearance.accent === accent} justifyContent="flex-start" variant={appearance.accent === accent ? 'subtle' : 'ghost'} colorPalette={appearance.accent === accent ? 'agentic' : 'gray'} onClick={() => setAppearance((current) => ({ ...current, accent }))}>
                         <Box flex="none" boxSize="3.5" rounded="full" colorPalette={accent === 'agentic' ? 'brand' : accent} bg="colorPalette.solid" borderWidth="1px" borderColor="border"/>
                         <Text as="span" fontSize="xs">{ACCENT_LABELS[accent]}</Text>
                       </Button>)}
                     </Grid>
-                  </Box>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Capçaleres dels panells</Text>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="tone">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Capçaleres dels panells</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(190px, 1fr))" gap="2" role="radiogroup" aria-label="Capçaleres dels panells">
                       {PANE_TONES.map((tone) => <Box key={tone} as="button" role="radio" aria-checked={appearance.paneTone === tone} textAlign="left" borderWidth="1px" borderColor={appearance.paneTone === tone ? 'agentic.solid' : 'border'} borderRadius="md" overflow="hidden" bg="bg" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneTone: tone }))}>
                         <PaneHeader icon={GitBranch} title="Git" subtitle="Només lectura" tone={tone}/>
                         <Text px="3" py="1.5" fontSize="xs" color={appearance.paneTone === tone ? 'agentic.fg' : 'fg.muted'}>{PANE_TONE_LABELS[tone]}</Text>
                       </Box>)}
                     </Grid>
-                  </Box>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Estil dels panells</Text>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="style">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Estil dels panells</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Estil dels panells">
                       {PANE_STYLES.map((style) => <Box key={style} as="button" role="radio" aria-checked={appearance.paneStyle === style} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneStyle === style ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneStyle: style }))}>
                         <Box h="20" display="flex"><PaneCard variant={style} header={<PaneHeader icon={TerminalIcon} title="Terminal"/>}><Box/></PaneCard></Box>
                         <Text mt="1.5" fontSize="xs" color={appearance.paneStyle === style ? 'agentic.fg' : 'fg.muted'}>{PANE_STYLE_LABELS[style]}</Text>
                       </Box>)}
                     </Grid>
-                  </Box>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Fons de les finestres</Text>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="background">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Fons de les finestres</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     {/* One card per option, like Chakra's token docs: the colour, its name and its values. */}
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Fons de les finestres">
                       {PANE_BACKGROUNDS.map((value) => {
@@ -2710,9 +2724,11 @@ export function App(): React.JSX.Element {
                       })}
                     </Grid>
                     <Text mt="1" fontSize="xs" color="fg.muted">Els tokens de fons de Chakra; s’aplica a tots els panells, també al xat i al terminal.</Text>
-                  </Box>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="medium" mb="1.5">Diàlegs</Text>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  <Accordion.Item value="dialogs">
+                    <Accordion.ItemTrigger><Text flex="1" fontSize="sm" fontWeight="medium">Diàlegs</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                    <Accordion.ItemContent><Accordion.ItemBody>
                     <Grid templateColumns="repeat(auto-fill, minmax(150px, 1fr))" gap="3" role="radiogroup" aria-label="Diàlegs">
                       {DIALOG_MATERIAL_OPTIONS.map((material) => <Box key={material} as="button" role="radio" aria-checked={appearance.dialogs === material} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.dialogs === material ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, dialogs: material }))}>
                         <Box position="relative" h="20" borderRadius="md" overflow="hidden" bg="bg" p="2">
@@ -2722,7 +2738,9 @@ export function App(): React.JSX.Element {
                         <Text mt="1.5" fontSize="xs" color={appearance.dialogs === material ? 'agentic.fg' : 'fg.muted'}>{DIALOG_MATERIAL_LABELS[material]}</Text>
                       </Box>)}
                     </Grid>
-                  </Box>
+                    </Accordion.ItemBody></Accordion.ItemContent>
+                  </Accordion.Item>
+                  </Accordion.Root>
                   <HStack gap="2" flexWrap="wrap">
                     <Button variant="outline" onClick={() => setAppearance(defaultAppearance())}><RefreshCw size={14}/>Restableix l’aparença</Button>
                     <Button variant="outline" onClick={() => { setRailLayout(defaultRailLayout()); setStatus('Icones de la barra en l’ordre inicial'); }}><RefreshCw size={14}/>Restableix l’ordre de les icones</Button>
@@ -2730,7 +2748,6 @@ export function App(): React.JSX.Element {
                 </Stack></Tabs.Content>
               </Tabs.Root>
             </Dialog.Body>
-            <Dialog.Footer><ChakraButton size="sm" variant="outline" onClick={() => setPreferencesOpen(false)}>Tanca</ChakraButton></Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
       </Portal>

@@ -157,7 +157,8 @@ test('every dialog and the floating Historial local window speak the panes’ la
   assert.doesNotMatch(app, /<Dialog\.Header><Dialog\.Title>/);
   for (const title of ['Desa com a cas verificat', 'Edita el cas desat', 'Esborra el cas desat', 'Detall del cas', 'Preferències']) assert.match(app, new RegExp(`<DialogHeading icon=\\{\\w+\\} title="${title}"\\/>`), title);
   const footers = app.match(/<Dialog\.Footer>[\s\S]*?<\/Dialog\.Footer>/g) || [];
-  assert.equal(footers.length, 10);
+  // Preferències has no footer: it closes with the ✕ of its header and Esc.
+  assert.equal(footers.length, 9);
   // Footer buttons are all size sm: the secondary one outlined (visible, not bare text), the main one solid.
   for (const footer of footers) {
     assert.doesNotMatch(footer, /<Button /, 'no xs buttons in a footer');
@@ -294,8 +295,17 @@ test('the accordions of Avaluació and Aprenentatge local go edge to edge: the t
   assert.match(recipes, /pane: \{\n\s*item: \{ borderBottomWidth: "1px", borderColor: "border" \},\n\s*itemTrigger: \{ px: "var\(--accordion-padding-x\)", borderRadius: "0" \},\n\s*itemContent: \{ px: "var\(--accordion-padding-x\)" \},/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /accordion: accordionRecipe/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 2);
+  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 3, 'Avaluació, Aprenentatge local and Preferències › Aparença');
   // No space kept for the scroll bar: edge to edge on both sides; the thin bar appears only when it scrolls.
   assert.match(app, /<Box flex="1" minH="0" \{\.\.\.scrollArea\}>\{evaluationPane\}<\/Box>/);
   assert.match(app, /<Box h="full" minH="0" \{\.\.\.scrollArea\}><Stack gap="3">/);
+});
+
+test('Preferències › Aparença: its sections open and close (the theme open), and the dialog has no «Tanca»', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  const tab = app.slice(app.indexOf('<Tabs.Content value="appearance">'), app.indexOf('</Tabs.Content>', app.indexOf('<Tabs.Content value="appearance">')));
+  assert.match(tab, /<Accordion\.Root multiple collapsible defaultValue=\{\['theme'\]\} size="sm" variant=\{PANE_ACCORDION\}>/);
+  for (const key of ['theme', 'fonts', 'accent', 'tone', 'style', 'background', 'dialogs']) assert.match(tab, new RegExp(`<Accordion\\.Item value="${key}">`), key);
+  const preferences = app.slice(app.indexOf('<Dialog.Content data-preferences>'), app.indexOf('</Dialog.Content>', app.indexOf('<Dialog.Content data-preferences>')));
+  assert.doesNotMatch(preferences, /Dialog\.Footer|>Tanca</);
 });
