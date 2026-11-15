@@ -2695,8 +2695,7 @@ export function App(): React.JSX.Element {
                         return <Box key={value} as="button" role="radio" aria-checked={appearance.paneBg === value} textAlign="left" p="2" borderWidth="1px" borderColor={appearance.paneBg === value ? 'agentic.solid' : 'transparent'} borderRadius="md" bg="canvas" cursor="pointer" onClick={() => setAppearance((current) => ({ ...current, paneBg: value }))} data-pane-bg-option={value}>
                           {/* Only the colour, in the mode in use, like Chakra's token docs. */}
                           <Box h="14" borderRadius="md" borderWidth="1px" borderColor="border" bg={token} data-swatch/>
-                          <Text mt="1.5" fontSize="xs" fontFamily={value === 'auto' ? undefined : 'mono'} color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value === 'auto' ? 'Segons l’estil del panell' : value}</Text>
-                          {value === 'auto' && <Text fontSize="2xs" color="fg.muted" fontFamily="mono">{token}</Text>}
+                          <Text mt="1.5" fontSize="xs" truncate fontFamily={value === 'auto' ? undefined : 'mono'} color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value === 'auto' ? `Segons l’estil (${token})` : value}</Text>
                           {/* Its values, as Chakra's token docs show them: «light: {gray.100} · dark: {gray.900}». */}
                           {(['_light', '_dark'] as const).map((mode) => <Text key={mode} fontSize="2xs" color="fg.muted" fontFamily="mono" truncate>{mode === '_light' ? 'light' : 'dark'}: {tokenValue(chakraSystem, token, mode)}</Text>)}
                         </Box>;
