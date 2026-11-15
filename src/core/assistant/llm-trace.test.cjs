@@ -156,7 +156,7 @@ test('the toolbar’s buttons: only their icons, their names in a tooltip and as
 
 test('the prompt cache: mlx_lm’s own, in the chat and not in an evaluation, and its reuse in Mètriques', () => {
   const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
-  assert.match(worker, /PROMPT_CACHE = LRUPromptCache\(max_size=4, max_bytes=int\(float\(os\.environ\.get\("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"\)\)\)\)/);
+  assert.match(worker, /PROMPT_CACHE = LRUPromptCache\(max_size=8, max_bytes=int\(float\(os\.environ\.get\("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"\)\)\)\)/);
   assert.match(worker, /cache, rest = PROMPT_CACHE\.fetch_nearest_cache\("model", tokens\[:\]\)/);
   assert.match(worker, /PROMPT_CACHE\.insert_cache\("model", key, cache\)/);
   assert.match(worker, /return tokenizer\.encode\(prompt, add_special_tokens=bos is None or not prompt\.startswith\(bos\)\)/, 'the tokens stream_generate makes of a text');
@@ -168,6 +168,14 @@ test('the prompt cache: mlx_lm’s own, in the chat and not in an evaluation, an
 test('the prompt cache keeps a checkpoint where a prompt stops being the previous one (instructions that change at their end)', () => {
   const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
   assert.match(worker, /shared = min\(common_prefix\(tokens, LAST_PROMPT\), len\(tokens\) - 1\)/);
-  assert.match(worker, /if shared - self\.reused >= CHECKPOINT_MIN and PROMPT_CACHE\.max_bytes > 0:\n\s*prefill\(cache, tokens\[self\.reused:shared\]\)\n\s*PROMPT_CACHE\.insert_cache\("model", tokens\[:shared\], copy\.deepcopy\(cache\), cache_type="system"\)\n\s*rest = tokens\[shared:\]/);
+  assert.match(worker, /prefill\(cache, tokens\[position:boundary\]\)\n\s*PROMPT_CACHE\.insert_cache\("model", tokens\[:boundary\], copy\.deepcopy\(cache\), cache_type="system"\)\n\s*position = boundary\n[\s\S]*?rest = tokens\[position:\]/);
   assert.match(worker, /model\(mx\.array\(tokens\[start:start \+ step\]\)\[None\], cache=cache\)\n\s*mx\.eval\(\[c\.state for c in cache\]\)/, 'read in steps, as stream_generate reads a prompt');
+});
+
+test('the prompt cache also keeps the start every chat prompt shares and the first turn, beside the latest checkpoint', () => {
+  const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
+  assert.match(worker, /boundaries = \{first_turn_end\(tokens\), shared\}/);
+  assert.match(worker, /stable = common_prefix\(tokens, STABLE_PROMPT\)\n\s*if stable >= CHECKPOINT_MIN:\n\s*STABLE_PROMPT = STABLE_PROMPT\[:stable\]\n\s*boundaries\.add\(stable\)/, 'only shorter, and not for prompts of another kind');
+  assert.match(worker, /if boundary - position >= CHECKPOINT_MIN and not stored\(tokens\[:boundary\]\):/);
+  assert.match(worker, /PROMPT_CACHE = LRUPromptCache\(max_size=8,/);
 });

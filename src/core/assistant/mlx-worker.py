@@ -77,6 +77,10 @@ def prompt_tokens(prompt):
 
 # The previous prompt's tokens: where the next one stops being the same is a checkpoint (below).
 LAST_PROMPT = []
+# The start every chat prompt so far shares (it only gets shorter): kept as a checkpoint too, so a message
+# whose instructions changed in their middle (a file the model edited, in «Contingut llegit») still reuses
+# what never changes. Prompts of another kind (the reviewer's) share almost nothing and leave it alone.
+STABLE_PROMPT = None
 # A checkpoint is worth its copy from this many tokens on.
 CHECKPOINT_MIN = 256
 
@@ -96,6 +100,23 @@ def prefill(cache, tokens, step=2048):
     for start in range(0, len(tokens), step):
         model(mx.array(tokens[start:start + step])[None], cache=cache)
         mx.eval([c.state for c in cache])
+
+
+def first_turn_end(tokens):
+    """Where the prompt's first turn ends (the tools the template lists first): one more boundary that is
+    the same in every call."""
+    ends = set(getattr(tokenizer, "eos_token_ids", None) or [])
+    for index, token in enumerate(tokens):
+        if token in ends:
+            return index + 1
+    return 0
+
+
+def stored(key):
+    try:
+        return PROMPT_CACHE._trie.search("model", key).exact is not None
+    except Exception:
+        return False
 
 
 class CachedStream:
@@ -121,12 +142,26 @@ class CachedStream:
         if cache is None:
             cache, rest = make_prompt_cache(model), tokens
         self.reused = len(tokens) - len(rest)
+        global STABLE_PROMPT
         shared = min(common_prefix(tokens, LAST_PROMPT), len(tokens) - 1)
         LAST_PROMPT = tokens
-        if shared - self.reused >= CHECKPOINT_MIN and PROMPT_CACHE.max_bytes > 0:
-            prefill(cache, tokens[self.reused:shared])
-            PROMPT_CACHE.insert_cache("model", tokens[:shared], copy.deepcopy(cache), cache_type="system")
-            rest = tokens[shared:]
+        boundaries = {first_turn_end(tokens), shared}
+        if STABLE_PROMPT is None:
+            STABLE_PROMPT = tokens[:]
+        else:
+            stable = common_prefix(tokens, STABLE_PROMPT)
+            if stable >= CHECKPOINT_MIN:
+                STABLE_PROMPT = STABLE_PROMPT[:stable]
+                boundaries.add(stable)
+        # Every boundary not stored yet, from the shortest: read up to it and keep a copy, then go on.
+        position = self.reused
+        if PROMPT_CACHE.max_bytes > 0:
+            for boundary in sorted(b for b in boundaries if b < len(tokens)):
+                if boundary - position >= CHECKPOINT_MIN and not stored(tokens[:boundary]):
+                    prefill(cache, tokens[position:boundary])
+                    PROMPT_CACHE.insert_cache("model", tokens[:boundary], copy.deepcopy(cache), cache_type="system")
+                    position = boundary
+        rest = tokens[position:]
         key = tokens[:]
         for response in stream_generate(model, tokenizer, prompt=rest, prompt_cache=cache, **options):
             key.append(response.token)
@@ -147,7 +182,7 @@ MODEL_DIR = sys.argv[1]
 # server uses it. Measured on 15-11-2026 with MiMo 9B at temperature 0: the same tokens with and without it,
 # 2.607 of 2.630 prompt tokens reused on a chat's second message, first token in 0,26 s instead of 12,8 s.
 # It lives and dies with this process (one model, one cache); a few entries, bounded in bytes.
-PROMPT_CACHE = LRUPromptCache(max_size=4, max_bytes=int(float(os.environ.get("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"))))
+PROMPT_CACHE = LRUPromptCache(max_size=8, max_bytes=int(float(os.environ.get("AGENT_MLX_PROMPT_CACHE_BYTES", "1e9"))))
 CONTEXT_LIMIT = mlx_trace.context_limit(MODEL_DIR)
 HAS_VISION = mlx_vision.model_has_vision(MODEL_DIR) and not adapter_path
 BACKEND = "text"
