@@ -67,6 +67,11 @@ h1 { font-size: clamp(34px, 6vw, 64px); line-height: 1.05; letter-spacing: -0.03
 .shot { margin: 56px auto 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 80px rgba(34, 197, 94, 0.08); }
 
+/* The video */
+.video { margin: 40px 0 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #000;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(34, 197, 94, 0.06); }
+.video video { display: block; width: 100%; height: auto; }
+
 /* Sections */
 .section { max-width: var(--max); margin: 0 auto; padding: 96px 24px 0; }
 h2 { font-size: clamp(28px, 4vw, 42px); line-height: 1.12; letter-spacing: -0.03em; font-weight: 800; margin: 0; }
@@ -155,5 +160,6 @@ h3 { font-size: 20px; letter-spacing: -0.01em; margin: 0; }
   .card, .wide { padding: 20px; }
   .wide { flex-direction: column; gap: 14px; }
   .shot { margin-top: 40px; border-radius: 10px; }
+  .video { margin-top: 28px; border-radius: 10px; }
   .footer { padding: 28px 16px 40px; }
 }

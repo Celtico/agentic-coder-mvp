@@ -2,6 +2,10 @@
 
 ![Agentic Coder](docs/cover.png)
 
+[![Una sessió amb Agentic Coder: escriu els fitxers, obre la pàgina i el Log del model](docs/demo.gif)](https://celtico.github.io/agentic-coder-mvp/#video)
+
+[Mira el vídeo sencer (1 min) a la web.](https://celtico.github.io/agentic-coder-mvp/#video)
+
 **Agentic Coder** és el teu propi model de programació. Funciona al teu ordinador, aprèn de tu i creix
 amb la teva màquina. És privat: no fa servir el núvol.
 
