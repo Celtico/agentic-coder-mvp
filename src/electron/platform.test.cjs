@@ -32,3 +32,43 @@ test('packages: a Linux AppImage and deb next to the Mac dmg, with every Python 
   assert.deepEqual(pkg.build.linux.target, ['AppImage', 'deb']);
   assert.ok(pkg.build.files.includes('src/core/assistant/*.py'), 'mlx_trace.py and mlx_download.py too');
 });
+
+test('engine per platform: MLX on a Mac as always; on Linux CUDA, its own venv and the models added under models/hf', async (t) => {
+  const os = require('node:os');
+  const mlxModels = require('./mlx-models.cjs');
+  assert.equal(mlxModels.engineFor('darwin'), 'mlx');
+  assert.equal(mlxModels.engineFor('linux'), 'cuda');
+  assert.equal(mlxModels.enginePython('/m', 'darwin'), path.join('/m', '.mlx-venv', 'bin', 'python'));
+  assert.equal(mlxModels.enginePython('/m', 'linux'), path.join('/m', '.cuda-venv', 'bin', 'python'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-linux-models-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const add = (sub, folder, meta) => {
+    fs.mkdirSync(path.join(dir, sub, folder), { recursive: true });
+    fs.writeFileSync(path.join(dir, sub, folder, 'config.json'), '{}');
+    fs.writeFileSync(path.join(dir, sub, folder, 'model.safetensors'), 'w');
+    fs.writeFileSync(path.join(dir, sub, folder, 'agentic-model.json'), JSON.stringify(meta));
+  };
+  add('hf', 'qwen-coder', { id: 'hf-qwen-coder', label: 'Qwen Coder', modelId: 'Qwen/Qwen2.5-Coder-7B-Instruct' });
+  add('mlx', 'mac-only', { id: 'hf-mac-only', label: 'Mac', modelId: 'mlx-community/x' });
+  const linux = await mlxModels.listModels(dir, 'linux');
+  assert.deepEqual(linux.map((model) => [model.id, model.runtime, model.dir]), [['hf-qwen-coder', 'cuda', 'hf']], 'no MLX model on Linux, built-in or added');
+  assert.equal(await mlxModels.modelDirectory(linux[0], dir), path.join(dir, 'hf', 'qwen-coder'));
+  const mac = await mlxModels.listModels(dir, 'darwin');
+  assert.ok(mac.some((model) => model.id === 'mimo-9b-mlx'), 'the Mac keeps its built-in models');
+  assert.deepEqual(mac.filter((model) => model.own).map((model) => [model.id, model.runtime]), [['hf-mac-only', 'mlx']]);
+});
+
+test('the agent picks the engine from the runtime: cuda → CudaInferenceEngine (cuda-worker.py), else MLX', () => {
+  const runtime = require('../core/assistant/agent-runtime.cjs');
+  assert.ok(runtime.createEngine('cuda') instanceof runtime.CudaInferenceEngine);
+  assert.ok(runtime.createEngine('cuda') instanceof runtime.MlxInferenceEngine, 'the same engine, another worker');
+  assert.ok(!(runtime.createEngine('mlx') instanceof runtime.CudaInferenceEngine));
+  assert.ok(!(runtime.createEngine(undefined) instanceof runtime.CudaInferenceEngine), 'a Mac without the variable: MLX');
+  const engine = read('src/core/assistant/inference-engine.ts');
+  assert.match(engine, /export class CudaInferenceEngine extends MlxInferenceEngine \{\n\s*protected readonly workerScript = 'cuda-worker\.py';/);
+  const worker = read('src/core/assistant/cuda-worker.py');
+  assert.match(worker, /import mlx_text  # noqa: E402/, 'the tool-call reading is shared, not copied');
+  assert.match(worker, /"device_map": "auto"/);
+  assert.match(worker, /BitsAndBytesConfig\(load_in_4bit=True/);
+  assert.match(read('scripts/evaluate-agent.cjs'), /const engine = createEngine\(model\.runtime\);/);
+});

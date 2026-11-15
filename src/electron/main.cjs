@@ -216,7 +216,8 @@ async function saveSettings() {
 // (~/Library/Application Support/Agentic Coder/models), or from AGENT_MODELS_DIR.
 const projectModelsDirectory = () => process.env.AGENT_MODELS_DIR
   || (app.isPackaged ? path.join(app.getPath('userData'), 'models') : path.resolve(__dirname, '..', '..', 'models'));
-const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || path.join(projectModelsDirectory(), '.mlx-venv', 'bin', 'python');
+// The engine's Python: models/.mlx-venv on a Mac (MLX), models/.cuda-venv on Linux (CUDA) (src/electron/mlx-models.cjs).
+const mlxPythonPath = () => process.env.AGENT_MLX_PYTHON || mlxModels.enginePython(projectModelsDirectory());
 // Every MLX model this app knows (src/electron/mlx-models.cjs); one is offered only when its weights are here.
 const allModels = () => mlxModels.listModels(projectModelsDirectory());
 const currentModel = async () => { const models = await allModels(); return models.find((model) => model.id === selectedModel) || mlxModels.defaultModel(models); };
@@ -226,8 +227,8 @@ async function getAvailableModels() {
   for (const model of await allModels()) {
     const directory = await mlxModels.modelDirectory(model, projectModelsDirectory());
     const available = Boolean(directory && mlxPythonReady);
-    const reason = available ? undefined : !directory ? 'Falten els pesos locals del model.' : 'Falta el runtime MLX de Python.';
-    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, vision: await mlxModels.hasVision(directory), shown: modelManager.shownInSelector(model, modelVisibility, selectedModel), ...(reason ? { reason } : {}) });
+    const reason = available ? undefined : !directory ? 'Falten els pesos locals del model.' : mlxModels.engineFor() === 'mlx' ? 'Falta el runtime MLX de Python.' : 'Falta el runtime CUDA de Python (models/.cuda-venv; mira docs/linux.md).';
+    result.push({ id: model.id, label: model.label, modelId: model.modelId, available, vision: mlxModels.engineFor() === 'mlx' && await mlxModels.hasVision(directory), shown: modelManager.shownInSelector(model, modelVisibility, selectedModel), ...(reason ? { reason } : {}) });
   }
   return result;
 }
@@ -549,6 +550,8 @@ const loadedModels = new Set();
 let modelWorkerModelId = null;
 async function startModelWorker() {
   if (modelWorker && modelWorker.connected) return modelWorker;
+  // On Linux there is no built-in model: the first one is added in Gestiona els models.
+  if (!await currentModel()) throw new Error('Encara no hi ha cap model en aquest ordinador: afegeix-ne un a Aprenentatge local › Gestiona els models.');
   const nodeExecutable = findNodeExecutable();
   const child = fork(path.join(__dirname, '..', 'core', 'assistant', 'agent-worker.cjs'), [], {
     execPath: nodeExecutable,
@@ -568,7 +571,7 @@ async function startModelWorker() {
       // A model already loaded once in this session is «loaded again», not «the first time»; one that sees
       // images gets the text of prompts/vision.md.
       ...(loadedModels.has((await currentModel()).id) ? { AGENT_MODEL_RELOAD: '1' } : {}),
-      ...(await mlxModels.hasVision(await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory())) ? { AGENT_MODEL_VISION: '1' } : {}),
+      ...(mlxModels.engineFor() === 'mlx' && await mlxModels.hasVision(await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory())) ? { AGENT_MODEL_VISION: '1' } : {}),
       // A beta is the base with its adapter (src/electron/learning-versions.cjs); any other model, none.
       AGENT_MLX_ADAPTER_PATH: (await currentModel()).adapterPath || '',
       AGENT_VERIFIED_EXPERIENCES_PATH: path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'),

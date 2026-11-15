@@ -53,14 +53,14 @@ async function main() {
     AGENT_MODEL_CACHE: modelsRoot,
     AGENT_MODEL_RUNTIME: model.runtime,
     AGENT_MODEL: model.modelId,
-    AGENT_MLX_PYTHON: process.env.AGENT_MLX_PYTHON || path.join(modelsRoot, '.mlx-venv', 'bin', 'python'),
+    AGENT_MLX_PYTHON: process.env.AGENT_MLX_PYTHON || mlxModels.enginePython(modelsRoot),
     AGENT_MLX_MODEL_PATH: modelDirectory,
     AGENT_TURN_LOG: process.env.AGENT_TURN_LOG || path.join(outDir, `turns-${model.id}-${stamp}.jsonl`),
   });
 
-  const { LocalCodingAgent, MlxInferenceEngine } = require('../src/core/assistant/agent-runtime.cjs');
+  const { LocalCodingAgent, createEngine } = require('../src/core/assistant/agent-runtime.cjs');
   const { runBenchmark } = require('./agent-benchmark/run.cjs');
-  const engine = new MlxInferenceEngine();
+  const engine = createEngine(model.runtime);
   console.error(`Model: ${model.modelId} (${model.runtime}). Carregant…`);
   const loadStarted = Date.now();
   await engine.loadModel((message) => console.error(message));

@@ -145,3 +145,14 @@ def tool_parser_hint(model_dir):
     except Exception:
         pass
     return "qwen3_coder" if "<tool_call><function=" in template else None
+
+
+def tool_parser_type(model_dir):
+    """The tool-call format of a model: the one its files declare, else the one its template writes
+    (tool_parser_hint). For the Linux engine, which has no mlx_lm to ask."""
+    try:
+        with open(os.path.join(model_dir, "tokenizer_config.json"), encoding="utf-8") as handle:
+            declared = json.load(handle).get("tool_parser_type")
+    except Exception:
+        declared = None
+    return declared or tool_parser_hint(model_dir)

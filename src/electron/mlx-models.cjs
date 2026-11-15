@@ -8,6 +8,15 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
+// The engine of each platform: MLX on a Mac (Apple Silicon); on Linux, CUDA (PyTorch + transformers on
+// NVIDIA GPUs, src/core/assistant/cuda-worker.py). A Linux model is a Hugging Face safetensors folder
+// under models/hf/<folder>, added from Gestiona els models; the Mac's MLX models are not offered there.
+const engineFor = (platform = process.platform) => platform === 'darwin' ? 'mlx' : 'cuda';
+/** The folder under models/ where each engine keeps the models it can load. */
+const modelsFolder = (platform = process.platform) => engineFor(platform) === 'mlx' ? 'mlx' : 'hf';
+/** The Python that runs the engine: models/.mlx-venv on a Mac, models/.cuda-venv on Linux. */
+const enginePython = (modelsRoot, platform = process.platform) => path.join(modelsRoot, engineFor(platform) === 'mlx' ? '.mlx-venv' : '.cuda-venv', 'bin', 'python');
+
 const builtInModels = [
   { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx', hfCache: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', aliases: ['7b'] },
   { id: 'gemma-4-12b-mlx', label: 'Gemma 4 12B · MLX', modelId: 'lmstudio-community/gemma-4-12B-it-MLX-4bit', runtime: 'mlx', folder: 'gemma-4-12b-it-4bit', aliases: ['gemma', 'gemma-4-12b'] },
@@ -39,7 +48,7 @@ async function modelDirectory(model, modelsRoot) {
     }
     return null;
   }
-  const directory = path.join(modelsRoot, 'mlx', model.folder);
+  const directory = path.join(modelsRoot, model.dir || 'mlx', model.folder);
   return await hasWeights(directory) ? directory : null;
 }
 
@@ -73,30 +82,35 @@ async function hasVision(directory) {
 }
 
 /** Models of our own: every mlx/<folder>/agentic-model.json with an id, a label and weights beside it. */
-async function ownModels(modelsRoot) {
+async function ownModels(modelsRoot, platform = process.platform) {
   const found = [];
-  const root = path.join(modelsRoot, 'mlx');
+  const dir = modelsFolder(platform);
+  const root = path.join(modelsRoot, dir);
   for (const entry of await fs.readdir(root, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory()) continue;
     try {
       const meta = JSON.parse(await fs.readFile(path.join(root, entry.name, 'agentic-model.json'), 'utf8'));
       if (typeof meta.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(meta.id) || typeof meta.label !== 'string') continue;
       if (builtInModels.some((model) => model.id === meta.id)) continue;
-      found.push({ id: meta.id, label: meta.label.slice(0, 80), modelId: typeof meta.modelId === 'string' ? meta.modelId : meta.id, runtime: 'mlx', folder: entry.name, own: true, aliases: [] });
+      found.push({ id: meta.id, label: meta.label.slice(0, 80), modelId: typeof meta.modelId === 'string' ? meta.modelId : meta.id, runtime: engineFor(platform), dir, folder: entry.name, own: true, aliases: [] });
     } catch { /* not one of ours */ }
   }
   return found.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // The newest beta of each base (src/electron/learning-versions.cjs): the base's weights with an adapter.
-async function listModels(modelsRoot) {
+async function listModels(modelsRoot, platform = process.platform) {
   const { betaModels } = require('./learning-versions.cjs');
-  return [...builtInModels, ...await betaModels(builtInModels, modelsRoot), ...await ownModels(modelsRoot)];
+  // The built-in models are MLX conversions: a Mac's. On Linux every model is one added from Hugging Face.
+  const builtIn = engineFor(platform) === 'mlx' ? builtInModels : [];
+  const own = await ownModels(modelsRoot, platform);
+  // Betas are trained on the built-in models on a Mac (as always), on the added ones on Linux.
+  return [...builtIn, ...await betaModels(engineFor(platform) === 'mlx' ? builtIn : own, modelsRoot), ...own];
 }
 
 /** Finds a model by id or alias (e.g. "7b", "gemma"). */
-async function findModel(modelsRoot, idOrAlias) {
-  return (await listModels(modelsRoot)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
+async function findModel(modelsRoot, idOrAlias, platform = process.platform) {
+  return (await listModels(modelsRoot, platform)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
 }
 
-module.exports = { builtInModels, listModels, findModel, modelDirectory, hasVision, DEFAULT_MODEL_ID, defaultModel };
+module.exports = { engineFor, modelsFolder, enginePython, builtInModels, listModels, findModel, modelDirectory, hasVision, DEFAULT_MODEL_ID, defaultModel };

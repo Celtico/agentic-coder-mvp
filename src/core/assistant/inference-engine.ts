@@ -35,6 +35,9 @@ declare const __dirname: string;
 /** Native Apple Silicon backend. It keeps one MLX Python process alive for the whole chat task. */
 export class MlxInferenceEngine implements InferenceEngine {
   readonly modelId = process.env.AGENT_MODEL || 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit';
+  /** The Python worker it starts and the name the window shows: MLX on a Mac; CudaInferenceEngine on Linux. */
+  protected readonly workerScript: string = 'mlx-worker.py';
+  protected readonly runtimeName: string = 'MLX';
   readonly cacheDir = process.env.AGENT_MODEL_CACHE || path.resolve(__dirname, '../../../models/.hf');
   private child: ChildProcessWithoutNullStreams | null = null;
   private ready: Promise<void> | null = null;
@@ -55,9 +58,9 @@ export class MlxInferenceEngine implements InferenceEngine {
     this.ready = new Promise<void>((resolve, reject) => {
       const python = process.env.AGENT_MLX_PYTHON;
       const modelPath = process.env.AGENT_MLX_MODEL_PATH;
-      if (!python || !modelPath) { reject(new Error('No s’ha configurat el runtime MLX ni la carpeta del model.')); return; }
-      onStatus('Iniciant el runtime MLX d’Apple…');
-      const child = spawn(python, ['-u', path.join(__dirname, 'mlx-worker.py'), modelPath], { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
+      if (!python || !modelPath) { reject(new Error(`No s’ha configurat el runtime ${this.runtimeName} ni la carpeta del model.`)); return; }
+      onStatus(this.runtimeName === 'MLX' ? 'Iniciant el runtime MLX d’Apple…' : `Iniciant el runtime ${this.runtimeName}…`);
+      const child = spawn(python, ['-u', path.join(__dirname, this.workerScript), modelPath], { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
       this.child = child;
       let stderr = '';
       child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-8000); });
@@ -72,7 +75,7 @@ export class MlxInferenceEngine implements InferenceEngine {
         // An error before «ready» (no runtime, the model already loaded elsewhere…) is the reason it did not load.
         if (message.type === 'result' && typeof message.error === 'string' && this.state === 'loading') { reject(new Error(message.error)); return; }
         if (message.type === 'token' && this.traced && typeof message.text === 'string') { this.tracer.emit({ type: 'token', id: this.traced.id, text: message.text }); return; }
-        if (message.type === 'ready') { this.loadSeconds = typeof message.loadSeconds === 'number' ? message.loadSeconds : null; this.state = 'ready'; onStatus(`${this.modelId} carregat amb MLX${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
+        if (message.type === 'ready') { this.loadSeconds = typeof message.loadSeconds === 'number' ? message.loadSeconds : null; this.state = 'ready'; onStatus(`${this.modelId} carregat amb ${this.runtimeName}${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;
           this.finishTrace(message);
@@ -80,12 +83,12 @@ export class MlxInferenceEngine implements InferenceEngine {
           else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));
         }
       });
-      child.once('error', (error) => { if (current()) this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/MLX: ${error.message}`)); });
+      child.once('error', (error) => { if (current()) this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/${this.runtimeName}: ${error.message}`)); });
       child.once('exit', (code) => {
-        if (!current()) { reject(new Error('S’ha aturat el runtime MLX.')); return; }
+        if (!current()) { reject(new Error(`S’ha aturat el runtime ${this.runtimeName}.`)); return; }
         const wasReady = this.state === 'ready';
         this.state = 'unloaded'; this.child = null;
-        const error = new Error(`El procés MLX s’ha aturat (${code ?? 'sense codi'}). ${stderr.trim()}`);
+        const error = new Error(`El procés ${this.runtimeName} s’ha aturat (${code ?? 'sense codi'}). ${stderr.trim()}`);
         if (!wasReady) reject(error);
         this.pending?.reject(error); this.pending = null;
       });
@@ -99,8 +102,8 @@ export class MlxInferenceEngine implements InferenceEngine {
   }
 
   async generateResponse(messages: ChatTurn[], options: GenerationOptions): Promise<string> {
-    if (!this.child || this.state !== 'ready') throw new Error('El model MLX encara no està carregat.');
-    if (this.pending) throw new Error('El runtime MLX ja està generant una resposta.');
+    if (!this.child || this.state !== 'ready') throw new Error(`El model ${this.runtimeName} encara no està carregat.`);
+    if (this.pending) throw new Error(`El runtime ${this.runtimeName} ja està generant una resposta.`);
     // Log del model: only with the panel open; otherwise the request is exactly as it always was.
     const traceFields = this.startTrace(messages, options);
     return new Promise((resolve, reject) => {
@@ -153,12 +156,21 @@ export class MlxInferenceEngine implements InferenceEngine {
 
   async unloadModel(): Promise<void> {
     const child = this.child; this.child = null; this.state = 'unloaded';
-    this.pending?.reject(new Error('S’ha aturat el runtime MLX.'));
+    this.pending?.reject(new Error(`S’ha aturat el runtime ${this.runtimeName}.`));
     this.pending = null;
     if (child && !child.killed) child.kill('SIGTERM');
   }
   getModelStatus(): ModelStatus { return { modelId: this.modelId, state: this.state, cacheDir: this.cacheDir }; }
   getMemoryUsage(): MemoryUsage { return this.memory; }
+}
+
+/**
+ * Linux with NVIDIA GPUs: the same engine with cuda-worker.py (PyTorch + transformers, 4-bit, every GPU),
+ * the same JSON protocol, tool-call reading and Log del model. Chosen with AGENT_MODEL_RUNTIME=cuda.
+ */
+export class CudaInferenceEngine extends MlxInferenceEngine {
+  protected readonly workerScript = 'cuda-worker.py';
+  protected readonly runtimeName = 'CUDA';
 }
 
 export class TransformersJsInferenceEngine implements InferenceEngine {

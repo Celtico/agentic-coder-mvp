@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine, type InferenceToolDefinition } from './inference-engine';
+import { CudaInferenceEngine, MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine, type InferenceToolDefinition } from './inference-engine';
 import { prompt as promptText, toolDescriptions } from './prompts';
 import { splitSystem, type TraceContext } from './llm-trace';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
@@ -84,6 +84,13 @@ const agentToolDefinitions: InferenceToolDefinition[] = [
 const COMPACT_TOOL_NAMES = new Set(['list_files', 'read_file', 'write_file', 'run_project_script', 'start_project', 'install_package']);
 const COMPACT_CONTEXT_BYTES = 4000;
 const COMPACT_MANIFEST_ENTRIES = 80;
+/** The engine for a runtime: «cuda» on Linux with NVIDIA GPUs, «transformers» for ONNX in Node, else MLX (a Mac). */
+export function createEngine(runtime: string | undefined): InferenceEngine {
+  if (runtime === 'cuda') return new CudaInferenceEngine();
+  if (runtime === 'transformers') return new TransformersJsInferenceEngine();
+  return new MlxInferenceEngine();
+}
+
 export function isSmallModel(modelId: string): boolean {
   if (process.env.AGENT_COMPACT === '1') return true;
   if (process.env.AGENT_COMPACT === '0') return false;
@@ -621,7 +628,7 @@ export class LocalCodingAgent {
   answerTokens = 2400;
   maxIterations = 28;
 
-  constructor({ onStatus = () => {}, engine = process.env.AGENT_MODEL_RUNTIME === 'transformers' ? new TransformersJsInferenceEngine() : new MlxInferenceEngine(), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
+  constructor({ onStatus = () => {}, engine = createEngine(process.env.AGENT_MODEL_RUNTIME), verifiedExperiencesPath = process.env.AGENT_VERIFIED_EXPERIENCES_PATH, experienceRanker = new LocalExperienceEmbedder() }: {
     onStatus?: (status: AgentStatus) => void;
     engine?: InferenceEngine;
     verifiedExperiencesPath?: string;
@@ -790,7 +797,7 @@ export class LocalCodingAgent {
         break;
       } catch { /* no skills file */ }
     }
-    const baseSystem = compact ? tidyBlankLines(promptText('system-compact', { folder: path.resolve(projectRoot), projectState, projectInstructions, projectSkills, requestedPages, files: context.manifest || '(la carpeta és buida)', contents: context.contents ? promptText('context-compact-contents', { contents: context.contents }) : '' })) : tidyBlankLines(promptText('system', { model: this.engine.getModelStatus().modelId, runtime: process.env.AGENT_MODEL_RUNTIME === 'transformers' ? 'Transformers.js' : 'MLX d’Apple', folder: path.resolve(projectRoot), projectState, delegation: options.allowDelegation === false
+    const baseSystem = compact ? tidyBlankLines(promptText('system-compact', { folder: path.resolve(projectRoot), projectState, projectInstructions, projectSkills, requestedPages, files: context.manifest || '(la carpeta és buida)', contents: context.contents ? promptText('context-compact-contents', { contents: context.contents }) : '' })) : tidyBlankLines(promptText('system', { model: this.engine.getModelStatus().modelId, runtime: process.env.AGENT_MODEL_RUNTIME === 'transformers' ? 'Transformers.js' : process.env.AGENT_MODEL_RUNTIME === 'cuda' ? 'CUDA (Linux)' : 'MLX d’Apple', folder: path.resolve(projectRoot), projectState, delegation: options.allowDelegation === false
         ? promptText('system-delegated-agent')
         : promptText('system-delegation'), web: this.webSearch ? promptText('system-web-search') : promptText('system-web-pages'), delegationTools: options.allowDelegation === false ? promptText('system-tools-no-delegation') : promptText('system-tools-delegation'), projectInstructions, projectSkills, mcpTools, requestedPages, files: context.manifest || '(no s’han trobat fitxers visibles)', contents: context.contents || '(no hi ha fitxers de text compatibles dins del límit)', experiences: verifiedExperiences || '(no n’hi ha cap de prou similar)' }));
     // With a model that sees images, the text of prompts/vision.md (if there is any) follows the instructions.
@@ -1383,5 +1390,5 @@ export class LocalCodingAgent {
 }
 
 export { LocalExperienceEmbedder, cosineSimilarity, rankExperiences } from './local-embeddings';
-export { MlxInferenceEngine, TransformersJsInferenceEngine } from './inference-engine';
+export { CudaInferenceEngine, MlxInferenceEngine, TransformersJsInferenceEngine } from './inference-engine';
 export { prompt as promptText, toolDescriptions, promptsDirectory } from './prompts';
