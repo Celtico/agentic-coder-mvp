@@ -1850,7 +1850,7 @@ export function App(): React.JSX.Element {
               {!learningVersions?.base && <Notice tone="warning">Tria un model base al selector del xat per entrenar-ne versions.</Notice>}
               {learningVersions?.base && <Text fontSize="xs" color="fg.muted">Sempre des de l’original: {learningVersions.base.label}, amb tots els casos vàlids ({learningVersions.cases}). Mai sobre una altra beta.</Text>}
               {/* Dataset: what a beta would be trained with; see it in the app or download it (neither trains anything). */}
-              <Box>
+              <Box borderTopWidth="1px" borderColor="border" pt="3" data-training-section>
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Dataset</Text>
                 <HStack gap="2" flexWrap="wrap">
                   <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas vàlid' : 'casos vàlids'} · {datasetPreview.counts.input - datasetPreview.counts.included} descartats</Text>
@@ -1860,7 +1860,7 @@ export function App(): React.JSX.Element {
                 </HStack>
                 <Text mt="1" fontSize="xs" color="fg.muted">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Text>
               </Box>
-              <Box>
+              <Box borderTopWidth="1px" borderColor="border" pt="3" data-training-section>
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Beta</Text>
                 <HStack gap="2" flexWrap="wrap">
                   {trainingRunning
@@ -1879,7 +1879,7 @@ export function App(): React.JSX.Element {
                   {index > 0 && <IconButton icon={Trash} label={`Esborra la beta ${beta.number}`} disabled={trainingRunning} onClick={() => void deleteBeta(beta.folder)}/>}
                 </HStack>)}</Stack>}
               </Box>
-              <Box>
+              <Box borderTopWidth="1px" borderColor="border" pt="3" data-training-section>
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Estable</Text>
                 <HStack gap="2" flexWrap="wrap">
                   <Button size="sm" flex="none" variant="outline" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>

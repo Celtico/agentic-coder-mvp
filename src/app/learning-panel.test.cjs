@@ -82,3 +82,9 @@ test('a function the running main process does not have yet says «restart the a
   assert.match(app, /async function downloadPreparedData\(\) \{[\s\S]*?catch \(error\) \{ learningError\(error\); \}/);
   assert.match(app, /Cal reiniciar l’app per activar aquesta funció: tanca-la \(⌘Q\) i torna-la a obrir\./);
 });
+
+test('Entrenament: a line above each section (Dataset, Beta, Estable)', () => {
+  for (const label of ['Dataset', 'Beta', 'Estable']) {
+    assert.match(app, new RegExp(`<Box borderTopWidth="1px" borderColor="border" pt="3" data-training-section>\\n\\s*<Text fontSize="2xs" color="fg\\.muted" textTransform="uppercase" letterSpacing="0\\.1em" mb="1\\.5">${label}</Text>`), label);
+  }
+});
