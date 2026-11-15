@@ -2241,8 +2241,9 @@ export function App(): React.JSX.Element {
           {railGroup('top')}
           {railGroup('bottom')}
         </Flex>
-        <Flex direction="column" h="full" minH="0" minW="0" overflow="hidden" pt={ownTitleBar ? '0' : '6px'} pr="6px">
-        <Box flex="1" minH="0" minW="0" overflow="hidden">
+        {/* Only clipped sideways, so the panes' shadow («amb ombra») shows below them too, with room above the status bar. */}
+        <Flex direction="column" h="full" minH="0" minW="0" overflowX="clip" pt={ownTitleBar ? '0' : '6px'} pr="6px" pb="2">
+        <Box flex="1" minH="0" minW="0" overflowX="clip">
         {topRow}
         </Box>
         {bottomDock}

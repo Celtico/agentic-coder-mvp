@@ -124,3 +124,10 @@ test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing sta
   assert.match(source, /useEffect\(\(\) => \(\) => endDragRef\.current\?\.\(\), \[\]\)/);
   assert.match(source, /endDragRef\.current = end\n/);
 });
+
+test('nothing round the rows clips them vertically, so a pane’s shadow shows below it too', () => {
+  const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  assert.match(row, /<Flex ref=\{rowRef\} h="full" w="full" minW="0" minH="0" overflowX="clip"/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" overflowX="clip" pt=\{ownTitleBar \? '0' : '6px'\} pr="6px" pb="2">\n\s*<Box flex="1" minH="0" minW="0" overflowX="clip">/);
+});

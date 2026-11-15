@@ -82,7 +82,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   }
 
   return (
-    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflow="hidden" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
+    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflowX="clip" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
       {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer onPointerUp={() => setDragging(null)}/>}
       {items.map((item) => {
         // The panes clip their own content (their Card); these boxes do not, so a pane's shadow («amb ombra») shows round its corners.
