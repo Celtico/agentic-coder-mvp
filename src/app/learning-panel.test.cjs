@@ -82,3 +82,7 @@ test('a function the running main process does not have yet says «restart the a
   assert.match(app, /async function downloadPreparedData\(\) \{[\s\S]*?catch \(error\) \{ learningError\(error\); \}/);
   assert.match(app, /Cal reiniciar l’app per activar aquesta funció: tanca-la \(⌘Q\) i torna-la a obrir\./);
 });
+
+test('Entrenament: a separator (Chakra’s) between its sections, Dataset | Beta | Estable', () => {
+  for (const label of ['Beta', 'Estable']) assert.match(app, new RegExp(`<Separator data-training-separator/>\\n\\s*<Box>\\n\\s*<Text fontSize="2xs" color="fg\\.muted" textTransform="uppercase" letterSpacing="0\\.1em" mb="1\\.5">${label}</Text>`), label);
+});
