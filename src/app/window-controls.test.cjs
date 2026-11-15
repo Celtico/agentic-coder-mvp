@@ -66,8 +66,11 @@ test('yellow and green turn into restore when the window is already minimized or
 test('the colours and sizes come from the theme, not from the component', () => {
   const source = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
   assert.doesNotMatch(source, /#[0-9a-f]{3,8}\b|\d+px/i);
+  // The lights: Chakra's red, yellow and green, and Chakra's size and spacing scale (3 = 12 px, 2 = 8 px).
   const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  for (const token of ['"window.close"', '"window.minimize"', '"window.maximize"', 'windowTitleBar: { value: "28px" }', 'windowLight: { value: "12px" }', 'windowLights: { value: "52px" }', 'windowLightGap: { value: "8px" }', 'windowLightInset: { value: "12px" }']) assert.ok(theme.includes(token), token);
+  for (const token of ['"window.close": { value: "{colors.red.500}" }', '"window.minimize": { value: "{colors.yellow.400}" }', '"window.maximize": { value: "{colors.green.500}" }']) assert.ok(theme.includes(token), token);
+  assert.match(source, /boxSize="3"/);
+  assert.match(source, /gap="2"/);
 });
 
 test('the floating window: a Mac window’s rounder corners and a header of the window’s own colour', () => {

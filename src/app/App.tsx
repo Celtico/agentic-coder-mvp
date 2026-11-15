@@ -230,7 +230,7 @@ export function App(): React.JSX.Element {
   const appAreaRef = useRef<HTMLDivElement | null>(null);
   const chakraSystem = useChakraContext();
   const [historyStart] = useState(() => {
-    const top = ownTitleBar ? parseFloat(String(chakraSystem.token('sizes.appTitleBar', '36px'))) || 36 : 0;
+    const top = ownTitleBar ? parseFloat(String(chakraSystem.token('sizes.9', '36px'))) || 36 : 0;
     const saved = { ...(initialView.history.position ?? { x: 76, y: top + 28 }), ...(initialView.history.size ?? { width: 1120, height: 720 }) };
     return clampWindowRect(saved, { x: 0, y: top, width: window.innerWidth, height: window.innerHeight - top });
   });
@@ -2307,7 +2307,7 @@ export function App(): React.JSX.Element {
   return (
     <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}><PaneBgContext.Provider value={appearance.paneBg}>
     <Flex h="100dvh" w="100vw" minW="0" direction="column" overflow="hidden" bg="canvas">
-    {ownTitleBar && <Flex flex="none" h="appTitleBar" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
+    {ownTitleBar && <Flex flex="none" h="9" align="center" justify="center" gap="2" pl="84px" pr="84px" bg="canvas" userSelect="none" data-drag-region>
       <Mark size={15} busy={loading || modelChanging}/>
       <Text fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">Agentic Coder</Text>
       {project && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">— {project.path.split(/[\\/]/).filter(Boolean).at(-1)}</Text>}

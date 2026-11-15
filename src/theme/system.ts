@@ -7,14 +7,7 @@ import { accordionRecipe, dialogRecipe, floatingPanelRecipe, paneCardRecipe, pan
 export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultConfig, defineConfig({
   globalCss: {
     "html, body, #root": { height: "100%", width: "100%", margin: 0, overflow: "hidden" },
-    html: { colorScheme: "light", "&.dark": { colorScheme: "dark" } },
-    body: { minHeight: "100dvh", bg: "bg", color: "fg", fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" },
-    "*, *::before, *::after": { boxSizing: "border-box" },
-    "button, input, textarea": { font: "inherit" },
-    "input, textarea, [contenteditable=true]": { cursor: "text" },
-    "button, [role=button], a[href]": { cursor: "pointer" },
-    // Els botons neutres de Chakra prenen el color de text de l'app, en mode clar i fosc.
-    '.chakra-button[data-variant="outline"], .chakra-button[data-variant="ghost"]': { color: "fg" },
+    // Colours, fonts, box sizing… are Chakra's own (its globalCss and preflight); only the app's layout here.
     "webview": { display: "flex" },
     // The app's own title bar on macOS: the part marked data-drag-region moves the window.
     // (an Electron property, not in Chakra's style types).
@@ -34,33 +27,10 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         brand: BRAND_TOKENS,
         agentic: accentTokens(accent),
       },
-      // Every panel of the window (columns, the Converses and Fitxers boxes, the evaluation cards).
-      radii: {
-        panel: { value: "10px" },
-      },
-      // A floating window's title bar is a thin macOS one: 28 px high, with the traffic lights 12 px
-      // round, 8 px apart and 12 px in from the edge, centred in the bar (src/app/window-controls.tsx).
-      sizes: {
-        windowTitleBar: { value: "28px" },
-        // The app's own title bar on macOS (App.tsx, data-drag-region); floating windows stay below it.
-        appTitleBar: { value: "36px" },
-        windowLight: { value: "12px" },
-        windowLights: { value: "52px" },
-      },
-      spacing: {
-        windowLightGap: { value: "8px" },
-        windowLightInset: { value: "12px" },
-      },
     },
     textStyles: {
       chatMessage: {
         value: { fontSize: "sm", lineHeight: "1.7" },
-      },
-      interface: {
-        value: { fontSize: "sm", lineHeight: "1.45" },
-      },
-      caption: {
-        value: { fontSize: "xs", lineHeight: "1.35" },
       },
     },
     semanticTokens: {

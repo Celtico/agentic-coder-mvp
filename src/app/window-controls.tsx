@@ -21,8 +21,8 @@ function Light({ color, label, children, ...trigger }: Omit<IconButtonProps, "co
       display="inline-flex"
       alignItems="center"
       justifyContent="center"
-      boxSize="windowLight"
-      minW="windowLight"
+      boxSize="3"
+      minW="3"
       rounded="full"
       bg={color}
       color="transparent"
@@ -48,7 +48,7 @@ export function WindowTitleBar({ icon, title, subtitle, subtitleTitle, stage, na
   const minimized = stage === "minimized"
   const maximized = stage === "maximized"
   const lights = (
-    <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic" me="1">
+    <FloatingPanel.Control data-group display="flex" alignItems="center" gap="2" colorPalette="agentic" me="1">
       <FloatingPanel.CloseTrigger asChild>
         <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
       </FloatingPanel.CloseTrigger>

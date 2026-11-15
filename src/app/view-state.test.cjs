@@ -110,8 +110,8 @@ test('the history window opens, moves and grows only inside the area below the a
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /getBoundaryEl=\{\(\) => appAreaRef\.current\}/);
   assert.match(app, /<Grid ref=\{appAreaRef\}/);
-  assert.match(app, /h="appTitleBar"/);
+  // The app's title bar is Chakra's size 9 (36 px), and the window's top is read from the same token.
+  assert.match(app, /h="9" align="center" justify="center"/);
+  assert.match(app, /chakraSystem\.token\('sizes\.9', '36px'\)/);
   assert.match(app, /clampWindowRect\(saved, \{ x: 0, y: top/);
-  const theme = fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
-  assert.ok(theme.includes('appTitleBar: { value: "36px" }'));
 });
