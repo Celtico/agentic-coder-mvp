@@ -32,7 +32,9 @@ try:
     # An optional LoRA adapter goes on top of the base weights, which are never modified.
     adapter_path = os.environ.get("AGENT_MLX_ADAPTER_PATH") or None
     _load_started = time.perf_counter()
-    model, tokenizer = load(sys.argv[1], adapter_path=adapter_path)
+    # A model whose files lost their tool-call format gets the one its chat template writes (mlx_text.py).
+    _tool_parser = mlx_text.tool_parser_hint(sys.argv[1])
+    model, tokenizer = load(sys.argv[1], adapter_path=adapter_path, **({"tokenizer_config": {"tool_parser_type": _tool_parser}} if _tool_parser else {}))
     # Log del model: how long the load took, reported with the first traced call.
     LOAD_SECONDS = round(time.perf_counter() - _load_started, 2)
     emit({"type": "ready", "adapter": adapter_path, "loadSeconds": LOAD_SECONDS})

@@ -1,5 +1,6 @@
 """Text handling of the MLX worker that does not need a model: kept apart so it can be tested."""
 import json
+import os
 import re
 
 
@@ -122,3 +123,25 @@ def native_history(messages):
         out.append({"role": "assistant", "content": text.strip(), "tool_calls": calls})
         pending_tool = calls[-1]["function"]["name"]
     return out
+
+
+def tool_parser_hint(model_dir):
+    """The tool-call format to load a model with when its files do not declare one: a conversion that
+    lost `tool_parser_type` (MiMo V2.6 with vision, nativ-community, 15-11-2026) but whose chat template
+    writes Qwen3-Coder's calls (<tool_call><function=…>) gets that parser, as its text-only sibling
+    declares it. Then the worker reads its calls and gives it its history in its own format. Nothing in
+    the model's folder is changed; a model that declares its format keeps it (None)."""
+    try:
+        with open(os.path.join(model_dir, "tokenizer_config.json"), encoding="utf-8") as handle:
+            config = json.load(handle)
+    except Exception:
+        config = {}
+    if config.get("tool_parser_type"):
+        return None
+    template = config.get("chat_template") if isinstance(config.get("chat_template"), str) else ""
+    try:
+        with open(os.path.join(model_dir, "chat_template.jinja"), encoding="utf-8") as handle:
+            template += handle.read()
+    except Exception:
+        pass
+    return "qwen3_coder" if "<tool_call><function=" in template else None

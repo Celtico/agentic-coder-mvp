@@ -103,3 +103,32 @@ print(json.dumps([n('Vull revisar.<tool_call><function=read_file>{"path": "src/m
   assert.equal(plain, 'Sense cap eina.');
   assert.equal(broken, '<tool_call>no és una crida</tool_call>');
 });
+
+// MiMo V2.6 with vision (nativ-community) lost `tool_parser_type`; mlx_lm then guesses json_tools and
+// neither reads its XML calls nor gives it its history in its own format. Its template says which it is.
+test('a model without its tool-call format declared gets the one its chat template writes; a declared one is kept', () => {
+  const root = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'agentic-parser-hint-'));
+  try {
+    const model = (name, config, template) => {
+      fs.mkdirSync(path.join(root, name));
+      if (config) fs.writeFileSync(path.join(root, name, 'tokenizer_config.json'), JSON.stringify(config));
+      if (template) fs.writeFileSync(path.join(root, name, 'chat_template.jinja'), template);
+      return path.join(root, name);
+    };
+    const xml = "{{- '<tool_call><function=' ~ tool_call.name ~ '>' -}}";
+    const dirs = [
+      model('lost', { tokenizer_class: 'Qwen2Tokenizer' }, xml),
+      model('declared', { tool_parser_type: 'qwen3_coder' }, xml),
+      model('inline', { chat_template: xml }, null),
+      model('json', {}, '<tool_call>\n{"name": ...}</tool_call>'),
+      model('empty', null, null),
+    ];
+    const result = spawnSync('python3', ['-I', '-c', `import sys, json; sys.path.insert(0, ${JSON.stringify(__dirname)})
+import mlx_text
+print(json.dumps([mlx_text.tool_parser_hint(d) for d in ${JSON.stringify(dirs)}]))`], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), ['qwen3_coder', null, 'qwen3_coder', null, null]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
+  assert.match(worker, /_tool_parser = mlx_text\.tool_parser_hint\(sys\.argv\[1\]\)\n\s*model, tokenizer = load\(sys\.argv\[1\], adapter_path=adapter_path, \*\*\(\{"tokenizer_config": \{"tool_parser_type": _tool_parser\}\} if _tool_parser else \{\}\)\)/);
+});
