@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mlx_lock  # noqa: E402
+import mlx_text  # noqa: E402
 
 ADAPTER_FILE = "adapters.safetensors"
 
@@ -111,7 +112,7 @@ def fuse(args):
     adapter = args.adapter_path
     # PEFT looks for adapter_model.safetensors; the app's name is adapters.safetensors.
     if not os.path.exists(os.path.join(adapter, "adapter_model.safetensors")) and os.path.exists(os.path.join(adapter, ADAPTER_FILE)):
-        os.symlink(ADAPTER_FILE, os.path.join(adapter, "adapter_model.safetensors"))
+        mlx_text.link_or_copy(os.path.join(adapter, ADAPTER_FILE), os.path.join(adapter, "adapter_model.safetensors"))
     PeftConfig.from_pretrained(adapter)
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float16, device_map="cpu")
     model = PeftModel.from_pretrained(model, adapter).merge_and_unload()

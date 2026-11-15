@@ -156,3 +156,13 @@ def tool_parser_type(model_dir):
     except Exception:
         declared = None
     return declared or tool_parser_hint(model_dir)
+
+
+def link_or_copy(source, target):
+    """`target` as a link to `source` (beside it); a copy where links need permissions (Windows)."""
+    import shutil
+
+    try:
+        os.symlink(os.path.basename(source), target)
+    except (OSError, NotImplementedError):
+        shutil.copyfile(source, target)

@@ -8,14 +8,16 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
-// The engine of each platform: MLX on a Mac (Apple Silicon); on Linux, CUDA (PyTorch + transformers on
+// The engine of each platform: MLX on a Mac (Apple Silicon); on Linux and Windows, CUDA (PyTorch + transformers on
 // NVIDIA GPUs, src/core/assistant/cuda-worker.py). A Linux model is a Hugging Face safetensors folder
 // under models/hf/<folder>, added from Gestiona els models; the Mac's MLX models are not offered there.
 const engineFor = (platform = process.platform) => platform === 'darwin' ? 'mlx' : 'cuda';
 /** The folder under models/ where each engine keeps the models it can load. */
 const modelsFolder = (platform = process.platform) => engineFor(platform) === 'mlx' ? 'mlx' : 'hf';
-/** The Python that runs the engine: models/.mlx-venv on a Mac, models/.cuda-venv on Linux. */
-const enginePython = (modelsRoot, platform = process.platform) => path.join(modelsRoot, engineFor(platform) === 'mlx' ? '.mlx-venv' : '.cuda-venv', 'bin', 'python');
+/** The Python that runs the engine: models/.mlx-venv on a Mac, models/.cuda-venv on Linux and Windows (Scripts\python.exe there). */
+const enginePython = (modelsRoot, platform = process.platform) => platform === 'win32'
+  ? path.win32.join(modelsRoot, '.cuda-venv', 'Scripts', 'python.exe')
+  : path.join(modelsRoot, engineFor(platform) === 'mlx' ? '.mlx-venv' : '.cuda-venv', 'bin', 'python');
 
 const builtInModels = [
   { id: 'qwen-7b-mlx', label: 'Qwen2.5-Coder 7B · MLX', modelId: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', runtime: 'mlx', hfCache: 'mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', aliases: ['7b'] },

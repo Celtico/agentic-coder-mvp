@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const processes = require('../../src/electron/processes.cjs');
 const { executeProjectChecks } = require('../../src/electron/project-checks.cjs');
 
 // The project tools of the app, reduced to what a benchmark task can use without a window: reading,
@@ -33,7 +33,7 @@ async function listProjectFiles(root, directory = root, found = []) {
 }
 
 function runNpmScript(root, script, timeoutMs = 60000) {
-  return runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], root, timeoutMs);
+  return runCommand('npm', ['run', script], root, timeoutMs);
 }
 
 function runCommand(command, args, root, timeoutMs = 60000) {
@@ -42,7 +42,10 @@ function runCommand(command, args, root, timeoutMs = 60000) {
     // itself runs under node --test.
     const env = { ...process.env, CI: '1', FORCE_COLOR: '0' };
     delete env.NODE_TEST_CONTEXT;
-    const child = spawn(command, args, { cwd: root, env });
+    // npm and npx through processes.cjs: their .cmd on Windows, with the arguments quoted (or refused).
+    let child;
+    try { child = processes.start(command, args, { cwd: root, env, detached: false }); }
+    catch (error) { resolve({ code: -1, output: error.message }); return; }
     let output = '';
     const keep = (chunk) => { output = (output + chunk.toString()).slice(-12000); };
     child.stdout.on('data', keep);
@@ -63,14 +66,14 @@ function createSandboxExecutor(root, { allowInstall = false } = {}) {
     calls.push(record);
     try {
       if (allowInstall && INSTALL_TOOLS.has(name)) {
-        const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        const npm = 'npm';
         if (name === 'install_dependencies') return runCommand(npm, ['install'], root, 600000);
         if (typeof args.packageName !== 'string' || !PACKAGE_NAME.test(args.packageName)) throw new Error('Nom de paquet npm no vàlid.');
         record.package = args.packageName;
         if (name === 'install_package') return runCommand(npm, ['install', ...(args.dev === true ? ['--save-dev'] : []), args.packageName], root, 300000);
         const extra = Array.isArray(args.args) ? args.args : [];
         if (extra.length > 10 || extra.some((item) => typeof item !== 'string' || item.length > 120 || /[\r\n\0;&|`$<>]/.test(item))) throw new Error('Els arguments de l’ordre no són vàlids.');
-        return runCommand(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['-y', args.packageName, ...extra], root, 300000);
+        return runCommand('npx', ['-y', args.packageName, ...extra], root, 300000);
       }
       if (UNAVAILABLE.has(name)) throw new Error(`L’eina ${name} no està disponible en aquesta avaluació: no hi ha xarxa, navegador ni Git.`);
       if (name === 'list_files') return { files: await listProjectFiles(root) };

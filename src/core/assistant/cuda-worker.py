@@ -57,7 +57,7 @@ try:
         # The app names a beta's weights adapters.safetensors (as mlx_lm does); PEFT reads adapter_model.safetensors.
         named = os.path.join(adapter_path, "adapter_model.safetensors")
         if not os.path.exists(named) and os.path.exists(os.path.join(adapter_path, "adapters.safetensors")):
-            os.symlink("adapters.safetensors", named)
+            mlx_text.link_or_copy(os.path.join(adapter_path, "adapters.safetensors"), named)
 
         model = PeftModel.from_pretrained(model, adapter_path)
     model.eval()

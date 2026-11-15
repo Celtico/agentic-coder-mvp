@@ -24,6 +24,8 @@ const dictation = require('./dictation.cjs');
 const versions = require('./learning-versions.cjs');
 const modelManager = require('./model-manager.cjs');
 const llmCalls = require('./llm-calls.cjs');
+// Processes on every platform: npm/npx .cmd on Windows, stopping a whole process tree (processes.cjs).
+const processes = require('./processes.cjs');
 const { buildMenuTemplate, PANES: MENU_PANES } = require('./app-menu.cjs');
 const menuLabels = require('./menu-labels.cjs');
 const { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normalizeAgentPreferences, migrateAgentPreferences, limitHistory } = require('./preferences.cjs');
@@ -453,9 +455,7 @@ async function readProjectPackage(root) {
 
 function startProjectProcess(root, script) {
   return new Promise((resolve) => {
-    const child = spawn('npm', ['run', script], {
-      cwd: root, shell: false, detached: process.platform !== 'win32', env: { ...process.env }
-    });
+    const child = processes.start('npm', ['run', script], { cwd: root, env: { ...process.env } });
     activeProjectProcess = child;
     activeProjectRoot = root;
     activeProjectOutput = '';
@@ -501,11 +501,9 @@ function stopProjectProcess() {
       resolve(result);
     };
     child.once('close', (code, signal) => finish({ stopped: true, code, signal, output: activeProjectOutput }));
-    try { if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); }
-    catch { child.kill('SIGTERM'); }
+    processes.stopTree(child, 'SIGTERM');
     const forceTimer = setTimeout(() => {
-      try { if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); }
-      catch {}
+      processes.stopTree(child, 'SIGKILL');
       finish({ stopped: true, forced: true, output: activeProjectOutput });
     }, 4000);
   });
@@ -1262,7 +1260,9 @@ async function executeNpmCommand(root, args, timeoutMs) {
 
 async function executeBinary(executable, args, root, timeoutMs) {
   return new Promise((resolve) => {
-    const child = spawn(executable, args, { cwd: root, shell: false, detached: process.platform !== 'win32', env: { ...process.env, CI: '1' } });
+    let child;
+    try { child = processes.start(executable, args, { cwd: root, env: { ...process.env, CI: '1' } }); }
+    catch (error) { resolve({ code: -1, output: error.message }); return; }
     let output = '';
     let settled = false;
     let timedOut = false;
@@ -1272,8 +1272,7 @@ async function executeBinary(executable, args, root, timeoutMs) {
     const append = (chunk) => { output = (output + chunk.toString()).slice(-100000); show(chunk.toString()); };
     const timer = setTimeout(() => {
       timedOut = true;
-      try { if (process.platform !== 'win32') process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); }
-      catch { child.kill('SIGTERM'); }
+      processes.stopTree(child, 'SIGTERM');
     }, timeoutMs);
     child.stdout.on('data', append);
     child.stderr.on('data', append);
@@ -1413,7 +1412,7 @@ const sendTraining = (event) => { if (win && !win.isDestroyed()) win.webContents
 
 function runStreaming(command, args, { onLine, signal, env } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: projectModelsDirectory(), env: { AGENT_MLX_LOCK_LABEL: 'un entrenament d’Agentic Coder', ...process.env, ...env }, detached: true });
+    const child = processes.start(command, args, { cwd: projectModelsDirectory(), env: { AGENT_MLX_LOCK_LABEL: 'un entrenament d’Agentic Coder', ...process.env, ...env } });
     let output = '';
     let partial = '';
     const take = (chunk) => {
@@ -1425,7 +1424,7 @@ function runStreaming(command, args, { onLine, signal, env } = {}) {
     };
     child.stdout.on('data', take);
     child.stderr.on('data', take);
-    const stop = () => { try { process.kill(-child.pid, 'SIGTERM'); } catch {} };
+    const stop = () => processes.stopTree(child, 'SIGTERM');
     signal?.addEventListener('abort', stop, { once: true });
     child.on('error', (error) => { signal?.removeEventListener('abort', stop); resolve({ code: -1, output: error.message }); });
     child.on('close', (code) => { signal?.removeEventListener('abort', stop); resolve({ code: code ?? -1, output }); });

@@ -38,17 +38,20 @@ async function sourceFiles(root, directory = root, found = []) {
 
 /** Serves the built app with `vite preview` and loads it in Electron. Null when it cannot be tried. */
 async function loadBuiltPage(root) {
-  const vite = path.join(root, 'node_modules', '.bin', 'vite');
-  const electron = path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron');
+  const vite = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'vite.cmd' : 'vite');
+  const electron = process.platform === 'win32' ? require('electron') : path.join(__dirname, '..', '..', 'node_modules', '.bin', 'electron');
   if (!fsSync.existsSync(vite) || !fsSync.existsSync(electron)) return null;
   const port = 4800 + Math.floor(Math.random() * 400);
-  const preview = spawn(vite, ['preview', '--port', String(port), '--strictPort'], { cwd: root, detached: true, stdio: 'ignore' });
+  // On Windows the project's vite is vite.cmd; stopped with its whole tree (src/electron/processes.cjs).
+  const preview = process.platform === 'win32'
+    ? require('../../src/electron/processes.cjs').start('vite', ['preview', '--port', String(port), '--strictPort'], { cwd: root, stdio: 'ignore', env: { ...process.env, PATH: `${path.join(root, 'node_modules', '.bin')};${process.env.PATH || ''}` } })
+    : spawn(vite, ['preview', '--port', String(port), '--strictPort'], { cwd: root, detached: true, stdio: 'ignore' });
   try {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     const result = await runCommand(electron, [path.join(__dirname, 'load-page.cjs'), `http://localhost:${port}/`], __dirname, 60000);
     const line = result.output.split('\n').find((item) => item.startsWith('PAGE_RESULT '));
     return line ? JSON.parse(line.slice('PAGE_RESULT '.length)) : { errors: [`no s’ha pogut carregar: ${result.output.slice(-300)}`], textLength: 0 };
-  } finally { try { process.kill(-preview.pid, 'SIGKILL'); } catch {} }
+  } finally { require('../../src/electron/processes.cjs').stopTree(preview, 'SIGKILL'); }
 }
 
 function appCheck({ chakra }) {
