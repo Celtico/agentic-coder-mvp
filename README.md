@@ -42,6 +42,25 @@ En tancar i tornar a obrir, l’app queda com la vas deixar: la mida i la posici
 
 La decisió del motor, els models provats i l'aprenentatge estan documentats a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
 
+## Descàrrega
+Les versions publicades són a [Releases](https://github.com/Celtico/agentic-coder-mvp/releases). Hi ha un
+`.dmg` per a Mac amb Apple Silicon, i un `.AppImage` i un `.deb` per a Linux. Els canvis de cada versió són
+al [CHANGELOG](CHANGELOG.md).
+
+Els models no van dins de l'app perquè ocupen uns quants GB. Tampoc hi va el motor de Python. La primera
+vegada cal preparar-los:
+
+- **Mac.** L'app no està signada. La primera vegada, obre-la amb clic dret › Obre, o fes
+  `xattr -dr com.apple.quarantine "/Applications/Agentic Coder.app"`.
+  Després crea el motor MLX a la carpeta de dades de l'app i afegeix els models des de Gestiona els models:
+  ```bash
+  python3 -m venv ~/Library/Application\ Support/Agentic\ Coder/models/.mlx-venv
+  ~/Library/Application\ Support/Agentic\ Coder/models/.mlx-venv/bin/pip install mlx-lm mlx-vlm mlx-whisper huggingface_hub
+  ```
+- **Linux (GPU NVIDIA).** Cal el controlador de NVIDIA. Després prepara el motor CUDA amb
+  `MODELS_DIR=~/.config/Agentic\ Coder/models bash scripts/setup-linux.sh`, des del repositori. Ho explica
+  [docs/linux.md](docs/linux.md).
+
 ## Requisits
 - macOS amb Apple Silicon. També hi ha un camí per a **Linux amb GPU NVIDIA** (motor CUDA en lloc d’MLX): mira [docs/linux.md](docs/linux.md).
 - Node.js 20 LTS o posterior (recomanat).

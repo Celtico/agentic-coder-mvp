@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first desktop coding agent MVP",
+  "homepage": "https://github.com/Celtico/agentic-coder-mvp",
+  "repository": { "type": "git", "url": "https://github.com/Celtico/agentic-coder-mvp.git" },
   "main": "src/electron/main.cjs",
   "scripts": {
     "start": "npm run typecheck && npm run build:agent && npm run build:ui && electron .",
@@ -66,7 +68,7 @@
       "target": ["AppImage", "deb"],
       "category": "Development",
       "icon": "assets/icon.png",
-      "maintainer": "Agentic Coder"
+      "maintainer": "Agentic Coder <agentic-coder@users.noreply.github.com>"
     },
     "mac": {
       "target": [

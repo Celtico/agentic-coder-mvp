@@ -102,9 +102,41 @@ test('the PC’s setup: requirements, a script that builds models/.cuda-venv, an
   const requirements = read('requirements-linux.txt');
   for (const name of ['transformers', 'accelerate', 'bitsandbytes', 'peft', 'faster-whisper', 'huggingface_hub']) assert.match(requirements, new RegExp(`^${name}>=`, 'm'), name);
   const script = read('scripts/setup-linux.sh');
-  assert.match(script, /python3 -m venv models\/\.cuda-venv/);
-  assert.match(script, /pip install torch --index-url/);
-  assert.match(script, /pip install -r requirements-linux\.txt/);
+  assert.match(script, /MODELS="\$\{MODELS_DIR:-models\}"\nVENV="\$MODELS\/\.cuda-venv"/, 'the repository’s models/ or the installed app’s data folder');
+  assert.match(script, /python3 -m venv "\$VENV"/);
+  assert.match(script, /pip" install torch --index-url/);
+  assert.match(script, /pip" install -r requirements-linux\.txt/);
   const guide = read('docs/linux.md');
   assert.match(guide, /encara no s'ha\s+> executat en un PC amb GPU NVIDIA/, 'honest about it being untested on real hardware');
+});
+
+test('versions and releases: package.json’s version under the mark, a tag that must match it, CHANGELOG as the notes', () => {
+  const pkg = JSON.parse(read('package.json'));
+  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+  const changelog = read('CHANGELOG.md');
+  assert.match(changelog, /^## \[Unreleased\]$/m);
+  assert.match(changelog, new RegExp(`^## \\[${pkg.version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm'), 'a section for the current version');
+  const workflow = require('js-yaml').load(read('.github/workflows/release.yml'));
+  assert.deepEqual(workflow.on, { push: { tags: ['v*'] } });
+  assert.deepEqual(workflow.permissions, { contents: 'write' });
+  const steps = workflow.jobs.build.steps;
+  const run = steps.map((step) => step.run || '').join('\n');
+  assert.match(run, /if \[ "\$\{GITHUB_REF_NAME\}" != "v\$\{version\}" \]/);
+  assert.match(run, /CHANGELOG\.md > release-notes\.md/);
+  assert.match(run, /npm run \$\{\{ matrix\.dist \}\} -- --publish never/);
+  const release = steps.find((step) => String(step.uses).startsWith('softprops/action-gh-release@'));
+  assert.match(release.uses, /@v\d+\.\d+\.\d+$/, 'pinned to a full version');
+  assert.equal(release.with.body_path, 'release-notes.md');
+  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => [item.os, item.dist]), [['macos-14', 'dist:mac'], ['ubuntu-latest', 'dist:linux']]);
+  // The changelog's notes come out of the awk the workflow runs.
+  const { execFileSync } = require('node:child_process');
+  const awk = /awk -v v="\$version" '([\s\S]*?)' CHANGELOG\.md/.exec(run)[1];
+  const notes = execFileSync('awk', ['-v', `v=${pkg.version}`, awk, path.join(root, 'CHANGELOG.md')], { encoding: 'utf8' });
+  assert.match(notes, /### Agent/);
+  assert.doesNotMatch(notes, /## \[/);
+  const app = read('src/app/App.tsx');
+  assert.match(app, /\{appVersion && <Text [^>]*fontSize="2xs" color="fg\.subtle"[^>]*data-app-version>v\{appVersion\}<\/Text>\}/);
+  assert.match(read('src/electron/main.cjs'), /ipcMain\.handle\('app:version', async \(\) => app\.getVersion\(\)\);/);
+  // Nothing of the models or the local data goes into the package.
+  assert.ok(!pkg.build.files.some((pattern) => /^(models|logs)\b/.test(pattern)));
 });

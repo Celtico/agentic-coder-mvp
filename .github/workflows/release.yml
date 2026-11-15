@@ -1,0 +1,74 @@
+# Releases: pushing a tag vX.Y.Z builds the app on GitHub's machines and attaches the files to a Release:
+# a .dmg for Macs with Apple Silicon and an AppImage and a .deb for Linux. Nothing is signed (no secrets).
+# The tag must match package.json's version; the release notes are that version's section of CHANGELOG.md.
+# How to publish a version: docs/publicar.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            dist: dist:mac
+            files: dist/*.dmg
+          - os: ubuntu-latest
+            dist: dist:linux
+            files: |
+              dist/*.AppImage
+              dist/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: The tag is package.json's version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "El tag ${GITHUB_REF_NAME} no coincideix amb la versió de package.json (v${version})." >&2
+            exit 1
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md no té cap secció ## [${version}]." >&2
+            exit 1
+          fi
+
+      - run: npm ci
+
+      # The tests are the Mac's (the app's default engine); the Linux job only builds.
+      - if: runner.os == 'macOS'
+        run: npm test
+
+      - name: Build
+        run: npm run ${{ matrix.dist }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - uses: softprops/action-gh-release@v2.2.2
+        with:
+          body_path: release-notes.md
+          files: ${{ matrix.files }}
