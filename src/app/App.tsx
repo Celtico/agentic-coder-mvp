@@ -1775,6 +1775,25 @@ export function App(): React.JSX.Element {
     <HStack flex="1" gap="2" minW="0">{Icon && <Icon size={14}/>}<Text fontSize={Icon ? 'sm' : 'xs'} fontWeight={Icon ? 'semibold' : 'medium'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{title}</Text>{count !== undefined && <Badge size="xs" variant="subtle" colorPalette="gray" color="fg" bg="bg" borderRadius="xs" px="1.5">{count}</Badge>}</HStack>
     <Accordion.ItemIndicator/>
   </>;
+  // One saved case in Aprenentatge local (Casos desats, Dades manuals): its task, check, date and actions.
+  const caseRow = (item: LearningCase) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface" minW="0">
+                <Stack flex="1" minW="0" gap="1">
+                  <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere" title={item.task}>{item.task}</Text>
+                  <Text fontSize="xs" color="fg.muted" lineClamp={2} overflowWrap="anywhere">Comprovació: {item.evidence || '—'}</Text>
+                  <HStack gap="1.5" flexWrap="wrap">
+                    <Text fontSize="2xs" color="fg.muted">{item.at && !Number.isNaN(Date.parse(item.at)) ? new Date(item.at).toLocaleString() : 'Sense data'}{item.model ? ` · ${item.model}` : ''}</Text>
+                    <Badge size="sm" variant="subtle">{item.turns} {item.turns === 1 ? 'petició' : 'peticions'} · {item.steps} {item.steps === 1 ? 'pas' : 'passos'}</Badge>
+                    {item.source === 'manual' && <Badge size="sm" variant="subtle" colorPalette="blue" title="Escrit a mà a Dades manuals › Crea un cas.">manual</Badge>}
+                    {item.withoutToolSteps && item.source !== 'manual' && <Badge size="sm" variant="subtle" colorPalette="yellow" title="No té cap pas d’eina: només hi ha la petició i la resposta.">Sense passos d’eina</Badge>}
+                    {item.editedAt && <Badge size="sm" variant="outline">Editat</Badge>}
+                  </HStack>
+                </Stack>
+                <HStack flex="none" gap="0">
+                  <IconButton icon={Eye} label="Mostra el detall" disabled={caseBusy !== null} onClick={() => void openCaseDetail(item.id)}/>
+                  <IconButton icon={Pencil} label="Edita la petició i la comprovació" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseEdit({ id: item.id, task: item.task, evidence: item.evidence }); }}/>
+                  <IconButton icon={Trash} label="Esborra el cas" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseToDelete(item); }}/>
+                </HStack>
+              </HStack>;
   const learningPane = (
     <Box h="full" minH="0" p="3" bg="bg" overflowY="auto"><Stack gap="3">
       {learningStatus && <Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice>}
@@ -1787,35 +1806,25 @@ export function App(): React.JSX.Element {
               {caseError && !caseEdit && !caseToDelete && <Box mb="2"><Notice tone="warning">{caseError}</Notice></Box>}
               {learningCases && <>
             <Stack gap="1.5">
-              {learningCases.cases.map((item) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface" minW="0">
-                <Stack flex="1" minW="0" gap="1">
-                  <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere" title={item.task}>{item.task}</Text>
-                  <Text fontSize="xs" color="fg.muted" lineClamp={2} overflowWrap="anywhere">Comprovació: {item.evidence || '—'}</Text>
-                  <HStack gap="1.5" flexWrap="wrap">
-                    <Text fontSize="2xs" color="fg.muted">{item.at && !Number.isNaN(Date.parse(item.at)) ? new Date(item.at).toLocaleString() : 'Sense data'}{item.model ? ` · ${item.model}` : ''}</Text>
-                    <Badge size="sm" variant="subtle">{item.turns} {item.turns === 1 ? 'petició' : 'peticions'} · {item.steps} {item.steps === 1 ? 'pas' : 'passos'}</Badge>
-                    {item.source === 'manual' && <Badge size="sm" variant="subtle" colorPalette="blue" title="Escrit a mà a Dades preparades › Crea un cas.">manual</Badge>}
-                    {item.withoutToolSteps && item.source !== 'manual' && <Badge size="sm" variant="subtle" colorPalette="yellow" title="No té cap pas d’eina: només hi ha la petició i la resposta.">Sense passos d’eina</Badge>}
-                    {item.editedAt && <Badge size="sm" variant="outline">Editat</Badge>}
-                  </HStack>
-                </Stack>
-                <HStack flex="none" gap="0">
-                  <IconButton icon={Eye} label="Mostra el detall" disabled={caseBusy !== null} onClick={() => void openCaseDetail(item.id)}/>
-                  <IconButton icon={Pencil} label="Edita la petició i la comprovació" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseEdit({ id: item.id, task: item.task, evidence: item.evidence }); }}/>
-                  <IconButton icon={Trash} label="Esborra el cas" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseToDelete(item); }}/>
-                </HStack>
-              </HStack>)}
+              {learningCases.cases.map(caseRow)}
               {!learningCases.cases.length && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas desat.</Text>}
               {learningCases.unreadable > 0 && <Text fontSize="xs" color="fg.muted">{learningCases.unreadable} línies del registre no són un cas llegible i es deixen tal com són.</Text>}
             </Stack>
               </>}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
+          {/* Dades manuals: the cases written by hand, and the button to write one (src/electron/learning-cases.cjs). */}
+          <Accordion.Item value="manual">
+            <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
+              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
+              {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
+              {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
           <Accordion.Item value="data">
             <Accordion.ItemTrigger>{rowHeader('Dades preparades', datasetPreview.counts.included, FileText)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="3">
-              {/* A case written by hand, with the four fields of a verified case. */}
-              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
               <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
                 <Stat label="Examinats" value={datasetPreview.counts.input}/>
                 <Stat label="Preparats" value={datasetPreview.counts.included}/>
@@ -2343,7 +2352,7 @@ export function App(): React.JSX.Element {
         </Dialog.Positioner>
       </Portal>
     </Dialog.Root>
-    {/* Dades preparades › Crea un cas: a verified case written by hand, with the four fields of one. */}
+    {/* Dades manuals › Crea un cas: a verified case written by hand, with the four fields of one. */}
     <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={manualCase !== null} onOpenChange={({ open }) => { if (!open && !manualCaseBusy) setManualCase(null); }}>
       <Portal>
         <Dialog.Backdrop/>
