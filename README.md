@@ -43,7 +43,7 @@ En tancar i tornar a obrir, l’app queda com la vas deixar: la mida i la posici
 La decisió del motor, els models provats i l'aprenentatge estan documentats a [`docs/engine-and-learning.md`](docs/engine-and-learning.md).
 
 ## Requisits
-- macOS amb Apple Silicon.
+- macOS amb Apple Silicon. També hi ha un camí per a **Linux amb GPU NVIDIA** (motor CUDA en lloc d’MLX): mira [docs/linux.md](docs/linux.md).
 - Node.js 20 LTS o posterior (recomanat).
 - Python 3.12 amb MLX en un entorn propi a `models/.mlx-venv` (`python3 -m venv models/.mlx-venv && models/.mlx-venv/bin/pip install mlx-lm`).
 - Connexió a internet per instal·lar dependències i descarregar els pesos una vegada. MiMo (el model base) i Gemma van a `models/mlx/<carpeta>`; el Qwen 7B, a `models/.hf` (memòria cau de Hugging Face). Sense els pesos de MiMo, l’app fa servir el primer model que trobi:
