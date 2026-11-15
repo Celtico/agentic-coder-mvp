@@ -128,3 +128,21 @@ test('the rail: an open panel’s icon in the accent’s fg (its paler tone), a 
   const app = fs.readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /variant="ghost" colorPalette=\{button\.palette\} color=\{button\.palette === 'agentic' \? 'colorPalette\.fg' : 'fg\.muted'\}/);
 });
+
+test('on Linux: ordinary safetensors (never an MLX one), a limit from the GPUs’ memory, and models/hf', () => {
+  const files = [['config.json', 1], ['model-00001.safetensors', 15e9]];
+  const linux = (repo, extra = {}, maxBytes = 56e9) => manager.checkRepository(listing(files, { library_name: 'transformers', tags: [], ...extra }), repo, { platform: 'linux', maxBytes });
+  assert.equal(linux('Qwen/Qwen2.5-Coder-7B-Instruct').ok, true, 'a 15 GB 16-bit model on two 8 GB cards (4-bit when loaded)');
+  assert.match(linux('mlx-community/Qwen2.5-Coder-7B-Instruct-4bit', { library_name: 'mlx' }).problem, /És un model MLX, per a Mac/);
+  assert.match(linux('Qwen/Qwen2.5-Coder-32B-Instruct', {}, 10e9).problem, /no hi cap a la memòria de les GPU/);
+  // The Mac as before: MLX only, 12 GB.
+  assert.match(manager.checkRepository(listing(files, { library_name: 'transformers', tags: [] }), 'Qwen/Qwen2.5-Coder-7B-Instruct', { platform: 'darwin' }).problem, /No és un model MLX/);
+  assert.equal(manager.maxModelBytes('darwin', 16e9), manager.MAX_MODEL_BYTES);
+  assert.equal(manager.maxModelBytes('linux', null), manager.MAX_MODEL_BYTES);
+  const vram = manager.parseNvidiaMemory('8192\n8192\n');
+  assert.equal(vram, 2 * 8192 * 1024 * 1024);
+  assert.equal(manager.maxModelBytes('linux', vram), Math.round(vram * 3.5));
+  assert.equal(manager.parseNvidiaMemory(''), null);
+  assert.equal(manager.addedModel({ repo: 'Qwen/Qwen2.5-Coder-7B-Instruct', label: '', modelsRoot: '/m', platform: 'linux' }).directory, path.join('/m', 'hf', 'qwen2.5-coder-7b-instruct'));
+  assert.equal(manager.addedModel({ repo: 'a/b', label: '', modelsRoot: '/m', platform: 'darwin' }).directory, path.join('/m', 'mlx', 'b'));
+});

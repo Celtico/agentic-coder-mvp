@@ -28,17 +28,20 @@ const DOWNLOAD_PATTERNS = ['*.json', '*.safetensors', '*.txt', '*.model', '*.jin
  * can load: MLX weights (safetensors and a config), a chat model (not speech), and small enough.
  * Returns { ok, problem, bytes, vision }.
  */
-function checkRepository(info, repo) {
+function checkRepository(info, repo, { platform = process.platform, maxBytes = MAX_MODEL_BYTES } = {}) {
   if (!info || typeof info !== 'object' || !Array.isArray(info.siblings)) return { ok: false, problem: 'No s’ha trobat aquest model a Hugging Face.' };
   const files = info.siblings.filter((file) => typeof file?.rfilename === 'string');
   const names = files.map((file) => file.rfilename);
   if (!names.includes('config.json') || !names.some((name) => name.endsWith('.safetensors'))) return { ok: false, problem: 'No té els pesos en safetensors amb el seu config.json: no es pot carregar amb MLX.' };
   const tags = Array.isArray(info.tags) ? info.tags.map(String) : [];
   const mlx = info.library_name === 'mlx' || tags.includes('mlx') || /mlx/i.test(repo);
-  if (!mlx) return { ok: false, problem: 'No és un model MLX. Busca’n la versió MLX (per exemple a mlx-community).' };
+  // A Mac loads MLX conversions; Linux (CUDA, transformers) the ordinary safetensors, never an MLX one.
+  const linux = platform !== 'darwin';
+  if (!linux && !mlx) return { ok: false, problem: 'No és un model MLX. Busca’n la versió MLX (per exemple a mlx-community).' };
+  if (linux && mlx) return { ok: false, problem: 'És un model MLX, per a Mac. A Linux cal la versió normal en safetensors (per exemple la del repositori original).' };
   if (info.pipeline_tag === 'automatic-speech-recognition' || /whisper/i.test(repo)) return { ok: false, problem: 'És un model de dictat: els de dictat es trien a Preferències › Agent › Dictat.' };
   const bytes = downloadBytes(info);
-  if (bytes > MAX_MODEL_BYTES) return { ok: false, problem: `Ocupa ${formatBytes(bytes)}: no hi cap a la memòria d’aquest Mac.`, bytes };
+  if (bytes > maxBytes) return { ok: false, problem: `Ocupa ${formatBytes(bytes)}: no hi cap a la memòria ${linux ? 'de les GPU d’aquest ordinador' : 'd’aquest Mac'}.`, bytes };
   // The listing tells it apart by its processor files or its task; once downloaded the weights decide (hasVision).
   const vision = names.some((name) => /^(preprocessor|processor)_config\.json$/.test(name)) || info.pipeline_tag === 'image-text-to-text' || tags.includes('image-text-to-text');
   return { ok: true, bytes, vision };
@@ -81,11 +84,12 @@ function removalBlock(row, state) {
 }
 
 /** Where a newly added model goes, and its registry entry (read by mlx-models.cjs, ownModels). */
-function addedModel({ repo, label, modelsRoot }) {
+function addedModel({ repo, label, modelsRoot, platform = process.platform }) {
   const slug = slugFor(repo);
+  const folder = require('./mlx-models.cjs').modelsFolder(platform);
   return {
-    directory: path.join(modelsRoot, 'mlx', slug),
-    partial: path.join(modelsRoot, 'mlx', `.${slug}.partial`),
+    directory: path.join(modelsRoot, folder, slug),
+    partial: path.join(modelsRoot, folder, `.${slug}.partial`),
     meta: { id: `hf-${slug}`, label: String(label || '').trim().slice(0, 80) || repo.split('/').pop(), modelId: repo, source: 'huggingface' },
   };
 }
@@ -119,4 +123,20 @@ function setShown(visibility, id, shown, { selectedId, models }) {
   return next;
 }
 
-module.exports = { shownInSelector, normalizeVisibility, setShown, validRepoId, slugFor, checkRepository, downloadBytes, folderBytes, removalBlock, addedModel, formatBytes, MAX_MODEL_BYTES, DOWNLOAD_PATTERNS };
+/**
+ * The biggest download that fits: on a Mac the 12 GB of a 16 GB machine's GPU share; on Linux the GPUs'
+ * memory (nvidia-smi, all cards together), the weights being 16-bit and loaded in 4 (about a quarter,
+ * with room for the answer). Unknown VRAM: the Mac's limit.
+ */
+function maxModelBytes(platform = process.platform, vramBytes = null) {
+  if (platform === 'darwin' || !vramBytes) return MAX_MODEL_BYTES;
+  return Math.round(vramBytes * 3.5);
+}
+
+/** The total memory of the NVIDIA GPUs from `nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits` (MiB per line). */
+function parseNvidiaMemory(output) {
+  const mib = String(output || '').split('\n').map((line) => Number(line.trim())).filter((value) => Number.isFinite(value) && value > 0);
+  return mib.length ? mib.reduce((sum, value) => sum + value, 0) * 1024 * 1024 : null;
+}
+
+module.exports = { maxModelBytes, parseNvidiaMemory, shownInSelector, normalizeVisibility, setShown, validRepoId, slugFor, checkRepository, downloadBytes, folderBytes, removalBlock, addedModel, formatBytes, MAX_MODEL_BYTES, DOWNLOAD_PATTERNS };

@@ -1847,7 +1847,7 @@ async function managedModels() {
     // What goes to the Trash: a beta's adapter, a cached model's whole cache entry, or the model's folder.
     const folder = model.beta ? model.adapterPath : model.hfCache ? path.join(root, '.hf', 'hub', `models--${model.hfCache.replace('/', '--')}`) : directory;
     let meta = null;
-    if (model.own) { try { meta = JSON.parse(await fs.readFile(path.join(root, 'mlx', model.folder, 'agentic-model.json'), 'utf8')); } catch {} }
+    if (model.own) { try { meta = JSON.parse(await fs.readFile(path.join(root, model.dir || 'mlx', model.folder, 'agentic-model.json'), 'utf8')); } catch {} }
     const vision = !model.beta && await mlxModels.hasVision(directory);
     rows.push({
       id: model.id, label: model.label, repo: model.modelId, installed: Boolean(directory), folder,
@@ -1897,6 +1897,16 @@ ipcMain.handle('models:remove', async (_event, id) => {
 });
 
 // The listing of a repository on Hugging Face (files and sizes); null when there is no such public model.
+// On Linux, the memory of the NVIDIA GPUs bounds the models that can be added (model-manager.cjs).
+let gpuMemoryBytes;
+function modelSizeLimit() {
+  if (mlxModels.engineFor() === 'mlx') return modelManager.maxModelBytes('darwin');
+  if (gpuMemoryBytes === undefined) {
+    try { gpuMemoryBytes = modelManager.parseNvidiaMemory(require('node:child_process').execFileSync('nvidia-smi', ['--query-gpu=memory.total', '--format=csv,noheader,nounits'], { encoding: 'utf8', timeout: 5000 })); }
+    catch { gpuMemoryBytes = null; }
+  }
+  return modelManager.maxModelBytes(process.platform, gpuMemoryBytes);
+}
 async function huggingFaceListing(repo) {
   const [org, name] = repo.split('/');
   const response = await fetch(`https://huggingface.co/api/models/${encodeURIComponent(org)}/${encodeURIComponent(name)}?blobs=true`, { signal: AbortSignal.timeout(20_000) });
@@ -1908,7 +1918,7 @@ async function huggingFaceListing(repo) {
 ipcMain.handle('models:check', async (_event, repo) => {
   const clean = String(repo || '').trim();
   if (!modelManager.validRepoId(clean)) throw new Error('Escriu el nom del model com a Hugging Face: organització/nom.');
-  const result = modelManager.checkRepository(await huggingFaceListing(clean), clean);
+  const result = modelManager.checkRepository(await huggingFaceListing(clean), clean, { maxBytes: modelSizeLimit() });
   return { repo: clean, ...result, size: result.bytes ? modelManager.formatBytes(result.bytes) : null };
 });
 
@@ -1932,7 +1942,7 @@ ipcMain.handle('models:add', async (_event, request) => {
   } else {
     repo = String(request?.repo || '').trim();
     if (!modelManager.validRepoId(repo)) throw new Error('Escriu el nom del model com a Hugging Face: organització/nom.');
-    const checked = modelManager.checkRepository(await huggingFaceListing(repo), repo);
+    const checked = modelManager.checkRepository(await huggingFaceListing(repo), repo, { maxBytes: modelSizeLimit() });
     if (!checked.ok) throw new Error(checked.problem);
     const added = modelManager.addedModel({ repo, label: request?.label, modelsRoot: root });
     if (rows.some((row) => row.id === added.meta.id || row.repo === repo)) throw new Error('Aquest model ja és a la llista.');
