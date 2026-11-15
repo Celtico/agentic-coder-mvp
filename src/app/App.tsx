@@ -2310,7 +2310,9 @@ export function App(): React.JSX.Element {
       <Text fontSize="xs" fontWeight="semibold" whiteSpace="nowrap">Agentic Coder</Text>
       {project && <Text minW="0" fontSize="xs" color="fg.muted" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">— {project.path.split(/[\\/]/).filter(Boolean).at(-1)}</Text>}
     </Flex>}
-    <Grid ref={appAreaRef} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" overflow="hidden" bg="canvas">
+    {/* The work area does not clip, and sits above the status bar, so the bottom row's shadow («amb ombra»)
+        shows over the bar's top; no size changes. The window itself still clips at its edges. */}
+    <Grid ref={appAreaRef} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax(0, 1fr)" bg="canvas" position="relative" zIndex="1">
         <Flex as="nav" aria-label="Accions principals" h="full" minH="0" bg="canvas" px="1" pb="2" direction="column" align="center" gap="1">
           {/* The app's mark in its own slot at the top of the bar, always in the brand green (not the accent),
               with clear space before the first group of icons. It turns while the model works. */}

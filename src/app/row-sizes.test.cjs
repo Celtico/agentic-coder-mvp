@@ -162,3 +162,8 @@ test('the panes fit the row: wider than the window, each gives up a share of the
   assert.match(row, /new ResizeObserver\(\(\[entry\]\) => setRowWidth\(Math\.round\(entry\.contentRect\.width\)\)\)/);
   assert.match(row, /const fitted = fitPaneWidths\(fixedIds, widths, \{ rowWidth, flexMin: paneMinWidth\(flexId\), handles: fixedIds\.length \}\)/);
 });
+
+test('the work area does not clip the bottom row and sits above the status bar, so its shadow shows there', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<Grid ref=\{appAreaRef\} flex="1" minH="0" w="full" minW="0" templateColumns="52px minmax\(0, 1fr\)" bg="canvas" position="relative" zIndex="1">/);
+});
