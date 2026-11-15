@@ -1716,7 +1716,7 @@ async function stopModelWorker() {
 function runDictation({ file, model, language }) {
   return new Promise((resolve, reject) => {
     const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
-    const child = spawn(mlxPythonPath(), ['-u', script, dictation.dictationModelDirectory(model, projectModelsDirectory()), file, language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(mlxPythonPath(), ['-u', script, dictation.dictationModelDirectory(model, projectModelsDirectory()), file, language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder', AGENT_DICTATION_ENGINE: mlxModels.engineFor() }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), 180_000);
@@ -1739,7 +1739,7 @@ const enqueueDictation = dictation.createDictationQueue({
 ipcMain.handle('dictation:info', async () => ({
   preferences: dictationPreferences,
   languages: dictation.DICTATION_LANGUAGES,
-  models: await Promise.all(dictation.DICTATION_MODELS.map(async (model) => ({ id: model.id, label: model.label, repo: model.repo, bytes: model.bytes, installed: await dictation.dictationModelInstalled(model, projectModelsDirectory()) }))),
+  models: await Promise.all(dictation.dictationModels().map(async (model) => ({ id: model.id, label: model.label, repo: model.repo, bytes: model.bytes, installed: await dictation.dictationModelInstalled(model, projectModelsDirectory()) }))),
 }));
 ipcMain.handle('preferences:set-dictation', async (_event, change) => {
   dictationPreferences = dictation.normalizeDictationPreferences({ ...dictationPreferences, ...(change && typeof change === 'object' ? change : {}) }, dictationPreferences);
@@ -1759,14 +1759,14 @@ let liveModel = null;
 const residentWhisper = dictation.createResidentTranscriber({
   start: () => {
     const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
-    const child = spawn(mlxPythonPath(), ['-u', script, '--serve', dictation.dictationModelDirectory(liveModel, projectModelsDirectory()), dictationPreferences.language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder', ...(liveModel.shared ? { AGENT_DICTATION_SHARED: '1' } : {}) }, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(mlxPythonPath(), ['-u', script, '--serve', dictation.dictationModelDirectory(liveModel, projectModelsDirectory()), dictationPreferences.language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder', AGENT_DICTATION_ENGINE: mlxModels.engineFor(), ...(liveModel.shared ? { AGENT_DICTATION_SHARED: '1' } : {}) }, stdio: ['pipe', 'pipe', 'ignore'] });
     child.stdout.setEncoding('utf8');
     return dictation.createLiveTranscriber(child);
   },
 });
 let liveDictation = null;
 async function dictationModelReady() {
-  const model = dictation.DICTATION_MODELS.find((item) => item.id === dictationPreferences.model);
+  const model = dictation.dictationModels().find((item) => item.id === dictationPreferences.model);
   if (!await dictation.dictationModelInstalled(model, projectModelsDirectory())) throw new Error(`Falta el model de dictat ${model.label} (${model.repo}, ${Math.round(model.bytes / 1e6)} MB) a models/whisper/${model.folder}.`);
   return model;
 }
@@ -1800,7 +1800,7 @@ ipcMain.handle('dictation:live-stop', async () => { liveDictation = null; reside
 ipcMain.handle('dictation:transcribe', async (_event, audio) => {
   if (trainingRun || benchmarkRun) throw new Error('Hi ha un entrenament o una avaluació en marxa: el dictat pot esperar que acabi.');
   const { buffer } = dictation.validateDictationAudio(audio);
-  const model = dictation.DICTATION_MODELS.find((item) => item.id === dictationPreferences.model);
+  const model = dictation.dictationModels().find((item) => item.id === dictationPreferences.model);
   if (!await dictation.dictationModelInstalled(model, projectModelsDirectory())) throw new Error(`Falta el model de dictat ${model.label} (${model.repo}, ${Math.round(model.bytes / 1e6)} MB) a models/whisper/${model.folder}.`);
   const file = await dictation.writeDictationAudio(path.join(app.getPath('userData'), 'dictation'), buffer);
   try { return { text: await enqueueDictation({ file, model, language: dictationPreferences.language }) }; }
@@ -1861,7 +1861,7 @@ async function managedModels() {
       bytes: directory ? await modelManager.folderBytes(folder) : 0,
     });
   }
-  for (const model of dictation.DICTATION_MODELS) {
+  for (const model of dictation.dictationModels()) {
     const directory = dictation.dictationModelDirectory(model, root);
     const installed = await dictation.dictationModelInstalled(model, root);
     rows.push({ id: model.id, label: model.label, repo: model.repo, installed, folder: directory, kind: 'dictat', source: 'app', downloadable: !installed, shown: null, selected: dictationPreferences.model === model.id, isDefault: model.id === dictation.DEFAULT_DICTATION_MODEL, loaded: residentWhisper.resident && dictationPreferences.model === model.id, bytes: installed ? await modelManager.folderBytes(directory) : 0 });
@@ -1938,7 +1938,7 @@ ipcMain.handle('models:add', async (_event, request) => {
     if (!info) throw new Error('El model ja no és a Hugging Face.');
     ({ repo, label, folder: target } = row);
     if (row.kind !== 'dictat') target = path.join(root, 'mlx', (await allModels()).find((model) => model.id === row.id).folder);
-    total = modelManager.downloadBytes(info);
+    total = modelManager.downloadBytes(info, row.kind === 'dictat' ? modelManager.DICTATION_PATTERNS : modelManager.DOWNLOAD_PATTERNS);
   } else {
     repo = String(request?.repo || '').trim();
     if (!modelManager.validRepoId(repo)) throw new Error('Escriu el nom del model com a Hugging Face: organització/nom.');
@@ -1951,6 +1951,8 @@ ipcMain.handle('models:add', async (_event, request) => {
     total = checked.bytes;
   }
   if (fsSync.existsSync(target)) throw new Error('Ja hi ha una carpeta amb aquest nom a models/.');
+  // A dictation model (Whisper) may be a CTranslate2 model.bin on Linux: its own file patterns.
+  const dictationDownload = Boolean(request?.id) && rows.find((item) => item.id === request.id)?.kind === 'dictat';
   const partial = path.join(path.dirname(target), `.${path.basename(target)}.partial`);
   await fs.rm(partial, { recursive: true, force: true });
   await fs.mkdir(partial, { recursive: true });
@@ -1964,7 +1966,7 @@ ipcMain.handle('models:add', async (_event, request) => {
   (async () => {
     let result = null;
     try {
-      result = await runStreaming(mlxPythonPath(), [path.join(__dirname, '..', 'core', 'assistant', 'mlx_download.py'), repo, partial, ...modelManager.DOWNLOAD_PATTERNS], { signal: controller.signal, env: { AGENT_MLX_LOCK_LABEL: 'una baixada' } });
+      result = await runStreaming(mlxPythonPath(), [path.join(__dirname, '..', 'core', 'assistant', 'mlx_download.py'), repo, partial, ...(dictationDownload ? modelManager.DICTATION_PATTERNS : modelManager.DOWNLOAD_PATTERNS)], { signal: controller.signal, env: { AGENT_MLX_LOCK_LABEL: 'una baixada' } });
       if (result.code === 0 && !controller.signal.aborted) {
         await fs.rm(path.join(partial, '.cache'), { recursive: true, force: true });
         if (meta) await fs.writeFile(path.join(partial, 'agentic-model.json'), JSON.stringify({ ...meta, addedAt: new Date().toISOString() }, null, 2));

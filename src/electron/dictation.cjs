@@ -20,16 +20,25 @@ const DICTATION_MODELS = [
   { id: 'whisper-small', label: 'Whisper small', repo: 'mlx-community/whisper-small-mlx', folder: 'whisper-small-mlx', bytes: 481_309_720, kind: 'dictation' },
 ];
 const DEFAULT_DICTATION_MODEL = 'whisper-large-v3-turbo-q4';
+// On Linux (faster-whisper on CUDA, src/core/assistant/mlx_dictation.py) the same models as CTranslate2
+// folders; their sizes are approximate until downloaded (Gestiona els models measures them).
+const LINUX_DICTATION_MODELS = [
+  { id: 'faster-whisper-large-v3-turbo', label: 'Whisper large-v3 turbo (CUDA)', repo: 'mobiuslabsgmbh/faster-whisper-large-v3-turbo', folder: 'faster-whisper-large-v3-turbo', bytes: 1_620_000_000, kind: 'dictation' },
+  { id: 'faster-whisper-small', label: 'Whisper small (CUDA)', repo: 'Systran/faster-whisper-small', folder: 'faster-whisper-small', bytes: 484_000_000, kind: 'dictation' },
+];
+/** The dictation models of this platform: mlx-whisper's on a Mac, faster-whisper's elsewhere. */
+const dictationModels = (platform = process.platform) => platform === 'darwin' ? DICTATION_MODELS : LINUX_DICTATION_MODELS;
+const defaultDictationModel = (platform = process.platform) => dictationModels(platform)[0].id;
 const DICTATION_LANGUAGES = ['auto', 'ca', 'es', 'en'];
 
 // `coexist`: the warm Whisper lives beside the chat's model instead of one model on the GPU at a time.
 // Off by default: the one-model rule came after a kernel panic (13-11-2026, two MLX processes with models).
-const defaultDictationPreferences = () => ({ model: DEFAULT_DICTATION_MODEL, language: 'auto', coexist: false });
+const defaultDictationPreferences = (platform = process.platform) => ({ model: defaultDictationModel(platform), language: 'auto', coexist: false });
 
-function normalizeDictationPreferences(value, base = defaultDictationPreferences()) {
+function normalizeDictationPreferences(value, base = defaultDictationPreferences(), platform = process.platform) {
   const saved = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
-    model: DICTATION_MODELS.some((model) => model.id === saved.model) ? saved.model : base.model,
+    model: dictationModels(platform).some((model) => model.id === saved.model) ? saved.model : base.model,
     language: DICTATION_LANGUAGES.includes(saved.language) ? saved.language : base.language,
     coexist: typeof saved.coexist === 'boolean' ? saved.coexist : base.coexist,
   };
@@ -41,7 +50,8 @@ async function dictationModelInstalled(model, modelsRoot) {
   const directory = dictationModelDirectory(model, modelsRoot);
   try {
     await fs.access(path.join(directory, 'config.json'));
-    return (await fs.readdir(directory)).some((name) => /^weights\.(?:npz|safetensors)$/.test(name));
+    // mlx-whisper's weights.npz/safetensors on a Mac; a CTranslate2 model.bin on Linux.
+    return (await fs.readdir(directory)).some((name) => /^(?:weights\.(?:npz|safetensors)|model\.bin)$/.test(name));
   } catch { return false; }
 }
 
@@ -192,6 +202,7 @@ const WHISPER_ROOMY_TOTAL_BYTES = 12 * 1024 ** 3;
 const roomForWhisper = (freeBytes, totalBytes = 0) => totalBytes >= WHISPER_ROOMY_TOTAL_BYTES || (Number.isFinite(freeBytes) && freeBytes >= WHISPER_MIN_FREE_BYTES);
 
 module.exports = {
+  dictationModels, defaultDictationModel, LINUX_DICTATION_MODELS,
   createLiveTranscriber, createResidentTranscriber, LIVE_DICTATION_IDLE_MS, WHISPER_MIN_FREE_BYTES, roomForWhisper,
   DICTATION_MODELS, DEFAULT_DICTATION_MODEL, DICTATION_LANGUAGES, MAX_AUDIO_BYTES,
   defaultDictationPreferences, normalizeDictationPreferences, dictationModelDirectory, dictationModelInstalled,

@@ -20,6 +20,9 @@ import wave
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 LANGUAGES = ("ca", "es", "en")
+MISSING_ENGINE = ("Falta faster-whisper al runtime CUDA: el dictat no funcionarà fins que s’instal·li (docs/linux.md)."
+                  if os.environ.get("AGENT_DICTATION_ENGINE") == "cuda"
+                  else "Falta mlx-whisper al runtime MLX: el dictat no funcionarà fins que s’instal·li.")
 
 
 def language_option(value):
@@ -50,8 +53,33 @@ def transcribe(mlx_whisper, model_dir, path, language):
     samples = read_wav(path)
     if is_silent(samples):
         return ""
+    if isinstance(mlx_whisper, CudaWhisper):
+        return mlx_whisper.transcribe(samples, language_option(language))
     result = mlx_whisper.transcribe(samples, path_or_hf_repo=model_dir, language=language_option(language), task="transcribe", verbose=None, condition_on_previous_text=False)
     return str(result.get("text", "")).strip()
+
+
+class CudaWhisper:
+    """Linux with NVIDIA GPUs (AGENT_DICTATION_ENGINE=cuda): faster-whisper on CUDA, the model a CTranslate2
+    folder (models/whisper/<folder>), loaded once. The same answers as mlx-whisper's for the app."""
+
+    def __init__(self, model_dir):
+        from faster_whisper import WhisperModel
+
+        self.model = WhisperModel(model_dir, device="cuda", compute_type="float16")
+
+    def transcribe(self, samples, language):
+        segments, _info = self.model.transcribe(samples, language=language, task="transcribe", condition_on_previous_text=False)
+        return "".join(segment.text for segment in segments).strip()
+
+
+def load_engine(model_dir):
+    """mlx-whisper on a Mac; faster-whisper on Linux. Raises ImportError when it is not installed."""
+    if os.environ.get("AGENT_DICTATION_ENGINE") == "cuda":
+        return CudaWhisper(model_dir)
+    import mlx_whisper
+
+    return mlx_whisper
 
 
 def emit(value):
@@ -64,9 +92,9 @@ def serve(model_dir, language):
     model at a time, unless the app asks it to live beside the chat's model (AGENT_DICTATION_SHARED=1,
     Preferències › Agent › Dictat); then the app closes it before a training or an evaluation."""
     try:
-        import mlx_whisper
+        mlx_whisper = load_engine(model_dir)
     except ImportError:
-        emit({"error": "Falta mlx-whisper al runtime MLX: el dictat no funcionarà fins que s’instal·li."})
+        emit({"error": MISSING_ENGINE})
         return 1
     if os.environ.get("AGENT_DICTATION_SHARED") != "1":
         import mlx_lock
@@ -98,9 +126,9 @@ def main(argv):
         return 2
     model_dir, audio_path, language = argv[1], argv[2], argv[3]
     try:
-        import mlx_whisper
+        mlx_whisper = load_engine(model_dir)
     except ImportError:
-        emit({"error": "Falta mlx-whisper al runtime MLX: el dictat no funcionarà fins que s’instal·li."})
+        emit({"error": MISSING_ENGINE})
         return 1
     import mlx_lock
 

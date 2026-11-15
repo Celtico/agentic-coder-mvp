@@ -22,6 +22,8 @@ function slugFor(repo) {
 const MAX_MODEL_BYTES = 12_000_000_000;
 // What a model needs to be loaded with MLX; nothing that runs code (no *.py).
 const DOWNLOAD_PATTERNS = ['*.json', '*.safetensors', '*.txt', '*.model', '*.jinja', '*.tiktoken'];
+// A Whisper for dictation: mlx-whisper's weights.npz on a Mac, a CTranslate2 model.bin on Linux (no code either).
+const DICTATION_PATTERNS = ['*.json', '*.safetensors', '*.npz', '*.bin', '*.txt'];
 
 /**
  * Whether a Hugging Face repository (its listing from /api/models/<repo>?blobs=true) is a model this app
@@ -48,8 +50,8 @@ function checkRepository(info, repo, { platform = process.platform, maxBytes = M
 }
 
 /** What a download of the repository takes: the files the patterns let through. */
-function downloadBytes(info) {
-  return (info?.siblings || []).filter((file) => typeof file?.rfilename === 'string' && DOWNLOAD_PATTERNS.some((pattern) => file.rfilename.endsWith(pattern.slice(1)))).reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+function downloadBytes(info, patterns = DOWNLOAD_PATTERNS) {
+  return (info?.siblings || []).filter((file) => typeof file?.rfilename === 'string' && patterns.some((pattern) => file.rfilename.endsWith(pattern.slice(1)))).reduce((sum, file) => sum + (Number(file.size) || 0), 0);
 }
 
 const formatBytes = (bytes) => bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
@@ -139,4 +141,4 @@ function parseNvidiaMemory(output) {
   return mib.length ? mib.reduce((sum, value) => sum + value, 0) * 1024 * 1024 : null;
 }
 
-module.exports = { maxModelBytes, parseNvidiaMemory, shownInSelector, normalizeVisibility, setShown, validRepoId, slugFor, checkRepository, downloadBytes, folderBytes, removalBlock, addedModel, formatBytes, MAX_MODEL_BYTES, DOWNLOAD_PATTERNS };
+module.exports = { maxModelBytes, parseNvidiaMemory, shownInSelector, normalizeVisibility, setShown, validRepoId, slugFor, checkRepository, downloadBytes, folderBytes, removalBlock, addedModel, formatBytes, MAX_MODEL_BYTES, DOWNLOAD_PATTERNS, DICTATION_PATTERNS };

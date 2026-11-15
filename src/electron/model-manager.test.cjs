@@ -106,7 +106,7 @@ test('the wiring: the selector reads only the switched-on models; removing goes 
   assert.match(main, /modelVisibility = modelManager\.normalizeVisibility\(saved\.modelVisibility\);/);
   assert.match(main, /training: trainingPreferences, modelVisibility \}/);
   // The download runs huggingface_hub with the file patterns, never code, and is stopped with the app.
-  assert.match(main, /mlx_download\.py'\), repo, partial, \.\.\.modelManager\.DOWNLOAD_PATTERNS\]/);
+  assert.match(main, /mlx_download\.py'\), repo, partial, \.\.\.\(dictationDownload \? modelManager\.DICTATION_PATTERNS : modelManager\.DOWNLOAD_PATTERNS\)\]/);
   assert.match(main, /modelDownload\?\.controller\.abort\(\);\n\}\);/);
   assert.ok(!manager.DOWNLOAD_PATTERNS.some((pattern) => pattern.endsWith('.py')));
   const preload = fs.readFileSync(path.join(__dirname, 'preload.cjs'), 'utf8');

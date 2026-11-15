@@ -175,3 +175,31 @@ test('the resident Whisper: kept after a dictation, released after the idle time
   assert.match(python, /if is_silent\(samples\):\n\s*return ""/);
   assert.match(python, /condition_on_previous_text=False/);
 });
+
+test('dictation on Linux: faster-whisper models (CTranslate2), the engine told to the Whisper process, model.bin downloaded', () => {
+  assert.equal(dictation.dictationModels('darwin'), dictation.DICTATION_MODELS, 'the Mac as before');
+  assert.deepEqual(dictation.dictationModels('linux').map((model) => model.repo), ['mobiuslabsgmbh/faster-whisper-large-v3-turbo', 'Systran/faster-whisper-small']);
+  assert.equal(dictation.defaultDictationModel('darwin'), dictation.DEFAULT_DICTATION_MODEL);
+  assert.equal(dictation.normalizeDictationPreferences({ model: 'whisper-small' }, dictation.defaultDictationPreferences('linux'), 'linux').model, 'faster-whisper-large-v3-turbo', 'a Mac model is not kept on Linux');
+  const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.equal((main.match(/AGENT_DICTATION_ENGINE: mlxModels\.engineFor\(\)/g) || []).length, 2);
+  assert.doesNotMatch(main, /dictation\.DICTATION_MODELS/);
+  const manager = require('./model-manager.cjs');
+  assert.ok(manager.DICTATION_PATTERNS.includes('*.bin') && manager.DICTATION_PATTERNS.includes('*.npz'));
+  assert.ok(!manager.DICTATION_PATTERNS.some((pattern) => pattern.endsWith('.py')));
+  const python = fs.readFileSync(path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py'), 'utf8');
+  assert.match(python, /if os\.environ\.get\("AGENT_DICTATION_ENGINE"\) == "cuda":\n\s*return CudaWhisper\(model_dir\)/);
+  assert.match(python, /WhisperModel\(model_dir, device="cuda", compute_type="float16"\)/);
+});
+
+test('a Whisper folder is installed with mlx-whisper’s weights or a CTranslate2 model.bin', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentic-whisper-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const [model] = dictation.LINUX_DICTATION_MODELS;
+  const dir = dictation.dictationModelDirectory(model, root);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.json'), '{}');
+  assert.equal(await dictation.dictationModelInstalled(model, root), false);
+  fs.writeFileSync(path.join(dir, 'model.bin'), 'w');
+  assert.equal(await dictation.dictationModelInstalled(model, root), true);
+});
