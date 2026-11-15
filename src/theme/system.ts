@@ -51,9 +51,6 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         windowLightGap: { value: "8px" },
         windowLightInset: { value: "12px" },
       },
-      shadows: {
-        composer: { value: "0 4px 24px #0002" },
-      },
     },
     textStyles: {
       chatMessage: {
@@ -76,24 +73,15 @@ export const buildSystem = (accent: Accent = "agentic") => createSystem(defaultC
         // on it. Written as the colours, not as {colors.bg}, so «Fons de les finestres» (which re-points bg)
         // never changes the window itself.
         canvas: { value: { _light: "{colors.white}", _dark: "{colors.black}" } },
-        // bg (bg, bg.subtle, bg.muted, bg.emphasized, bg.panel…) is Chakra's own, untouched: Preferències ›
-        // Aparença › Fons de les finestres chooses among them. fg and border are groups: DEFAULT is the app's
-        // own value and Chakra's own members (fg.error, border.subtle…) are kept (written as single values
-        // they hid the whole group).
-        fg: {
-          DEFAULT: { value: { _light: "#1f1f1f", _dark: "#ececec" } },
-          muted: { value: { _light: "#5e5e5e", _dark: "#a1a1a1" } },
-        },
-        surface: { value: { _light: "#ececec", _dark: "#303030" } },
-        "surface.subtle": { value: { _light: "#f2f2f2", _dark: "#171717" } },
-        border: { DEFAULT: { value: { _light: "#dcdcdc", _dark: "#393939" } } },
+        // bg, fg and border (and their members: bg.subtle, bg.muted, fg.muted, border.subtle…) are Chakra's own,
+        // untouched, as in its docs; Preferències › Aparença › Fons de les finestres chooses among the bg ones.
         accent: { value: "{colors.agentic.500}" },
         // The traffic lights of a floating window, like macOS (src/app/window-controls.tsx).
         "window.close": { value: "#ff5f57" },
         "window.minimize": { value: "#febc2e" },
         "window.maximize": { value: "#28c840" },
-        "window.lightBorder": { value: "#0000001f" },
-        "window.lightGlyph": { value: "#00000099" },
+        "window.lightBorder": { value: "{colors.blackAlpha.200}" },
+        "window.lightGlyph": { value: "{colors.blackAlpha.700}" },
       },
     },
   },

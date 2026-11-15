@@ -95,7 +95,7 @@ const Notice = ({ tone = 'info', children }: { tone?: keyof typeof noticeTones; 
 };
 /** One figure of the learning panel. */
 const Stat = ({ label, value, dim = false }: { label: string; value: number; dim?: boolean }) => (
-  <Box px="3" py="2" borderRadius="md" bg="surface.subtle" minW="0">
+  <Box px="3" py="2" borderRadius="md" bg="bg.subtle" minW="0">
     <Text fontSize="xl" fontWeight="semibold" lineHeight="1.2" color={dim && value === 0 ? 'fg.muted' : 'fg'}>{value}</Text>
     <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.06em" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={label}>{label}</Text>
   </Box>
@@ -114,7 +114,7 @@ const ownTitleBar = typeof navigator !== 'undefined' && /Mac/i.test(navigator.pl
 const Tip = ({ label, children }: { label: string; children: React.ReactElement }) => (
   <Tooltip.Root openDelay={250} closeDelay={0} positioning={{ gutter: 6 }}>
     <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-    <Portal><Tooltip.Positioner><Tooltip.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1" fontSize="xs" fontWeight="medium" boxShadow="lg" maxW="280px">{label}</Tooltip.Content></Tooltip.Positioner></Portal>
+    <Portal><Tooltip.Positioner><Tooltip.Content maxW="280px">{label}</Tooltip.Content></Tooltip.Positioner></Portal>
   </Tooltip.Root>
 );
 const IconButton = ({ icon: Icon, label, ...props }: IconButtonProps) => <Tip label={label}><Button aria-label={label} variant="ghost" size="xs" px="2" {...props}><Icon size={16}/></Button></Tip>;
@@ -196,7 +196,7 @@ function ProjectTreeNodeActions({ node, isDirectory, onCreate, onDelete, onRenam
   const childPath = (name: string) => parent ? `${parent}/${name}` : name;
   return <Menu.Root>
     <Menu.ContextTrigger asChild>{children}</Menu.ContextTrigger>
-    <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+    <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
       <Menu.Item value="create-file" onClick={() => onCreate(childPath('nou-fitxer.txt'), false)}><IconLabel icon={FilePlus}>Crea un fitxer aquí</IconLabel></Menu.Item>
       {isDirectory && <Menu.Item value="create-directory" onClick={() => onCreate(childPath('nova-carpeta'), true)}><IconLabel icon={FolderPlus}>Crea un directori aquí</IconLabel></Menu.Item>}
       <Menu.Item value="rename" onClick={() => onRename(node.value)}><IconLabel icon={Pencil}>Canvia el nom</IconLabel></Menu.Item>
@@ -1672,7 +1672,7 @@ export function App(): React.JSX.Element {
         {!messages.length ? <Box maxW="740px" mx="auto" mt="11vh" textAlign="center"><Heading size="2xl" fontWeight="medium">En què treballem?</Heading><Text color="fg.muted" mt="3" mb="5">Tria la carpeta del projecte i descriu què vols entendre o millorar.</Text><Badge colorPalette="agentic" variant="subtle">{modelOptions.find((item) => item.id === selectedModel)?.label || 'Model local'}</Badge></Box> : <Stack maxW="820px" mx="auto" gap="6">{messages.map((message, index) => {
           const previousUser = message.role === 'assistant' ? [...messages.slice(0, index)].reverse().find((item) => item.role === 'user') : undefined;
           const experienceKey = `${activeSessionId}:${index}`;
-          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" fontSize={appearance.chatFontSize} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'surface' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
+          return <Box key={`${index}-${message.role}`} textStyle="chatMessage" fontSize={appearance.chatFontSize} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'bg.muted' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
             {message.role === 'assistant'
               ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
               : message.text}
@@ -1686,8 +1686,8 @@ export function App(): React.JSX.Element {
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}
-        <Box bg="surface" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="composer" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
-          {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="surface.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
+        <Box bg="bg.muted" borderWidth="1px" borderColor={chatDropActive ? 'agentic.solid' : 'border'} borderRadius="16px" px="3" py="2.5" boxShadow="lg" onDragEnter={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); setChatDropActive(true); } }} onDragOver={(event) => { if (Array.from(event.dataTransfer.types).includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChatDropActive(false); }} onDrop={(event) => { event.preventDefault(); setChatDropActive(false); void addChatFiles(event.dataTransfer.files); }}>
+          {chatAttachments.length > 0 && <Flex wrap="wrap" gap="1.5" px="2" pb="2">{chatAttachments.map((file) => <HStack key={file.id} gap="1" bg="bg.subtle" borderWidth="1px" borderColor="border" borderRadius="md" px="2" py="1"><Paperclip size={12}/><Text fontSize="xs" maxW="220px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={file.name}>{file.name}</Text><IconButton icon={X} label={`Treu ${file.name}`} onClick={() => setChatAttachments((current) => current.filter((item) => item.id !== file.id))}/></HStack>)}</Flex>}
           {chatImages.length > 0 && <Flex wrap="wrap" gap="2" px="2" pb="2">{chatImages.map((image) => <Box key={image.id} position="relative" flex="none">
             <Image src={image.thumbnail} alt={image.name} title={`${image.name} · ${image.width}×${image.height}`} boxSize="14" objectFit="cover" borderRadius="md" borderWidth="1px" borderColor="border"/>
             <CloseButton size="2xs" position="absolute" top="-2" right="-2" variant="solid" rounded="full" aria-label={`Treu ${image.name}`} onClick={() => setChatImages((current) => current.filter((item) => item.id !== image.id))}/>
@@ -1832,7 +1832,7 @@ export function App(): React.JSX.Element {
     <Accordion.ItemIndicator/>
   </>;
   // One saved case in Aprenentatge local (Casos desats, Dades manuals): its task, check, date and actions.
-  const caseRow = (item: LearningCase) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="surface" minW="0">
+  const caseRow = (item: LearningCase) => <HStack key={item.id} align="flex-start" gap="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md" bg="bg.muted" minW="0">
                 <Stack flex="1" minW="0" gap="1">
                   <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere" title={item.task}>{item.task}</Text>
                   <Text fontSize="xs" color="fg.muted" lineClamp={2} overflowWrap="anywhere">Comprovació: {item.evidence || '—'}</Text>
@@ -1905,8 +1905,8 @@ export function App(): React.JSX.Element {
                   <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
                 </HStack>
                 {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
-                {trainingProgress !== null && <Box mt="2" h="4px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
-                {trainingLog.length > 0 && <Box mt="2" maxH="140px" {...scrollArea} fontFamily="mono" fontSize="2xs" color="fg.muted" bg="surface.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
+                {trainingProgress !== null && <Box mt="2" h="4px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(trainingProgress * 100)}%`}/></Box>}
+                {trainingLog.length > 0 && <Box mt="2" maxH="140px" {...scrollArea} fontFamily="mono" fontSize="2xs" color="fg.muted" bg="bg.subtle" borderRadius="md" px="2" py="1.5">{trainingLog.slice(-40).map((event, index) => <Text key={index} color={event.step === 'failed' ? 'fg.error' : event.step === 'finished' ? 'agentic.fg' : undefined}>{event.message}</Text>)}</Box>}
                 {learningVersions && learningVersions.betas.length > 0 && <Stack mt="2" gap="1">{learningVersions.betas.map((beta, index) => <HStack key={beta.folder} gap="2" px="2.5" py="1.5" borderWidth="1px" borderColor="border" borderRadius="md" minW="0">
                   <Stack flex="1" minW="0" gap="0">
                     <Text fontSize="sm" fontWeight="medium">Beta {beta.number} · {beta.cases} {beta.cases === 1 ? 'cas' : 'casos'}{index === 0 ? ' · al selector' : ''}</Text>
@@ -2017,7 +2017,7 @@ export function App(): React.JSX.Element {
       {evaluationError && <Notice tone="warning">{evaluationError}</Notice>}
       {evaluationRunning && <Box borderWidth="1px" borderColor="agentic.emphasized" borderRadius="sm" p="2">
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
-        {evaluationCurrent && <Box h="5px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%`}/></Box>}
+        {evaluationCurrent && <Box h="5px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%`}/></Box>}
         {evaluationCurrent && <Text mt="1" fontSize="2xs" color="fg.muted">{evaluationTasks.find((task) => task.id === evaluationCurrent.task)?.description}</Text>}
         {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'fg.error' : 'agentic.fg'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
       </Box>}
@@ -2054,7 +2054,7 @@ export function App(): React.JSX.Element {
               <Text fontSize="xs" fontWeight="semibold" mb="1">{model.label}</Text>
               {([['Obertes', model.open, 'agentic.solid'], ['Apps', model.apps, 'orange.solid'], ['Dirigida', model.reference, 'fg.muted']] as const).map(([label, count, color]) => <HStack key={label} gap="2" h="14px">
                 <Text w="64px" flex="none" fontSize="2xs" color="fg.muted">{label}</Text>
-                <Box flex="1" h="6px" bg="surface.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
+                <Box flex="1" h="6px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg={color} width={`${count.runs ? Math.round((count.passed / count.runs) * 100) : 0}%`}/></Box>
                 <Text w="40px" flex="none" fontSize="2xs" textAlign="right">{count.runs ? `${count.passed}/${count.runs}` : '—'}</Text>
               </HStack>)}
             </Box>)}</Stack>
@@ -2139,7 +2139,7 @@ export function App(): React.JSX.Element {
                         <Button size="xs" fontSize="xs" w="full" minW="0" pr="8" justifyContent="flex-start" textAlign="left" variant={session.id === activeSessionId ? 'subtle' : 'ghost'} colorPalette={session.id === activeSessionId ? 'agentic' : 'gray'} title={session.title} onClick={() => void selectSession(session.id)}><Text as="span" flex="1" minW="0" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{session.title}</Text></Button>
                         <IconButton icon={Trash} label="Elimina la conversa" position="absolute" right="0.5" top="50%" transform="translateY(-50%)" color="fg.muted" _hover={{ color: 'fg.error' }} disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={(event) => { event.stopPropagation(); setChatToDelete(session); }}/>
                       </Box></Menu.ContextTrigger>
-                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
                         <Menu.Item value="delete-chat" color="fg.error" disabled={deletingChatId === session.id || (loading && session.id === activeSessionId)} onClick={() => setChatToDelete(session)}><IconLabel icon={Trash}>{deletingChatId === session.id ? 'Eliminant…' : 'Elimina la conversa'}</IconLabel></Menu.Item>
                       </Menu.Content></Menu.Positioner></Portal>
                     </Menu.Root>)}
@@ -2154,7 +2154,7 @@ export function App(): React.JSX.Element {
                 <IconButton icon={FolderOpen} label={project ? `${project.path} · canvia de projecte` : 'Selecciona la carpeta on vols treballar'} onClick={() => void selectProject()}/>
                 <Menu.Root>
                 <Menu.Trigger asChild><IconButton icon={Plus} label="Nou document o carpeta" disabled={!project}/></Menu.Trigger>
-                <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
                   <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                   <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
                 </Menu.Content></Menu.Positioner></Portal>
@@ -2184,7 +2184,7 @@ export function App(): React.JSX.Element {
                     {/* The empty space under the tree: right-click for the folder's own actions. */}
                     {project && <Menu.Root>
                       <Menu.ContextTrigger asChild><Box minH="140px" px="2" pt="2">{project.files.length === 0 && <Text fontSize="xs" color="fg.muted">La carpeta és buida. Botó dret aquí per crear un document o una carpeta.</Text>}</Box></Menu.ContextTrigger>
-                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+                      <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
                         <Menu.Item value="file" onClick={() => openCreateProjectEntry(false)}><IconLabel icon={FilePlus}>Nou document</IconLabel></Menu.Item>
                         <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
                         <Menu.Separator borderColor="border"/>
@@ -2261,7 +2261,7 @@ export function App(): React.JSX.Element {
               {last && railDrop?.group === group && railDrop.index === index + 1 && <Box position="absolute" bottom="-3px" left="4px" right="4px" h="2px" rounded="full" bg="agentic.solid" pointerEvents="none"/>}
             </Box>
           </Menu.ContextTrigger>
-          <Portal><Menu.Positioner zIndex="1500"><Menu.Content bg="surface" color="fg" borderWidth="1px" borderColor="border" borderRadius="md" boxShadow="lg" p="1">
+          <Portal><Menu.Positioner zIndex="1500"><Menu.Content>
             <Menu.Item value="move-other" onClick={() => moveRailIcon(panel, other, railLayout[other].length)}><IconLabel icon={other === 'top' ? ArrowUpToLine : ArrowDownToLine}>{other === 'top' ? 'Mou a dalt' : 'Mou a baix'}</IconLabel></Menu.Item>
           </Menu.Content></Menu.Positioner></Portal>
         </Menu.Root>;
@@ -2540,7 +2540,7 @@ export function App(): React.JSX.Element {
                     <Checkbox.Root size="sm" checked={Boolean(turn.excluded)} onCheckedChange={({ checked }) => void toggleExclusion({ turn: index }, checked === true)}><Checkbox.HiddenInput/><Checkbox.Control/><Checkbox.Label fontSize="xs" color="fg.muted">Exclou de l’entrenament</Checkbox.Label></Checkbox.Root>
                   </HStack>
                   <Text mt="1" fontSize="sm" whiteSpace="pre-wrap" overflowWrap="anywhere" lineClamp={8}>{turn.request || '—'}</Text>
-                  {turn.steps.length > 0 && <Stack mt="2" gap="1">{turn.steps.map((step, stepIndex) => <Box key={stepIndex} px="2" py="1" borderRadius="md" bg="surface.subtle" fontFamily="mono" fontSize="2xs" overflowWrap="anywhere">
+                  {turn.steps.length > 0 && <Stack mt="2" gap="1">{turn.steps.map((step, stepIndex) => <Box key={stepIndex} px="2" py="1" borderRadius="md" bg="bg.subtle" fontFamily="mono" fontSize="2xs" overflowWrap="anywhere">
                     <HStack gap="1.5"><Badge size="sm" variant="subtle" colorPalette={step.ok ? 'green' : 'red'}>{step.ok ? 'ok' : 'error'}</Badge><Text fontWeight="semibold" flex="1" textDecoration={step.excluded ? 'line-through' : undefined}>{step.name}</Text>
                       {step.ok && <Checkbox.Root size="xs" checked={Boolean(step.excluded)} disabled={Boolean(turn.excluded)} onCheckedChange={({ checked }) => void toggleExclusion({ step: `${index}:${step.index}` }, checked === true)} aria-label={`Exclou el pas ${step.name} de l’entrenament`}><Checkbox.HiddenInput/><Checkbox.Control/><Checkbox.Label fontFamily="body" color="fg.muted">Exclou</Checkbox.Label></Checkbox.Root>}</HStack>
                     {Object.entries(step.arguments).map(([key, value]) => <Text key={key} color="fg.muted">{key}: {value}</Text>)}

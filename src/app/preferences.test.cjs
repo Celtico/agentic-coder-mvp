@@ -70,7 +70,7 @@ test('every semantic colour the recipes and the app use exists in the theme (an 
   // undefined and the dialogs were see-through; fg.error and fg.warning had no colour either.
   for (const accent of ['agentic', 'blue']) {
     const system = theme.buildSystem(accent);
-    for (const token of ['bg', 'bg.panel', 'bg.subtle', 'bg.muted', 'fg', 'fg.muted', 'fg.error', 'fg.warning', 'border', 'border.subtle', 'canvas', 'surface', 'surface.subtle',
+    for (const token of ['bg', 'bg.panel', 'bg.subtle', 'bg.muted', 'fg', 'fg.muted', 'fg.error', 'fg.warning', 'border', 'border.subtle', 'canvas',
       'brand.solid', 'brand.fg', 'brand.subtle', 'agentic.solid', 'agentic.fg', 'agentic.subtle', 'agentic.contrast']) {
       assert.ok(system.token(`colors.${token}`), `${token} (${accent}) is not defined`);
     }
@@ -130,4 +130,11 @@ test('the backgrounds are Chakra’s own: bg, bg.subtle and bg.panel are not red
   assert.doesNotMatch(theme, /\bbg: \{\n\s*DEFAULT:/, 'no bg group of our own');
   assert.doesNotMatch(theme, /#212121|#262626|#f7f7f7/);
   assert.match(theme, /canvas: \{ value: \{ _light: "\{colors\.white\}", _dark: "\{colors\.black\}" \} \}/);
+});
+
+test('every colour of the app is Chakra’s: no fg, border or surface of our own', () => {
+  const theme = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'theme', 'system.ts'), 'utf8');
+  assert.doesNotMatch(theme, /\bfg: \{\n|\bborder: \{ DEFAULT|\bsurface\b/);
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /["']surface(\.subtle)?["']/);
 });
