@@ -196,3 +196,8 @@ test('a call whose arguments are named «parameter» or «parameters» runs with
     assert.deepEqual([calls[0]?.name, calls[0]?.arguments?.path], ['read_file', file], response);
   }
 });
+
+test('<function=name>{json}</tool_call> without its closing </function> is read as the call it is', async (t) => {
+  const { calls } = await run(t, { request: 'busca bg.inverted', responses: ['Vull veure-ho.<tool_call><function=search_text>{"query": "bg.inverted"}</tool_call>'], tool: async () => ({ matches: [] }) });
+  assert.deepEqual([calls[0]?.name, calls[0]?.arguments?.query], ['search_text', 'bg.inverted']);
+});

@@ -63,7 +63,8 @@ def _tool_call_objects(body):
     if text.startswith("call:"):
         text = text[len("call:"):].strip()
     # Qwen-style models sometimes put JSON arguments inside the XML function tag.
-    tagged = re.fullmatch(r"<function=([\w.-]+)>\s*(\{.*\})\s*</function>", text, re.DOTALL)
+    # (the closing </function> is sometimes left out: <function=name>{json}</tool_call>)
+    tagged = re.fullmatch(r"<function=([\w.-]+)>\s*(\{.*\})\s*(?:</function>)?", text, re.DOTALL)
     if tagged:
         return [{"name": tagged.group(1), "arguments": json.loads(tagged.group(2))}]
     # Qwen3-Coder's XML (<function=name><parameter=key>value</parameter>…), read without mlx_lm's parser.

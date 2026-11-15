@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Separator, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Progress, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
+  Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -19,6 +19,7 @@ import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { LlmLogPane } from './llm-log';
 import { ipcErrorText, missingInMain, RESTART_NOTICE } from './ipc-errors';
+import { splitToolCallMarkup } from './tool-call-markup';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
@@ -1740,7 +1741,18 @@ export function App(): React.JSX.Element {
           const experienceKey = `${activeSessionId}:${index}`;
           return <Box key={`${index}-${message.role}`} textStyle="chatMessage" fontSize={appearance.chatFontSize} alignSelf={message.role === 'user' ? 'flex-end' : 'stretch'} bg={message.role === 'user' ? 'bg.muted' : 'transparent'} borderRadius={message.role === 'user' ? '20px' : '0'} px={message.role === 'user' ? '4' : '2'} py={message.role === 'user' ? '3' : '0'} maxW={message.role === 'user' ? '82%' : '100%'} whiteSpace={message.role === 'user' ? 'pre-wrap' : undefined} overflowWrap="anywhere" color={message.error ? 'fg.error' : 'fg'}>
             {message.role === 'assistant'
-              ? <MarkdownPreview source={message.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>
+              ? (() => {
+                // A call the app could not read is not shown as the answer's text (src/app/tool-call-markup.ts).
+                const shown = splitToolCallMarkup(message.text);
+                return <>
+                  {shown.text && <MarkdownPreview source={shown.text} rehypePlugins={[rehypeSanitize]} disableCopy data-color-mode={colorMode} style={{ background: 'transparent', color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit', overflowWrap: 'anywhere' }}/>}
+                  {shown.calls.length > 0 && <Collapsible.Root mt="2" data-unread-tool-call>
+                    <Collapsible.Trigger asChild><ChakraButton size="xs" variant="subtle" colorPalette="yellow"><AlertTriangle size={14}/>{shown.calls.length === 1 ? 'Crida a eina no llegida' : `${shown.calls.length} crides a eines no llegides`}</ChakraButton></Collapsible.Trigger>
+                    <Collapsible.Content><Box mt="1.5" fontFamily="mono" fontSize="xs" whiteSpace="pre-wrap" overflowWrap="anywhere" bg="bg.subtle" borderRadius="md" px="2" py="1.5">{shown.calls.join('\n\n')}</Box>
+                      <Text mt="1" fontSize="2xs" color="fg.muted">El model l’ha escrita en un format que l’app no entén, i no s’ha executat. Al Log del model hi ha el detall.</Text></Collapsible.Content>
+                  </Collapsible.Root>}
+                </>;
+              })()
               : <>
                 {/* The images first, as a preview of each, then what was asked about them. */}
                 {message.images && message.images.length > 0 && <Flex wrap="wrap" justify="flex-end" gap="2" mb="2">{message.images.map((image, imageIndex) => <Image key={imageIndex} src={image.thumbnail} alt={image.name} title={image.name} maxH="60" maxW="full" objectFit="contain" borderRadius="lg"/>)}</Flex>}

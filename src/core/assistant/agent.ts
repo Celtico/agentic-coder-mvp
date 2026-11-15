@@ -261,8 +261,11 @@ function parseAction(raw: string): AgentAction | null {
         if (typeof call.name === 'string') action = { type: 'tool_call', name: call.name, arguments: call.arguments ?? call.parameters ?? call.parameter };
       }
     } catch {
+      // <function=name>{json}</function> inside the block, the closing </function> sometimes left out.
+      const tagged = /^<function=([\w.-]+)>\s*(\{[\s\S]*\})\s*(?:<\/function>)?$/.exec(match[1].trim());
+      if (tagged) { try { action = { type: 'tool_call', name: tagged[1], arguments: JSON.parse(tagged[2]) }; } catch { /* not JSON either */ } }
       // A file's content with real line breaks, or a missing closing brace.
-      action = parseLenient(match[1]);
+      action ??= parseLenient(match[1]);
     }
     if (action?.type !== 'tool_call') continue;
     if (validateToolCall(action)) return action;
