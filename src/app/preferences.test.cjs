@@ -17,7 +17,7 @@ fs.rmSync(dir, { recursive: true, force: true });
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the default appearance is the app as it was: dark, normal sizes, its own green', () => {
-  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', paneBg: 'auto', dialogs: 'glass' });
+  assert.deepEqual(prefs.defaultAppearance(), { colorMode: 'dark', chatFontSize: 'sm', editorFontSize: 11, accent: 'agentic', paneTone: 'brand', paneStyle: 'subtle', paneBg: 'bg.panel', dialogs: 'glass' });
 });
 
 test('a saved appearance keeps only valid values', () => {
@@ -95,14 +95,15 @@ test('with the blue accent the panes’ palette is blue (a tinted header: blue.s
   assert.match(app, /<Mark size=\{28\} gradient\/>/);
 });
 
-test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s own) by default, kept when saved', () => {
-  assert.deepEqual([...prefs.PANE_BACKGROUNDS], ['auto', 'bg', 'bg.subtle', 'bg.muted', 'bg.emphasized']);
-  assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.inverted' }).paneBg, 'auto', 'no longer offered');
-  assert.equal(prefs.defaultAppearance().paneBg, 'auto');
+test('Fons de les finestres: Chakra’s bg tokens, bg.panel by default, kept when saved; older values back to bg.panel', () => {
+  assert.deepEqual([...prefs.PANE_BACKGROUNDS], ['bg', 'bg.subtle', 'bg.muted', 'bg.emphasized', 'bg.panel']);
+  assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.inverted' }).paneBg, 'bg.panel', 'no longer offered');
+  assert.equal(prefs.normalizeAppearance({ paneBg: 'auto' }).paneBg, 'bg.panel');
+  assert.equal(prefs.defaultAppearance().paneBg, 'bg.panel');
   assert.equal(prefs.normalizeAppearance({ paneBg: 'bg.muted' }).paneBg, 'bg.muted');
-  assert.equal(prefs.normalizeAppearance({ paneBg: '#ff0000' }).paneBg, 'auto', 'only the tokens');
+  assert.equal(prefs.normalizeAppearance({ paneBg: '#ff0000' }).paneBg, 'bg.panel', 'only the tokens');
   const pane = require('node:fs').readFileSync(require('node:path').join(__dirname, 'pane-header.tsx'), 'utf8');
-  assert.match(pane, /bg=\{paneBg === "auto" \? undefined : paneBg\} color=\{paneBg === "bg\.inverted" \? "fg\.inverted" : undefined\}/);
+  assert.match(pane, /bg=\{paneBg === "bg\.panel" \? undefined : paneBg\}>/);
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<PaneBgContext\.Provider value=\{appearance\.paneBg\}>/);
   // Swatch cards like Chakra's token docs: the colour alone, its name and its values.
@@ -117,13 +118,9 @@ test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s
 test('Fons de les finestres reaches every window-like surface: bg and bg.panel re-pointed, dialogs and Historial too', () => {
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /if \(appearance\.paneBg !== 'bg'\) root\.setProperty\('--chakra-colors-bg', ref\(appearance\.paneBg\)\);/);
-  assert.match(app, /if \(appearance\.paneBg !== 'bg\.panel'\) root\.setProperty\('--chakra-colors-bg-panel', ref\(appearance\.paneBg\)\);/);
-  assert.match(app, /if \(appearance\.paneBg === 'auto'\) return;/, '«auto» leaves the theme as it is');
-  // Every dialog and the floating window take the text colour for bg.inverted.
-  const contents = app.match(/<Dialog\.Content\b[^>]*>/g) || [];
-  assert.ok(contents.length >= 10);
-  for (const tag of contents) assert.match(tag, /\{\.\.\.surfaceText\}/, tag);
-  assert.match(app, /<FloatingPanel\.Content [^>]*color="fg" \{\.\.\.surfaceText\}/);
+  assert.match(app, /root\.setProperty\('--chakra-colors-bg-panel', ref\(appearance\.paneBg\)\);/);
+  assert.match(app, /if \(appearance\.paneBg === 'bg\.panel'\) return;/, 'bg.panel leaves the theme as it is');
+  assert.doesNotMatch(app, /surfaceText|bg\.inverted/);
   // The swatches say their values like Chakra's docs.
   assert.match(app, /\{mode === '_light' \? 'light' : 'dark'\}: \{tokenValue\(chakraSystem, token, mode\)\}/);
 });

@@ -18,11 +18,10 @@ export const PANE_TONES: PaneHeaderTone[] = ["brand", "mono", "tinted"]
 /** How the panes themselves look: Chakra's Card variants (src/theme/pane-recipes.ts). */
 export const PANE_STYLES: PaneStyle[] = ["subtle", "outline", "elevated"]
 /**
- * The panes' background, one of Chakra's bg tokens; «auto» is the one of the chosen panel style.
- * (bg.inverted turns the text to fg.inverted too, src/app/pane-header.tsx.)
+ * The panes' background, one of Chakra's bg tokens; bg.panel (the theme's own, as until now) by default.
+ * Saved older values («auto», bg.inverted) go back to bg.panel.
  */
-// bg.panel is the same colour as bg in this theme, and bg.inverted made the panes unreadable: not offered.
-export const PANE_BACKGROUNDS = ["auto", "bg", "bg.subtle", "bg.muted", "bg.emphasized"] as const
+export const PANE_BACKGROUNDS = ["bg", "bg.subtle", "bg.muted", "bg.emphasized", "bg.panel"] as const
 export type PaneBackground = (typeof PANE_BACKGROUNDS)[number]
 /** What dialogs and floating windows are made of (src/theme/pane-recipes.ts). */
 export const DIALOG_MATERIAL_OPTIONS: DialogMaterial[] = ["solid", "glass"]
@@ -30,7 +29,7 @@ export const DIALOG_MATERIAL_OPTIONS: DialogMaterial[] = ["solid", "glass"]
 export type Appearance = { colorMode: ColorMode; chatFontSize: ChatFontSize; editorFontSize: number; accent: Accent; paneTone: PaneHeaderTone; paneStyle: PaneStyle; paneBg: PaneBackground; dialogs: DialogMaterial }
 
 /** As the app looked before there were preferences. */
-export const defaultAppearance = (): Appearance => ({ colorMode: "dark", chatFontSize: "sm", editorFontSize: 11, accent: "agentic", paneTone: "brand", paneStyle: "subtle", paneBg: "auto", dialogs: "glass" })
+export const defaultAppearance = (): Appearance => ({ colorMode: "dark", chatFontSize: "sm", editorFontSize: 11, accent: "agentic", paneTone: "brand", paneStyle: "subtle", paneBg: "bg.panel", dialogs: "glass" })
 
 export function normalizeAppearance(value: unknown): Appearance {
   const saved = value && typeof value === "object" ? value as Record<string, unknown> : {}
