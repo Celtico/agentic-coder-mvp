@@ -111,3 +111,17 @@ test('Fons de les finestres: Chakra’s bg tokens, «auto» (the panel style’s
   assert.doesNotMatch(app, /<NativeSelect\.Field aria-label="Fons de les finestres"/);
   assert.match(app, /theme: \{ background: tokenColor\(paneSurface\)/, 'the terminal follows it');
 });
+
+test('Fons de les finestres reaches every window-like surface: bg and bg.panel re-pointed, dialogs and Historial too', () => {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /if \(appearance\.paneBg !== 'bg'\) root\.setProperty\('--chakra-colors-bg', ref\(appearance\.paneBg\)\);/);
+  assert.match(app, /if \(appearance\.paneBg !== 'bg\.panel'\) root\.setProperty\('--chakra-colors-bg-panel', ref\(appearance\.paneBg\)\);/);
+  assert.match(app, /if \(appearance\.paneBg === 'auto'\) return;/, '«auto» leaves the theme as it is');
+  // Every dialog and the floating window take the text colour for bg.inverted.
+  const contents = app.match(/<Dialog\.Content\b[^>]*>/g) || [];
+  assert.ok(contents.length >= 10);
+  for (const tag of contents) assert.match(tag, /\{\.\.\.surfaceText\}/, tag);
+  assert.match(app, /<FloatingPanel\.Content \{\.\.\.surfaceText\}/);
+  // The swatches say their values like Chakra's docs.
+  assert.match(app, /\{mode === '_light' \? 'light' : 'dark'\}: \{tokenValue\(chakraSystem, token, mode\)\}/);
+});

@@ -137,6 +137,12 @@ const ChatMark: IconType = ({ size }) => <Mark size={typeof size === 'number' ? 
  * says «No handler registered», and an older preload has no such function at all.
  */
 const missingInMain = (error: unknown) => error instanceof TypeError && /is not a function/.test(error.message) || /No handler registered/i.test(String((error as Error)?.message ?? error));
+/** A bg token's value in one mode, as the theme defines it («{gray.100}», «#212121»), for Preferències. */
+const tokenValue = (system: ReturnType<typeof useChakraContext>, token: string, mode: '_light' | '_dark') => {
+  const group = (system as unknown as { _config?: { theme?: { semanticTokens?: { colors?: Record<string, Record<string, { value?: Record<string, string> }>> } } } })._config?.theme?.semanticTokens?.colors?.bg;
+  const value = group?.[token === 'bg' ? 'DEFAULT' : token.replace('bg.', '')]?.value?.[mode];
+  return value ? value.replace(/^\{colors\.(.+)\}$/, '{$1}') : '—';
+};
 const IconLabel = ({ icon: Icon, children }: { icon: IconType; children: React.ReactNode }) => <HStack gap="2"><Icon size={16}/><span>{children}</span></HStack>;
 type ProjectTreeNode = { value: string; label: string; children?: ProjectTreeNode[] };
 function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate, onDelete, onRename }: { node: ProjectTreeNode; indexPath: number[]; directoryPaths: ReadonlySet<string>; onOpen: (path: string) => void; onCreate: (path: string, directory: boolean) => void; onDelete: (path: string, directory: boolean) => void; onRename: (path: string) => void }) {
@@ -319,6 +325,20 @@ export function App(): React.JSX.Element {
   const [appearance, setAppearance] = useState<Appearance>(() => initialView.appearance);
   // The panes' background as a token (Preferències › Aparença › Fons de les finestres); «auto» is the
   // panel style's own: bg.panel for «Amb ombra», bg for the others. The terminal follows it.
+  // Every window-like surface (panes, dialogs, the floating Historial local, the editor and browser
+  // chrome…) is painted with Chakra's bg and bg.panel: the choice re-points those two tokens to the one
+  // chosen, so nothing is left out. «auto» leaves them as the theme defines them.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const ref = (token: string) => `var(--chakra-colors-${token.replace('.', '-')})`;
+    root.removeProperty('--chakra-colors-bg');
+    root.removeProperty('--chakra-colors-bg-panel');
+    if (appearance.paneBg === 'auto') return;
+    if (appearance.paneBg !== 'bg') root.setProperty('--chakra-colors-bg', ref(appearance.paneBg));
+    if (appearance.paneBg !== 'bg.panel') root.setProperty('--chakra-colors-bg-panel', ref(appearance.paneBg));
+  }, [appearance.paneBg]);
+  // With bg.inverted the text on those surfaces is fg.inverted (dialogs and the floating window too).
+  const surfaceText = appearance.paneBg === 'bg.inverted' ? { color: 'fg.inverted' } : {};
   const paneSurface = appearance.paneBg !== 'auto' ? appearance.paneBg : appearance.paneStyle === 'elevated' ? 'bg.panel' : 'bg';
   const setAccent = useSetAccent();
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true);
@@ -2326,7 +2346,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={createEntryKind === 'rename' ? Pencil : createEntryKind === 'directory' ? FolderPlus : FilePlus} title={createEntryKind === 'rename' ? 'Canvia el nom' : createEntryKind === 'directory' ? 'Crea un directori' : 'Crea un fitxer'}/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">{createEntryKind === 'rename' ? `Escriu el nom nou de «${renameEntryPath}».` : 'Escriu un nom o una ruta relativa dins del projecte.'}</Text>
@@ -2344,7 +2364,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Brain} title="Desa com a cas verificat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Indica què has comprovat perquè aquest exemple sigui fiable.</Text>
@@ -2365,7 +2385,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content maxW="3xl">
+          <Dialog.Content {...surfaceText} maxW="3xl">
             <DialogHeading icon={FileText} title="Dades preparades" subtitle={datasetView ? `${datasetView.counts.included} casos preparats · ${datasetView.discarded.length} descartats` : undefined}/>
             <Dialog.Body>
               {datasetView && <Tabs.Root size="sm" variant="line" defaultValue="train">
@@ -2404,7 +2424,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content maxW="xl">
+          <Dialog.Content {...surfaceText} maxW="xl">
             <DialogHeading icon={Plus} title="Crea un cas" subtitle="Compta per a la propera beta com qualsevol cas desat"/>
             <Dialog.Body>
               <Stack gap="4">
@@ -2436,7 +2456,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Pencil} title="Edita el cas desat"/>
             <Dialog.Body>
               <Text mb="2" fontSize="sm" color="fg.muted">Petició general</Text>
@@ -2457,7 +2477,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Trash} title="Esborra el cas desat"/>
             <Dialog.Body>
               <Text fontSize="sm" lineClamp={3} overflowWrap="anywhere">«{caseToDelete?.task}»</Text>
@@ -2476,7 +2496,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Eye} title="Detall del cas"/>
             <Dialog.Body>
               {caseDetail && <Stack gap="4">
@@ -2509,7 +2529,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content data-preferences>
+          <Dialog.Content {...surfaceText} data-preferences>
             <DialogHeading icon={Settings} title="Preferències"/>
             <Dialog.Body>
               {preferencesError && <Box mb="3"><Notice tone="warning">{preferencesError}</Notice></Box>}
@@ -2654,6 +2674,8 @@ export function App(): React.JSX.Element {
                           </HStack>
                           <Text mt="1.5" fontSize="xs" fontFamily={value === 'auto' ? undefined : 'mono'} color={appearance.paneBg === value ? 'agentic.fg' : 'fg'}>{value === 'auto' ? 'Segons l’estil del panell' : value}</Text>
                           {value === 'auto' && <Text fontSize="2xs" color="fg.muted" fontFamily="mono">{token}</Text>}
+                          {/* Its values, as Chakra's token docs show them: «light: {gray.100} · dark: {gray.900}». */}
+                          {(['_light', '_dark'] as const).map((mode) => <Text key={mode} fontSize="2xs" color="fg.muted" fontFamily="mono" truncate>{mode === '_light' ? 'light' : 'dark'}: {tokenValue(chakraSystem, token, mode)}</Text>)}
                         </Box>;
                       })}
                     </Grid>
@@ -2687,7 +2709,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Trash} title="Elimina la conversa?"/>
             <Dialog.Body>
               <Text fontSize="sm" fontWeight="medium" lineClamp={2} overflowWrap="anywhere">«{chatToDelete?.title}»</Text>
@@ -2705,7 +2727,7 @@ export function App(): React.JSX.Element {
       <Portal>
         <Dialog.Backdrop/>
         <Dialog.Positioner zIndex="1600">
-          <Dialog.Content>
+          <Dialog.Content {...surfaceText}>
             <DialogHeading icon={Trash} title="Paperera de converses" subtitle={chatTrash ? `${chatTrash.length} ${chatTrash.length === 1 ? 'conversa' : 'converses'}` : undefined}/>
             <Dialog.Body>
               {chatTrash && chatTrash.length === 0 && <Text fontSize="sm" color="fg.muted">La paperera és buida.</Text>}
@@ -2732,7 +2754,7 @@ export function App(): React.JSX.Element {
       getBoundaryEl={() => appAreaRef.current} persistRect defaultPosition={{ x: historyStart.x, y: historyStart.y }} defaultSize={{ width: historyStart.width, height: historyStart.height }} minSize={{ width: 680, height: 420 }} allowOverflow={false} closeOnEscape>
       <Portal>
       <FloatingPanel.Positioner zIndex="1000">
-        <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderWidth="1px" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
+        <FloatingPanel.Content {...surfaceText} w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderWidth="1px" color="fg" overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
         <RestoreWindowStage stage={fileHistoryStage}/>
         <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<PaneTitle icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath}/>}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
