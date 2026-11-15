@@ -44,8 +44,9 @@ La decisió del motor, els models provats i l'aprenentatge estan documentats a [
 
 ## Descàrrega
 Les versions publicades són a [Releases](https://github.com/Celtico/agentic-coder-mvp/releases). Hi ha un
-`.dmg` per a Mac amb Apple Silicon, i un `.AppImage` i un `.deb` per a Linux. Els canvis de cada versió són
-al [CHANGELOG](CHANGELOG.md).
+`.dmg` per a Mac amb Apple Silicon, i un `.AppImage` i un `.deb` per a Linux. El número de versió és la
+quantitat de commits, com a GesProd. Les notes de cada versió són els commits des de l'anterior. Com
+publicar-ne una: [docs/publicar.md](docs/publicar.md).
 
 Els models no van dins de l'app perquè ocupen uns quants GB. Tampoc hi va el motor de Python. La primera
 vegada cal preparar-los:

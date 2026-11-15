@@ -1,44 +1,32 @@
 # Com publicar una versió
 
-Les versions segueixen [Semantic Versioning](https://semver.org/lang/ca/):
+Les versions es numeren igual que a GesProd. El número és la quantitat de commits de la branca `main`:
+`v322`, `v323`… Puja tot sol a cada commit i no s'ha de tocar enlloc.
 
-- **pedaç** (`0.1.1`): correccions;
-- **menor** (`0.2.0`): funcionalitats noves;
-- **major** (`1.0.0`): canvis que trenquen el que hi havia.
+- L'app el mostra sota el logo. Si hi passes per sobre, mostra el commit.
+- Des del repositori, el llegeix de git cada vegada que s'obre.
+- L'app instal·lada porta el número i el commit amb què es va construir.
 
-## Els passos
+## Publicar-ne una
 
-1. **Pujar la versió** a `package.json`, al camp `version`, per exemple `0.2.0`. També es pot fer amb
-   `npm version 0.2.0 --no-git-tag-version`.
-2. **Actualitzar `CHANGELOG.md`:**
-   - mou el que hi ha a `## [Unreleased]` a una secció nova, `## [0.2.0] - AAAA-MM-DD`;
-   - afegeix l’enllaç de la versió al final del fitxer.
-3. **Fer el commit:**
-   ```bash
-   git commit -am "versió 0.2.0"
-   ```
-4. **Crear el tag i pujar-lo:**
+1. Puja els commits:
    ```bash
    git push origin main
-   git tag v0.2.0
-   git push origin v0.2.0
    ```
+2. A GitHub, ves a **Actions** › **Publica una versió** › **Run workflow**, sobre `main`.
 
-En pujar el tag, GitHub Actions (`.github/workflows/release.yml`) fa això:
+GitHub fa això:
 
-1. Comprova que el tag coincideix amb la versió de `package.json`.
-2. Passa les proves (al Mac).
-3. Construeix l’app: un `.dmg` per a Mac amb Apple Silicon, i un `.AppImage` i un `.deb` per a Linux.
-4. Crea la Release amb aquests fitxers. Les notes de la Release són la secció de la versió al `CHANGELOG.md`.
+1. Crea la Release `vN`. N és la quantitat de commits.
+2. Hi posa com a notes els missatges dels commits des de la versió anterior.
+3. Construeix l'app i hi afegeix els fitxers: un `.dmg` per a Mac amb Apple Silicon, i un `.AppImage` i un
+   `.deb` per a Linux.
 
-Es pot seguir a la pestanya **Actions** del repositori. La Release surt a **Releases**.
+Els missatges dels commits no han de seguir cap format especial, com `feat:` o `fix:`. Les notes són els
+missatges tal com els escrius, en català.
 
 ## Si falla
 
-- **«El tag no coincideix amb la versió de package.json»:** esborra el tag i torna a fer els passos amb la
-  mateixa versió als dos llocs.
-  ```bash
-  git tag -d v0.2.0
-  git push origin :refs/tags/v0.2.0
-  ```
-- **«CHANGELOG.md no té cap secció»:** afegeix la secció `## [0.2.0]` i torna a crear el tag.
+- Ho veuràs a **Actions**. Si la Release ja s'ha creat però li falten fitxers, torna a llançar només el
+  treball que ha fallat: **Re-run failed jobs**.
+- Per publicar el mateix número una altra vegada, esborra abans la Release i el tag `vN` a GitHub.

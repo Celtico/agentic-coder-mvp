@@ -103,8 +103,8 @@ export interface AgenticBridge {
   setPermissionMode(mode: 'ask' | 'auto'): Promise<'ask' | 'auto'>;
   listModels(): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
   selectModel(modelId: string): Promise<{ selectedModel: string; models: LocalModelOption[] }>;
-  /** The app's version, from package.json (e.g. «0.1.0»). */
-  appVersion(): Promise<string>;
+  /** The app's version: the count of commits of the branch and the commit it was built from (src/electron/app-version.cjs). */
+  appVersion(): Promise<{ version: string; commit: string }>;
   setTranslucent(on: boolean): Promise<boolean>;
   setLlmTrace(change: { open?: boolean; logprobs?: boolean }): Promise<{ open: boolean; logprobs: boolean }>;
   listLlmCalls(): Promise<{ calls: unknown[] }>;

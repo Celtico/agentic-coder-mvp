@@ -110,33 +110,24 @@ test('the PC’s setup: requirements, a script that builds models/.cuda-venv, an
   assert.match(guide, /encara no s'ha\s+> executat en un PC amb GPU NVIDIA/, 'honest about it being untested on real hardware');
 });
 
-test('versions and releases: package.json’s version under the mark, a tag that must match it, CHANGELOG as the notes', () => {
-  const pkg = JSON.parse(read('package.json'));
-  assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
-  const changelog = read('CHANGELOG.md');
-  assert.match(changelog, /^## \[Unreleased\]$/m);
-  assert.match(changelog, new RegExp(`^## \\[${pkg.version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm'), 'a section for the current version');
+test('versions as in GesProd: the count of commits, the commit on hover; a release published by hand from Actions', () => {
+  const { appVersion } = require('./app-version.cjs');
+  assert.deepEqual(appVersion({ isPackaged: false, git: () => ({ version: '322', commit: 'ea32d30' }) }), { version: '322', commit: 'ea32d30' });
+  assert.deepEqual(appVersion({ isPackaged: false, git: () => null }), { version: 'dev', commit: '' }, 'no git: dev');
+  assert.deepEqual(appVersion({ isPackaged: true, packageJson: { version: '0.0.322', appCommit: 'ea32d30' } }), { version: '322', commit: 'ea32d30' }, 'the installed app: what it was built with');
+  assert.deepEqual(appVersion({ isPackaged: true, packageJson: { version: '0.1.0' } }), { version: '0.1.0', commit: '' });
   const workflow = require('js-yaml').load(read('.github/workflows/release.yml'));
-  assert.deepEqual(workflow.on, { push: { tags: ['v*'] } });
+  assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch'], 'published by hand, nothing on each push');
   assert.deepEqual(workflow.permissions, { contents: 'write' });
-  const steps = workflow.jobs.build.steps;
-  const run = steps.map((step) => step.run || '').join('\n');
-  assert.match(run, /if \[ "\$\{GITHUB_REF_NAME\}" != "v\$\{version\}" \]/);
-  assert.match(run, /CHANGELOG\.md > release-notes\.md/);
-  assert.match(run, /npm run \$\{\{ matrix\.dist \}\} -- --publish never/);
-  const release = steps.find((step) => String(step.uses).startsWith('softprops/action-gh-release@'));
-  assert.match(release.uses, /@v\d+\.\d+\.\d+$/, 'pinned to a full version');
-  assert.equal(release.with.body_path, 'release-notes.md');
-  assert.deepEqual(workflow.jobs.build.strategy.matrix.include.map((item) => [item.os, item.dist]), [['macos-14', 'dist:mac'], ['ubuntu-latest', 'dist:linux']]);
-  // The changelog's notes come out of the awk the workflow runs.
-  const { execFileSync } = require('node:child_process');
-  const awk = /awk -v v="\$version" '([\s\S]*?)' CHANGELOG\.md/.exec(run)[1];
-  const notes = execFileSync('awk', ['-v', `v=${pkg.version}`, awk, path.join(root, 'CHANGELOG.md')], { encoding: 'utf8' });
-  assert.match(notes, /### Agent/);
-  assert.doesNotMatch(notes, /## \[/);
+  const run = [...workflow.jobs.release.steps, ...workflow.jobs.build.steps].map((step) => step.run || '').join('\n');
+  assert.match(run, /git rev-list --count HEAD/);
+  assert.match(run, /git log --no-merges --format='- %s' "\$range"/, 'the notes are the commits since the previous version');
+  assert.match(run, /gh release create "v\$\{VERSION\}"/);
+  assert.match(run, /-c\.extraMetadata\.version=0\.0\.\$\{\{ needs\.release\.outputs\.version \}\} -c\.extraMetadata\.appCommit=/);
+  assert.match(run, /gh release upload "v\$\{\{ needs\.release\.outputs\.version \}\}" \$\{\{ matrix\.files \}\} --clobber/);
+  assert.equal(workflow.jobs.release.steps[0].with['fetch-depth'], 0, 'the whole history, to count it');
   const app = read('src/app/App.tsx');
-  assert.match(app, /\{appVersion && <Text [^>]*fontSize="2xs" color="fg\.subtle"[^>]*data-app-version>v\{appVersion\}<\/Text>\}/);
-  assert.match(read('src/electron/main.cjs'), /ipcMain\.handle\('app:version', async \(\) => app\.getVersion\(\)\);/);
-  // Nothing of the models or the local data goes into the package.
-  assert.ok(!pkg.build.files.some((pattern) => /^(models|logs)\b/.test(pattern)));
+  assert.match(app, /<Tip label=\{appVersion\.commit \? `commit \$\{appVersion\.commit\}` : 'dev'\}><Text [^>]*fontSize="2xs" color="fg\.subtle"[^>]*data-app-version>v\{appVersion\.version\}<\/Text><\/Tip>/);
+  const pkg = JSON.parse(read('package.json'));
+  assert.ok(!pkg.build.files.some((pattern) => /^(models|logs)\b/.test(pattern)), 'no models or local data in the package');
 });

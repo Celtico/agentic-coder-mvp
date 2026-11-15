@@ -525,8 +525,13 @@ ipcMain.handle('window:set-translucent', async (_event, on) => {
   win.setBackgroundColor(on === true ? '#00000000' : '#171717');
   return on === true;
 });
-// The app's version (package.json, through Electron): shown under the mark in the left bar.
-ipcMain.handle('app:version', async () => app.getVersion());
+// The app's version, as in GesProd: the count of commits of the branch and the commit (src/electron/app-version.cjs),
+// shown under the mark in the left bar.
+ipcMain.handle('app:version', async () => require('./app-version.cjs').appVersion({
+  isPackaged: app.isPackaged,
+  packageJson: require(path.join(__dirname, '..', '..', 'package.json')),
+  git: () => require('./app-version.cjs').fromGit(path.join(__dirname, '..', '..')),
+}));
 ipcMain.handle('llm:set', async (_event, change) => {
   if (typeof change?.open === 'boolean') llmTrace.open = change.open;
   if (typeof change?.logprobs === 'boolean') llmTrace.logprobs = change.logprobs;
