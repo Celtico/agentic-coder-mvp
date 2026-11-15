@@ -46,7 +46,7 @@ export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage
   const minimized = stage === "minimized"
   const maximized = stage === "maximized"
   return (
-    <FloatingPanel.Header p="0" gap="0" minH="0">
+    <FloatingPanel.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0">
       {/* The pane header's box: 40 px, centred vertically, its padding and its line underneath. */}
       <FloatingPanel.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border">
         <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic">

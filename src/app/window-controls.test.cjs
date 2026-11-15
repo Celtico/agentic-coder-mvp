@@ -76,3 +76,10 @@ test('the floating window: a Mac window’s rounder corners and a header of the 
   assert.match(recipes, /header: \{ \.\.\.chakraFloatingPanel\.base\.header, bg: "transparent", borderBottomWidth: "0" \}/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /floatingPanel: floatingPanelRecipe/);
 });
+
+test('the floating window’s corners and header are set on the elements too, so nothing overrides them', () => {
+  const controls = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
+  assert.match(controls, /<FloatingPanel\.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0">/);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /<FloatingPanel\.Content [^>]*borderRadius="xl" boxShadow="2xl"[^>]*overflow="hidden"/);
+});
