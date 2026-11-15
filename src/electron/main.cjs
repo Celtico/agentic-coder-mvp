@@ -621,6 +621,8 @@ function cleanConversationHistory(value) {
 
 async function askModel(prompt, projectRoot, history = [], images = []) {
   if (activeModelRequestId !== null) throw new Error('Ja hi ha una petició al model local en marxa.');
+  // One model on the GPU at a time (unless the dictation lives beside it): a resident Whisper goes first.
+  if (!liveModel?.shared) residentWhisper.release();
   const id = ++requestId;
   activeModelRequestId = id;
   let child;
@@ -842,7 +844,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); });
+app.on('before-quit', () => { if (activeProjectProcess) stopProjectProcess(); stopMcpServers(); residentWhisper.release(); });
 
 ipcMain.handle('project:open', async () => {
   const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
@@ -1405,6 +1407,8 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
   // The chat model would take the memory the benchmark's own model process needs.
   if (modelWorker) { const child = modelWorker; modelWorker = null; child.kill('SIGTERM'); }
   const controller = new AbortController();
+  // A training or an evaluation needs the memory: the resident Whisper goes first.
+  residentWhisper.release();
   benchmarkRun = { controller, label: model.label };
   (async () => {
     let result = null;
@@ -1515,6 +1519,8 @@ async function startVersionRun(kind) {
   // Only one model on the GPU: the chat's model is unloaded first, and the training takes the GPU lock.
   await stopModelWorker();
   const controller = new AbortController();
+  // A training or an evaluation needs the memory: the resident Whisper goes first.
+  residentWhisper.release();
   trainingRun = { controller, name: kind, base: base.label };
   (async () => {
     try {
@@ -1667,25 +1673,37 @@ ipcMain.handle('preferences:set-dictation', async (_event, change) => {
 ipcMain.handle('dictation:microphone', async () => process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true);
 // Live dictation: a warm Whisper while the user speaks (partial text every few seconds), then the final
 // pass over the whole recording. Only while the chat is not answering: one model on the GPU at a time.
+// The warm Whisper (live dictation) stays resident between dictations (the next one starts at once) and is
+// closed after ten minutes without dictation, before a training or an evaluation and when the app quits.
+// By default it holds the GPU lock like any model (one at a time: the chat's model is unloaded while it is
+// there, and it is closed before the chat answers). With Preferències › Agent › Dictat › «conviu» on, it
+// takes no lock and lives beside the chat's model (with little free memory, it goes back to the default).
+let liveModel = null;
+const residentWhisper = dictation.createResidentTranscriber({
+  start: () => {
+    const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
+    const child = spawn(mlxPythonPath(), ['-u', script, '--serve', dictation.dictationModelDirectory(liveModel, projectModelsDirectory()), dictationPreferences.language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder', ...(liveModel.shared ? { AGENT_DICTATION_SHARED: '1' } : {}) }, stdio: ['pipe', 'pipe', 'ignore'] });
+    child.stdout.setEncoding('utf8');
+    return dictation.createLiveTranscriber(child);
+  },
+});
 let liveDictation = null;
 async function dictationModelReady() {
   const model = dictation.DICTATION_MODELS.find((item) => item.id === dictationPreferences.model);
   if (!await dictation.dictationModelInstalled(model, projectModelsDirectory())) throw new Error(`Falta el model de dictat ${model.label} (${model.repo}, ${Math.round(model.bytes / 1e6)} MB) a models/whisper/${model.folder}.`);
   return model;
 }
-function stopLiveDictation() { if (liveDictation) { liveDictation.stop(); liveDictation = null; } }
 ipcMain.handle('dictation:live-start', async () => {
   if (trainingRun || benchmarkRun) return { live: false, reason: 'Hi ha un entrenament o una avaluació en marxa.' };
-  if (activeModelRequestId !== null) return { live: false, reason: 'El xat està responent: el text sortirà quan acabis de parlar.' };
   const model = await dictationModelReady();
-  stopLiveDictation();
-  await stopModelWorker();
-  const script = path.join(__dirname, '..', 'core', 'assistant', 'mlx_dictation.py');
-  const child = spawn(mlxPythonPath(), ['-u', script, '--serve', dictation.dictationModelDirectory(model, projectModelsDirectory()), dictationPreferences.language], { env: { ...process.env, AGENT_MLX_LOCK_LABEL: 'el dictat d’Agentic Coder' }, stdio: ['pipe', 'pipe', 'ignore'] });
-  child.stdout.setEncoding('utf8');
-  const live = dictation.createLiveTranscriber(child);
-  liveDictation = live;
-  try { await live.ready; } catch (error) { if (liveDictation === live) stopLiveDictation(); return { live: false, reason: error.message }; }
+  const shared = dictationPreferences.coexist && dictation.roomForWhisper(require('node:os').freemem(), require('node:os').totalmem());
+  // One model at a time (the default): not while the chat answers, and the chat's model is unloaded.
+  if (!shared && activeModelRequestId !== null) return { live: false, reason: 'El xat està responent: el text sortirà quan acabis de parlar.' };
+  // Another model, language or way than the resident one: that one goes and this one comes.
+  if (liveModel && (liveModel.id !== model.id || liveModel.language !== dictationPreferences.language || liveModel.shared !== shared)) residentWhisper.release();
+  liveModel = { ...model, language: dictationPreferences.language, shared };
+  if (!shared && !residentWhisper.resident) await stopModelWorker();
+  try { liveDictation = await residentWhisper.acquire(); } catch (error) { liveDictation = null; return { live: false, reason: error.message }; }
   return { live: true };
 });
 async function liveTranscribe(audio) {
@@ -1696,11 +1714,12 @@ async function liveTranscribe(audio) {
   finally { await fs.rm(file, { force: true }).catch(() => {}); }
 }
 ipcMain.handle('dictation:live-partial', async (_event, audio) => ({ text: await liveTranscribe(audio) }));
+// The final pass; the warm Whisper then stays resident for the next dictation (closed after ten idle minutes).
 ipcMain.handle('dictation:live-final', async (_event, audio) => {
   try { return { text: await liveTranscribe(audio) }; }
-  finally { stopLiveDictation(); }
+  finally { liveDictation = null; residentWhisper.idle(); }
 });
-ipcMain.handle('dictation:live-stop', async () => { stopLiveDictation(); return true; });
+ipcMain.handle('dictation:live-stop', async () => { liveDictation = null; residentWhisper.idle(); return true; });
 ipcMain.handle('dictation:transcribe', async (_event, audio) => {
   if (trainingRun || benchmarkRun) throw new Error('Hi ha un entrenament o una avaluació en marxa: el dictat pot esperar que acabi.');
   const { buffer } = dictation.validateDictationAudio(audio);

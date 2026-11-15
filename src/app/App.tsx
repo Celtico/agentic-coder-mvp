@@ -25,7 +25,7 @@ import { PaneRow } from './pane-row';
 import { Pane as PaneCard, PaneBgContext, PaneHeader, PaneIcon, PaneStyleContext, PaneTitle, PaneToneContext, PaneToolbar, type PaneHeaderTone, type PaneStyle } from './pane-header';
 import { clampWindowRect, loadViewState, setProjectView, updateViewState, type ViewState } from './view-state';
 import { isWindowNotice } from './chat-notices';
-import { appendDictation, createLatestQueue, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64 } from './dictation';
+import { appendDictation, createLatestQueue, isSilent, LIVE_CHUNK_MS, MAX_RECORDING_MS, recordingToWav, toBase64, wavLevel } from './dictation';
 import { imageProblem, isImageFile, prepareImage, type ChatImage } from './image-attachments';
 import { closeTab, firstExistingFile, openTab, removeFromTabs, renameInTabs, savedTabs, tabLabels } from './editor-tabs';
 import { useSetAccent } from '../components/ui/provider';
@@ -933,8 +933,12 @@ export function App(): React.JSX.Element {
       const recorder = new MediaRecorder(stream);
       const chunks: Blob[] = [];
       // Partial passes over the audio so far, one at a time; the newest replaces one that waits.
+      // Each partial pass decodes the whole recording so far (its header and every chunk): a later chunk of
+      // a MediaRecorder recording cannot be decoded on its own.
       const partials = createLatestQueue(async (audio: Blob) => {
-        const { text } = await window.agentic.liveDictationPartial!({ data: toBase64(await recordingToWav(audio)) });
+        const wav = await recordingToWav(audio);
+        if (isSilent(wavLevel(wav))) return;
+        const { text } = await window.agentic.liveDictationPartial!({ data: toBase64(wav) });
         if (recorderRef.current?.recorder === recorder) setDictationPartial(text);
       });
       recorder.ondataavailable = (event) => {
@@ -965,7 +969,14 @@ export function App(): React.JSX.Element {
     setDictation('transcribing');
     setStatus('Transcrivint en local…');
     try {
-      const audio = { data: toBase64(await recordingToWav(blob)) };
+      const wav = await recordingToWav(blob);
+      // Silence (no sound reaches the microphone): Whisper would invent «Gràcies.»; it is not called.
+      if (isSilent(wavLevel(wav))) {
+        if (live) void window.agentic.stopLiveDictation?.();
+        setStatus('No arriba so del micròfon: comprova el dispositiu d’entrada i el permís del micròfon (Configuració del Sistema › Privadesa i seguretat › Micròfon › Electron).');
+        return;
+      }
+      const audio = { data: toBase64(wav) };
       // Live: the final pass over the whole recording with the warm Whisper (it then stops); otherwise one pass.
       const { text } = live && window.agentic.liveDictationFinal ? await window.agentic.liveDictationFinal(audio) : await window.agentic.transcribe(audio);
       if (text) { setDraft((current) => appendDictation(current, text)); setStatus('Dictat afegit al quadre de text: revisa’l abans d’enviar.'); promptRef.current?.focus(); }
@@ -2641,7 +2652,9 @@ export function App(): React.JSX.Element {
                         {dictationInfo.languages.map((language) => <option key={language} value={language}>{DICTATION_LANGUAGE_LABELS[language]}</option>)}
                       </NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
                     </HStack>
-                    <Text mt="1" fontSize="xs" color="fg.muted">Es transcriu en aquest Mac. Mentre transcriu, el model del xat es descarrega i torna a carregar-se amb el missatge següent.</Text>
+                    <Text mt="1" fontSize="xs" color="fg.muted">Es transcriu en aquest Mac, mentre parles. Per defecte només hi ha un model a la GPU alhora: mentre dictes, el model del xat es descarrega i torna a carregar-se amb el missatge següent.</Text>
+                    <Checkbox.Root mt="2" size="sm" checked={dictationInfo.preferences.coexist} onCheckedChange={({ checked }) => void changeDictationPreferences({ coexist: checked === true })}><Checkbox.HiddenInput/><Checkbox.Control/><Checkbox.Label fontSize="sm">Dictat sense descarregar el model del xat (Whisper conviu amb el model; ~0,5 GB més a la GPU)</Checkbox.Label></Checkbox.Root>
+                    <Text mt="1" fontSize="xs" color="fg.muted">La regla d’un sol model a la GPU es va posar després d’un kernel panic amb dos models carregats alhora; activa-ho només si vols provar-ho.</Text>
                   </Box>}
                 </Stack></Tabs.Content>
                 <Tabs.Content value="learning"><Stack gap="4">

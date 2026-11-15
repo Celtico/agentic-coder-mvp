@@ -59,3 +59,15 @@ test('live dictation: never two partial passes at once; one that waits is replac
   assert.match(app, /partials\.clear\(\);\n\s*void partials\.idle\(\)\.then\(\(\) => transcribeRecording\(/, 'the final pass waits for the partial in flight');
   assert.match(app, /\{dictationPartial && <Text [^>]*color="fg\.muted"[^>]*data-dictation-partial>/);
 });
+
+test('silence never goes to Whisper: the level of the WAV, and each partial decodes the whole recording so far', () => {
+  const silent = dictation.encodeWav(new Float32Array(16000));
+  const spoken = dictation.encodeWav(new Float32Array(16000).map((_, index) => Math.sin(index / 5) * 0.3));
+  assert.equal(dictation.isSilent(dictation.wavLevel(silent)), true);
+  assert.equal(dictation.isSilent(dictation.wavLevel(spoken)), false);
+  assert.equal(dictation.wavLevel(spoken).seconds, 1);
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /partials\.push\(new Blob\(chunks, \{ type: recorder\.mimeType \}\)\)/, 'all the chunks from the first (with the header)');
+  assert.match(app, /if \(isSilent\(wavLevel\(wav\)\)\) return;/);
+  assert.match(app, /No arriba so del micròfon/);
+});

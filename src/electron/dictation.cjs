@@ -22,13 +22,16 @@ const DICTATION_MODELS = [
 const DEFAULT_DICTATION_MODEL = 'whisper-large-v3-turbo-q4';
 const DICTATION_LANGUAGES = ['auto', 'ca', 'es', 'en'];
 
-const defaultDictationPreferences = () => ({ model: DEFAULT_DICTATION_MODEL, language: 'auto' });
+// `coexist`: the warm Whisper lives beside the chat's model instead of one model on the GPU at a time.
+// Off by default: the one-model rule came after a kernel panic (13-11-2026, two MLX processes with models).
+const defaultDictationPreferences = () => ({ model: DEFAULT_DICTATION_MODEL, language: 'auto', coexist: false });
 
 function normalizeDictationPreferences(value, base = defaultDictationPreferences()) {
   const saved = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
     model: DICTATION_MODELS.some((model) => model.id === saved.model) ? saved.model : base.model,
     language: DICTATION_LANGUAGES.includes(saved.language) ? saved.language : base.language,
+    coexist: typeof saved.coexist === 'boolean' ? saved.coexist : base.coexist,
   };
 }
 
@@ -151,8 +154,45 @@ function createLiveTranscriber(child, { readyTimeoutMs = 60_000 } = {}) {
   };
 }
 
+/** A warm Whisper stays resident this long after the last dictation, then is closed. */
+const LIVE_DICTATION_IDLE_MS = 10 * 60_000;
+
+/**
+ * The warm Whisper kept between dictations: `acquire()` gives the resident one (or starts one with
+ * `start()`), `idle()` arms the timer that closes it after `idleMs` without dictation, `release()` closes it
+ * now (the chat is about to use the GPU, or the app quits). One at a time.
+ */
+function createResidentTranscriber({ start, idleMs = LIVE_DICTATION_IDLE_MS, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let current = null;
+  let timer = null;
+  const cancelTimer = () => { if (timer) { clearTimer(timer); timer = null; } };
+  const release = () => { cancelTimer(); if (current) { const closing = current; current = null; closing.stop(); } };
+  return {
+    async acquire() {
+      cancelTimer();
+      if (current) return current;
+      const fresh = start();
+      current = fresh;
+      try { await fresh.ready; } catch (error) { if (current === fresh) current = null; fresh.stop(); throw error; }
+      return fresh;
+    },
+    idle() { cancelTimer(); if (current) timer = setTimer(release, idleMs); },
+    release,
+    get resident() { return current !== null; },
+  };
+}
+
+/**
+ * Whether a warm Whisper (~0.5 GB loaded, a little more while it transcribes) fits beside the chat's model:
+ * on a Mac with 12 GB or more it always does; on a smaller one only with 1.5 GB free. (macOS counts its file
+ * cache as used memory, so the free figure alone would say no too often.)
+ */
+const WHISPER_MIN_FREE_BYTES = 1.5 * 1024 ** 3;
+const WHISPER_ROOMY_TOTAL_BYTES = 12 * 1024 ** 3;
+const roomForWhisper = (freeBytes, totalBytes = 0) => totalBytes >= WHISPER_ROOMY_TOTAL_BYTES || (Number.isFinite(freeBytes) && freeBytes >= WHISPER_MIN_FREE_BYTES);
+
 module.exports = {
-  createLiveTranscriber,
+  createLiveTranscriber, createResidentTranscriber, LIVE_DICTATION_IDLE_MS, WHISPER_MIN_FREE_BYTES, roomForWhisper,
   DICTATION_MODELS, DEFAULT_DICTATION_MODEL, DICTATION_LANGUAGES, MAX_AUDIO_BYTES,
   defaultDictationPreferences, normalizeDictationPreferences, dictationModelDirectory, dictationModelInstalled,
   validateDictationAudio, writeDictationAudio, createDictationQueue, parseDictationOutput,

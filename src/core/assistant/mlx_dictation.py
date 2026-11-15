@@ -38,25 +38,44 @@ def read_wav(path):
     return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
 
 
+SILENCE_PEAK = 0.005
+
+
+def is_silent(samples):
+    """Silence (or almost): Whisper given it invents a word («Gràcies.»), so it is not called."""
+    return samples.size == 0 or float(abs(samples).max()) < SILENCE_PEAK
+
+
+def transcribe(mlx_whisper, model_dir, path, language):
+    samples = read_wav(path)
+    if is_silent(samples):
+        return ""
+    result = mlx_whisper.transcribe(samples, path_or_hf_repo=model_dir, language=language_option(language), task="transcribe", verbose=None, condition_on_previous_text=False)
+    return str(result.get("text", "")).strip()
+
+
 def emit(value):
     sys.stdout.write(json.dumps(value, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
 def serve(model_dir, language):
-    """Live dictation: the model stays loaded (and the GPU lock held) until stdin closes."""
+    """Live dictation: the model stays loaded until stdin closes. It takes the GPU lock (mlx_lock.py), one
+    model at a time, unless the app asks it to live beside the chat's model (AGENT_DICTATION_SHARED=1,
+    Preferències › Agent › Dictat); then the app closes it before a training or an evaluation."""
     try:
         import mlx_whisper
     except ImportError:
         emit({"error": "Falta mlx-whisper al runtime MLX: el dictat no funcionarà fins que s’instal·li."})
         return 1
-    import mlx_lock
+    if os.environ.get("AGENT_DICTATION_SHARED") != "1":
+        import mlx_lock
 
-    try:
-        lock = mlx_lock.acquire()  # noqa: F841 — kept until this process ends
-    except RuntimeError as error:
-        emit({"error": str(error)})
-        return 1
+        try:
+            lock = mlx_lock.acquire()  # noqa: F841 — kept until this process ends
+        except RuntimeError as error:
+            emit({"error": str(error)})
+            return 1
     emit({"ready": True})
     for line in sys.stdin:
         try:
@@ -65,8 +84,7 @@ def serve(model_dir, language):
             continue
         job_id = job.get("id")
         try:
-            result = mlx_whisper.transcribe(read_wav(job["file"]), path_or_hf_repo=model_dir, language=language_option(language), task="transcribe", verbose=None)
-            emit({"id": job_id, "text": str(result.get("text", "")).strip()})
+            emit({"id": job_id, "text": transcribe(mlx_whisper, model_dir, job["file"], language)})
         except Exception as error:  # noqa: BLE001 — the window shows what went wrong
             emit({"id": job_id, "error": f"No s’ha pogut transcriure: {error}"})
     return 0
@@ -92,8 +110,7 @@ def main(argv):
         emit({"error": str(error)})
         return 1
     try:
-        result = mlx_whisper.transcribe(read_wav(audio_path), path_or_hf_repo=model_dir, language=language_option(language), task="transcribe", verbose=None)
-        emit({"text": str(result.get("text", "")).strip()})
+        emit({"text": transcribe(mlx_whisper, model_dir, audio_path, language)})
         return 0
     except Exception as error:  # noqa: BLE001 — the window shows what went wrong
         emit({"error": f"No s’ha pogut transcriure: {error}"})

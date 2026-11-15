@@ -91,3 +91,24 @@ export function createLatestQueue<T>(run: (job: T) => Promise<void>) {
 
 /** Every few seconds while dictating live, the audio so far is transcribed again. */
 export const LIVE_CHUNK_MS = 2500
+
+/**
+ * How loud a 16-bit WAV is: its peak and RMS in [0, 1]. Whisper given silence (no microphone sound, a muted
+ * or wrong input, no permission) invents a word («Gràcies.»), so silence is caught before it gets there.
+ */
+export function wavLevel(wav: ArrayBuffer): { peak: number; rms: number; seconds: number } {
+  const view = new DataView(wav)
+  const count = Math.max(0, Math.floor((wav.byteLength - 44) / 2))
+  let peak = 0
+  let sum = 0
+  for (let index = 0; index < count; index += 1) {
+    const value = Math.abs(view.getInt16(44 + index * 2, true)) / 32768
+    if (value > peak) peak = value
+    sum += value * value
+  }
+  return { peak, rms: count ? Math.sqrt(sum / count) : 0, seconds: count / DICTATION_RATE }
+}
+
+/** Below this the recording is silence (about −46 dB of peak): nothing is sent to Whisper. */
+export const SILENCE_PEAK = 0.005
+export const isSilent = (level: { peak: number }) => level.peak < SILENCE_PEAK
