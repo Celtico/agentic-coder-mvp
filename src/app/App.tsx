@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
@@ -157,6 +157,9 @@ function ProjectTreeNodeView({ node, indexPath, directoryPaths, onOpen, onCreate
 const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot trigar fins a mig minut…';
 /** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
 const STOP_CONFIRM_MS = 3000;
+/** Dades preparades › Mostra: the splits and why a case was left out. */
+const DATASET_SPLITS = [['train', 'Entrenament'], ['validation', 'Validació'], ['test', 'Prova']] as const;
+const DISCARD_REASONS: Record<DatasetView['discarded'][number]['reason'], string> = { duplicate: 'Duplicat', secret: 'Possible credencial', invalid: 'Invàlid', unverified: 'Sense verificar' };
 /** The names of the accents in Preferències › Aparença (src/theme/accent.ts). */
 const ACCENT_LABELS: Record<Accent, string> = { agentic: 'Agentic (verd)', gray: 'Gris', red: 'Vermell', orange: 'Taronja', yellow: 'Groc', green: 'Verd', teal: 'Verd blavós', blue: 'Blau', cyan: 'Cian', purple: 'Lila', pink: 'Rosa' };
 const DICTATION_LANGUAGE_LABELS: Record<DictationPreferences['language'], string> = { auto: 'Detecta l’idioma', ca: 'Català', es: 'Castellà', en: 'Anglès' };
@@ -436,6 +439,9 @@ export function App(): React.JSX.Element {
   const [manualCase, setManualCase] = useState<ManualCase | null>(null);
   const [manualCaseErrors, setManualCaseErrors] = useState<Partial<Record<keyof ManualCase | 'form', string>>>({});
   const [manualCaseBusy, setManualCaseBusy] = useState(false);
+  // Dades preparades › Mostra: the prepared data in a dialog; and the last copy downloaded.
+  const [datasetView, setDatasetView] = useState<DatasetView | null>(null);
+  const [datasetExport, setDatasetExport] = useState<string | null>(null);
   const [caseToDelete, setCaseToDelete] = useState<LearningCase | null>(null);
   const [caseDetail, setCaseDetail] = useState<LearningCaseDetail | null>(null);
   const [caseBusy, setCaseBusy] = useState<string | null>(null);
@@ -1183,18 +1189,6 @@ export function App(): React.JSX.Element {
     finally { setCaseBusy(null); }
   }
 
-  async function prepareLearningDataset() {
-    setLearningBusy(true);
-    setLearningStatus('');
-    try {
-      const result = await window.agentic.prepareLearningDataset();
-      if (result.prepared && result.directory) {
-        setLearningStatus(`Versió candidata preparada: ${result.directory}. No s’ha entrenat ni canviat cap model.`);
-        await refreshLearningCounts();
-      }
-    } catch (error) { setLearningStatus(errorText(error)); }
-    finally { setLearningBusy(false); }
-  }
 
   async function runTests() {
     if (!project) { setStatus('Selecciona primer un projecte'); return; }
@@ -1210,6 +1204,19 @@ export function App(): React.JSX.Element {
           : `${result.code === 0 ? 'Comprovacions superades' : 'Les comprovacions han fallat'} (codi ${result.code}).\n\n\`\`\`\n${result.output}\n\`\`\``);
     } catch (error) { setStatus(`No s’han pogut executar les comprovacions: ${errorText(error)}`); }
     finally { setTestsBusy(false); }
+  }
+
+  async function showPreparedData() {
+    setLearningBusy(true);
+    try { setDatasetView(await window.agentic.learningDatasetView()); }
+    catch (error) { setLearningStatus(errorText(error)); }
+    finally { setLearningBusy(false); }
+  }
+  async function downloadPreparedData() {
+    try {
+      const result = await window.agentic.exportLearningDataset();
+      if (result.saved && result.path) { setDatasetExport(result.path); setLearningStatus(`Dades descarregades: ${result.path} (${result.examples} casos).`); }
+    } catch (error) { setLearningStatus(errorText(error)); }
   }
 
   async function saveManualCase() {
@@ -1800,33 +1807,6 @@ export function App(): React.JSX.Element {
       {learningBusy && !datasetPreview ? <HStack color="fg.muted"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : !datasetPreview ? <Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice>
         : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant="enclosed" bg="bg">
-          {/* Dades preparades first: what the next beta will be trained with; then where it comes from. */}
-          <Accordion.Item value="data">
-            <Accordion.ItemTrigger>{rowHeader('Dades preparades', datasetPreview.counts.included, FileText)}</Accordion.ItemTrigger>
-            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="3">
-              <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
-                <Stat label="Examinats" value={datasetPreview.counts.input}/>
-                <Stat label="Preparats" value={datasetPreview.counts.included}/>
-                <Stat label="Duplicats" value={datasetPreview.counts.duplicates} dim/>
-                <Stat label="Possibles secrets" value={datasetPreview.counts.secrets} dim/>
-                <Stat label="Sense verificar" value={datasetPreview.counts.unverified} dim/>
-                <Stat label="Invàlids" value={datasetPreview.counts.invalid} dim/>
-              </Grid>
-              <Box>
-                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Repartiment per a l’estable</Text>
-                <Grid templateColumns="repeat(auto-fill, minmax(112px, 1fr))" gap="2">
-                  <Stat label="Entrenament" value={datasetPreview.splitCounts.train} dim/>
-                  <Stat label="Validació" value={datasetPreview.splitCounts.validation} dim/>
-                  <Stat label="Prova final" value={datasetPreview.splitCounts.test} dim/>
-                </Grid>
-              </Box>
-              <HStack gap="3" flexWrap="wrap">
-                <Button size="sm" flex="none" variant="outline" onClick={() => void prepareLearningDataset()} disabled={learningBusy || datasetPreview.counts.included === 0}>{learningBusy ? <Spinner size="sm"/> : <Brain size={15}/>}Prepara versió candidata</Button>
-                <Text flex="1" minW="160px" fontSize="xs" color="fg.muted">Desa una còpia de les dades per revisar-la; no entrena res.</Text>
-              </HStack>
-              <Notice tone="info">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Notice>
-            </Stack></Accordion.ItemBody></Accordion.ItemContent>
-          </Accordion.Item>
           <Accordion.Item value="cases">
             <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0">
@@ -1854,6 +1834,17 @@ export function App(): React.JSX.Element {
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="4">
               {!learningVersions?.base && <Notice tone="warning">Tria un model base al selector del xat per entrenar-ne versions.</Notice>}
               {learningVersions?.base && <Text fontSize="xs" color="fg.muted">Sempre des de l’original: {learningVersions.base.label}, amb tots els casos vàlids ({learningVersions.cases}). Mai sobre una altra beta.</Text>}
+              {/* Dataset: what a beta would be trained with; see it in the app or download it (neither trains anything). */}
+              <Box>
+                <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Dataset</Text>
+                <HStack gap="2" flexWrap="wrap">
+                  <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas vàlid' : 'casos vàlids'} · {datasetPreview.counts.input - datasetPreview.counts.included} descartats</Text>
+                  <ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
+                  <ChakraButton size="xs" variant="ghost" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
+                  {datasetExport && <ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.revealLearningExport()}><FolderOpen size={14}/>Mostra al Finder</ChakraButton>}
+                </HStack>
+                <Text mt="1" fontSize="xs" color="fg.muted">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Text>
+              </Box>
               <Box>
                 <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.1em" mb="1.5">Beta</Text>
                 <HStack gap="2" flexWrap="wrap">
@@ -2348,6 +2339,45 @@ export function App(): React.JSX.Element {
             <Dialog.Footer>
               <ChakraButton size="sm" variant="outline" disabled={verifiedExperienceBusy} onClick={() => setVerifiedExperienceDraft(null)}>Cancel·la</ChakraButton>
               <ChakraButton size="sm" colorPalette="agentic" disabled={!verifiedEvidence.trim() || verifiedExperienceBusy} onClick={() => void saveVerifiedExperience()}>{verifiedExperienceBusy ? <Spinner size="xs"/> : <Check size={14}/>}Desa cas verificat</ChakraButton>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
+    {/* Dades preparades › Mostra: what the next beta would be trained with, split by split, and what is left out. */}
+    <Dialog.Root {...dialogMaterial} initialFocusEl={focusDialogContent} open={datasetView !== null} onOpenChange={({ open }) => { if (!open) setDatasetView(null); }} scrollBehavior="inside">
+      <Portal>
+        <Dialog.Backdrop/>
+        <Dialog.Positioner zIndex="1600">
+          <Dialog.Content maxW="3xl">
+            <DialogHeading icon={FileText} title="Dades preparades" subtitle={datasetView ? `${datasetView.counts.included} casos preparats · ${datasetView.discarded.length} descartats` : undefined}/>
+            <Dialog.Body>
+              {datasetView && <Tabs.Root size="sm" variant="line" defaultValue="train">
+                <Tabs.List>
+                  {DATASET_SPLITS.map(([value, label], index) => <Tabs.Trigger key={value} value={value} {...(index === 0 ? { 'data-initial-focus': true } : {})}>{label}<Badge size="sm" variant="subtle">{datasetView.splits[value].length}</Badge></Tabs.Trigger>)}
+                  <Tabs.Trigger value="discarded">Descartats<Badge size="sm" variant="subtle">{datasetView.discarded.length}</Badge></Tabs.Trigger>
+                </Tabs.List>
+                {DATASET_SPLITS.map(([value]) => <Tabs.Content key={value} value={value}>
+                  {datasetView.splits[value].length === 0 ? <Text fontSize="sm" color="fg.muted">Cap cas en aquesta part.</Text>
+                    : <Accordion.Root multiple variant="outline" size="sm">{datasetView.splits[value].map((item) => <Accordion.Item key={item.id} value={item.id}>
+                      <Accordion.ItemTrigger><Text flex="1" fontSize="sm" truncate textAlign="start">{item.task}</Text>{item.steps > 0 && <Badge size="sm" variant="subtle">{item.steps} passos</Badge>}<Accordion.ItemIndicator/></Accordion.ItemTrigger>
+                      <Accordion.ItemContent><Accordion.ItemBody><Stack gap="2" fontSize="xs">
+                        {([['Què es demana', item.task], ['El missatge de l’usuari', item.prompt], ['La resposta bona', item.answer], ['Per què és bona', item.evidence]] as const).map(([label, text]) => <Box key={label}>
+                          <Text color="fg.muted" mb="1">{label}</Text>
+                          <Box as="pre" whiteSpace="pre-wrap" overflowWrap="anywhere" fontFamily={label === 'La resposta bona' ? 'mono' : 'body'} bg="bg.subtle" borderRadius="md" p="2" maxH="48" overflowY="auto">{text}</Box>
+                        </Box>)}
+                      </Stack></Accordion.ItemBody></Accordion.ItemContent>
+                    </Accordion.Item>)}</Accordion.Root>}
+                </Tabs.Content>)}
+                <Tabs.Content value="discarded">
+                  {datasetView.discarded.length === 0 ? <Text fontSize="sm" color="fg.muted">No s’ha descartat cap cas.</Text>
+                    : <Stack gap="1.5">{datasetView.discarded.map((item, index) => <HStack key={`${item.id}-${index}`} gap="2" minW="0"><Badge size="sm" variant="subtle" colorPalette={item.reason === 'secret' ? 'red' : 'gray'} flex="none">{DISCARD_REASONS[item.reason]}</Badge><Text fontSize="sm" truncate title={item.task}>{item.task || '(sense text)'}</Text></HStack>)}</Stack>}
+                </Tabs.Content>
+              </Tabs.Root>}
+            </Dialog.Body>
+            <Dialog.Footer>
+              <ChakraButton size="sm" variant="outline" onClick={() => void downloadPreparedData()} disabled={!datasetView?.counts.included}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
+              <ChakraButton size="sm" colorPalette="agentic" onClick={() => setDatasetView(null)}>Tanca</ChakraButton>
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>

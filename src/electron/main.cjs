@@ -14,7 +14,7 @@ const { trajectoryKey, buildSessionTrajectory } = require('./learning-trajectory
 const { summarizeReports, renderBenchmarkSvg } = require('./benchmark-summary.cjs');
 const { projectFileExists, inspectFileForDeletion, deleteInspectedProjectFile, listDeletedProjectFiles, restoreDeletedProjectFile, ensureProjectDirectory } = require('./project-file-tools.cjs');
 const { listProjectFileHistory, listProjectFolderHistory, readProjectFileHistoryVersion } = require('./project-history.cjs');
-const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate } = require('./learning-dataset.cjs');
+const { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate, datasetView, datasetJsonl } = require('./learning-dataset.cjs');
 const learningCases = require('./learning-cases.cjs');
 const { isChatNotice } = require('./chat-notices.cjs');
 const { turnLogPath, appendTurnLog } = require('./turn-log.cjs');
@@ -1304,6 +1304,22 @@ ipcMain.handle('learning:dataset-preview', async () => {
   return { counts: prepared.counts, splitCounts: prepared.splitCounts, trainingReady: prepared.trainingReady };
 });
 
+// Dades preparades › Mostra: the prepared data, to look at in the window; nothing is written.
+ipcMain.handle('learning:dataset-view', async () => datasetView(await readPreparedExperienceDataset()));
+// Dades preparades › Descarrega: one .jsonl where the user chooses (and the usual copy in learning/candidates).
+let lastDatasetExport = null;
+ipcMain.handle('learning:export-dataset', async () => {
+  const prepared = await readPreparedExperienceDataset();
+  if (prepared.counts.included === 0) throw new Error('No hi ha casos confirmats aptes per descarregar.');
+  const result = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), `dataset-${new Date().toISOString().slice(0, 10)}.jsonl`), filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }] });
+  if (result.canceled || !result.filePath) return { saved: false };
+  await fs.writeFile(result.filePath, datasetJsonl(prepared), { encoding: 'utf8', mode: 0o600 });
+  await writeTrainingCandidate(prepared, path.join(app.getPath('userData'), 'learning', 'candidates'));
+  lastDatasetExport = result.filePath;
+  return { saved: true, path: result.filePath, examples: prepared.counts.included };
+});
+// Only the file just saved can be shown in the Finder.
+ipcMain.handle('learning:reveal-export', () => { if (lastDatasetExport) shell.showItemInFolder(lastDatasetExport); return Boolean(lastDatasetExport); });
 ipcMain.handle('learning:prepare-dataset', async () => {
   const prepared = await readPreparedExperienceDataset();
   if (prepared.counts.included === 0) throw new Error('No hi ha casos confirmats aptes per preparar.');

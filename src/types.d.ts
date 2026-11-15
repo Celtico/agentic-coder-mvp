@@ -22,6 +22,9 @@ export type BenchmarkList = { runs: { id: string; at: string; model: string; ada
 export type BenchmarkTurn = { input: { role: string; content: string } | null; output: string; seconds: number };
 export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
 export type TrainingProgress = { step: string; message: string; progress?: number; published?: boolean; modelId?: string };
+/** The prepared data, as Dades preparades › Mostra shows it (src/electron/learning-dataset.cjs). */
+export type DatasetItem = { id: string; task: string; prompt: string; answer: string; evidence: string; steps: number };
+export type DatasetView = { counts: { input: number; unverified: number; invalid: number; secrets: number; duplicates: number; included: number }; splits: { train: DatasetItem[]; validation: DatasetItem[]; test: DatasetItem[] }; discarded: { id: string | null; task: string; reason: 'invalid' | 'unverified' | 'secret' | 'duplicate' }[] };
 /** A verified case written by hand in Aprenentatge local › Dades preparades. */
 export type ManualCase = { task: string; prompt: string; answer: string; evidence: string };
 export type VerifiedExperience = { prompt: string; answer: string; projectPath: string; evidence: string; task?: string; sessionTurns?: { role: 'user' | 'assistant'; content: string }[]; source?: 'manual' };
@@ -98,6 +101,9 @@ export interface AgenticBridge {
   recordVerifiedExperience(experience: VerifiedExperience): Promise<{ id: string; saved: boolean }>;
   /** What is wrong with each field of a case written by hand; empty when it can be saved. */
   validateManualCase(value: ManualCase): Promise<Partial<Record<keyof ManualCase, string>>>;
+  learningDatasetView(): Promise<DatasetView>;
+  exportLearningDataset(): Promise<{ saved: boolean; path?: string; examples?: number }>;
+  revealLearningExport(): Promise<boolean>;
   startBenchmark(request: { repeat: 1 | 2; tasks?: string[] }): Promise<{ started: boolean; id: string }>;
   cancelBenchmark(): Promise<{ cancelled: boolean }>;
   benchmarkStatus(): Promise<{ running: boolean; model?: string; current?: BenchmarkCurrent | null }>;

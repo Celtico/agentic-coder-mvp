@@ -16,14 +16,14 @@ const view = require(out);
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
 test('the panel is three accordion sections, and the open ones are remembered', () => {
-  for (const [value, title] of [['cases', 'Casos desats'], ['data', 'Dades preparades'], ['training', 'Entrenament']]) {
+  for (const [value, title] of [['cases', 'Casos desats'], ['manual', 'Dades manuals'], ['training', 'Entrenament']]) {
     assert.match(app, new RegExp(`<Accordion\\.Item value="${value}">\\s*<Accordion\\.ItemTrigger>\\{rowHeader\\('${title}'`), title);
   }
   assert.match(app, /defaultValue=\{initialView\.learningSections\} onValueChange=\{\(\{ value \}\) => updateViewState\(localStorage, \(state\) => \{ state\.learningSections = value; \}\)\}/);
   assert.deepEqual(view.loadViewState(memoryStorage()).learningSections, ['cases', 'training']);
   const storage = memoryStorage();
-  view.updateViewState(storage, (state) => { state.learningSections = ['data', 'nope']; });
-  assert.deepEqual(view.loadViewState(storage).learningSections, ['data']);
+  view.updateViewState(storage, (state) => { state.learningSections = ['manual', 'data', 'nope']; });
+  assert.deepEqual(view.loadViewState(storage).learningSections, ['manual']);
 });
 
 test('the buttons follow the main process’s state: beta, stable, promotion, stop; nothing trains by itself', () => {
@@ -63,12 +63,15 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   assert.match(manual, /rowHeader\('Dades manuals', learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.length \?\? 0, Pencil\)/);
   assert.match(manual, /<Plus size=\{14\}\/>Crea un cas/);
   assert.match(manual, /learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.map\(caseRow\)/);
-  // The order: Dades preparades, Casos desats, Dades manuals, Entrenament; no «Crea» in Dades preparades.
-  const order = ['data', 'cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));
+  // The order: Casos desats, Dades manuals, Entrenament; Dades preparades is now the «Dades» block of Entrenament.
+  const order = ['cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));
   assert.ok(order.every((index) => index > -1), String(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
-  const data = app.slice(app.indexOf('<Accordion.Item value="data">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="data">')));
-  assert.doesNotMatch(data, /Crea un cas/);
+  assert.equal(app.indexOf('<Accordion.Item value="data">'), -1);
+  const training = app.slice(app.indexOf('<Accordion.Item value="training">'));
+  assert.ok(training.indexOf('>Dataset</Text>') > -1 && training.indexOf('>Dataset</Text>') < training.indexOf('>Beta</Text>'), 'Dataset just above Beta');
+  assert.match(training, /Mostra les dades<\/ChakraButton>/);
+  assert.match(training, /Descarrega \(\.jsonl\)<\/ChakraButton>/);
   // The open sections are remembered, «manual» too.
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "data", "training"\]/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "training"\]/);
 });

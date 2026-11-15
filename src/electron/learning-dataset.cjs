@@ -32,24 +32,30 @@ function parseVerifiedExperiences(contents) {
 function prepareTrainingDataset(records) {
   const counts = { input: records.length, unverified: 0, invalid: 0, secrets: 0, duplicates: 0, included: 0 };
   const unique = new Map();
+  // The cases left out, and why, so the window can show them (src/app: Dades preparades › Mostra).
+  const discarded = [];
+  const leaveOut = (record, reason) => {
+    const ok = record && typeof record === 'object' && !Array.isArray(record);
+    discarded.push({ id: ok && typeof record.id === 'string' ? record.id : null, task: ok ? String(record.task || record.prompt || '').slice(0, 300) : '', reason });
+  };
   for (const record of records.slice(-MAX_RECORDS)) {
-    if (!record || typeof record !== 'object' || Array.isArray(record) || record.__invalidJSON === true) { counts.invalid += 1; continue; }
-    if (record.verification !== 'user-confirmed') { counts.unverified += 1; continue; }
+    if (!record || typeof record !== 'object' || Array.isArray(record) || record.__invalidJSON === true) { counts.invalid += 1; leaveOut(record, 'invalid'); continue; }
+    if (record.verification !== 'user-confirmed') { counts.unverified += 1; leaveOut(record, 'unverified'); continue; }
     if (typeof record.id !== 'string' || !record.id || typeof record.projectPath !== 'string' ||
         typeof record.prompt !== 'string' || typeof record.answer !== 'string' || typeof record.evidence !== 'string' ||
         !record.prompt.trim() || !record.answer.trim() || !record.evidence.trim() ||
         record.prompt.length > 12_000 || record.answer.length > 30_000 || record.evidence.length > 4_000) {
-      counts.invalid += 1; continue;
+      counts.invalid += 1; leaveOut(record, 'invalid'); continue;
     }
     const trajectory = record.trajectory && typeof record.trajectory === 'object' && Array.isArray(record.trajectory.turns) ? record.trajectory : null;
     const trajectoryText = trajectory ? JSON.stringify(trajectory) : '';
-    if (trajectoryText.length > 400_000) { counts.invalid += 1; continue; }
+    if (trajectoryText.length > 400_000) { counts.invalid += 1; leaveOut(record, 'invalid'); continue; }
     const task = typeof record.task === 'string' && record.task.trim() ? record.task.trim().slice(0, 4000) : null;
     const text = `${record.prompt}\n${record.answer}\n${record.evidence}\n${task || ''}\n${trajectoryText}`;
-    if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) { counts.secrets += 1; continue; }
+    if (SECRET_PATTERNS.some((pattern) => pattern.test(text))) { counts.secrets += 1; leaveOut(record, 'secret'); continue; }
     const projectHash = digest(path.resolve(record.projectPath));
     const duplicateKey = `${projectHash}\n${normalizeText(record.prompt)}\n${normalizeText(record.answer)}`;
-    if (unique.has(duplicateKey)) { counts.duplicates += 1; continue; }
+    if (unique.has(duplicateKey)) { counts.duplicates += 1; leaveOut(record, 'duplicate'); continue; }
     unique.set(duplicateKey, {
       sourceId: record.id,
       sourceProjectHash: projectHash,
@@ -82,7 +88,26 @@ function prepareTrainingDataset(records) {
     splitCounts,
     trainingReady: counts.included >= 30 && splitCounts.train >= 24 && splitCounts.validation >= 3 && splitCounts.test >= 3,
     partitions,
+    discarded,
   };
+}
+
+/**
+ * The prepared data as the window shows it: each split's cases (task, message, answer, check) and the
+ * cases left out with their reason. Nothing is written.
+ */
+function datasetView(prepared) {
+  const item = (example) => ({ id: example.sourceId, task: example.task || example.prompt.slice(0, 300), prompt: example.prompt, answer: example.answer, evidence: example.evidence, steps: example.trajectory ? example.trajectory.turns.reduce((n, turn) => n + (Array.isArray(turn?.steps) ? turn.steps.length : 0), 0) : 0 });
+  return {
+    counts: prepared.counts,
+    splits: { train: prepared.partitions.train.map(item), validation: prepared.partitions.validation.map(item), test: prepared.partitions.test.map(item) },
+    discarded: prepared.discarded || [],
+  };
+}
+
+/** The prepared data as one JSONL file: one example per line, with the split it belongs to. */
+function datasetJsonl(prepared) {
+  return ['train', 'validation', 'test'].flatMap((split) => prepared.partitions[split].map((example) => JSON.stringify({ split, ...example }))).join('\n') + '\n';
 }
 
 async function writeTrainingCandidate(prepared, candidatesDirectory) {
@@ -140,4 +165,4 @@ async function writeTrainingCandidate(prepared, candidatesDirectory) {
   }
 }
 
-module.exports = { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate, SECRET_PATTERNS };
+module.exports = { parseVerifiedExperiences, prepareTrainingDataset, writeTrainingCandidate, datasetView, datasetJsonl, SECRET_PATTERNS };
