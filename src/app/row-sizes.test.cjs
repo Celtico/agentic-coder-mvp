@@ -127,7 +127,29 @@ test('a drag cut short (the row unmounted mid-drag) is ended too, so nothing sta
 
 test('nothing round the rows clips them vertically, so a pane’s shadow shows below it too', () => {
   const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
-  assert.match(row, /<Flex ref=\{rowRef\} h="full" w="full" minW="0" minH="0" overflowX="clip"/);
+  assert.match(row, /<Flex ref=\{rowRef\} h="full" w="full" minW="0" minH="0" overflowX=\{tooNarrow \? "auto" : "clip"\}/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<Flex direction="column" h="full" minH="0" minW="0" overflowX="clip" pt=\{ownTitleBar \? '0' : '6px'\} pr="6px" pb="2">\n\s*<Box flex="1" minH="0" minW="0" overflowX="clip">/);
+});
+
+test('the panes fit the row: wider than the window, each gives up a share of the excess above its minimum', () => {
+  const ids = ['dock-console', 'dock-terminal', 'dock-evaluation'];
+  const widths = { 'dock-console': 520, 'dock-terminal': 520, 'dock-evaluation': 720 };
+  // Room enough: their own widths.
+  assert.deepEqual(rows.fitPaneWidths(ids, widths, { rowWidth: 3000, flexMin: 220, handles: 3 }), widths);
+  // 1600 px row: 1600 − 220 (the last pane's minimum) − 18 (dividers) = 1362 for 1760 of widths.
+  const fitted = rows.fitPaneWidths(ids, widths, { rowWidth: 1600, flexMin: 220, handles: 3 });
+  const total = ids.reduce((sum, id) => sum + fitted[id], 0);
+  assert.ok(total <= 1362 && total >= 1359, String(total));
+  for (const id of ids) assert.ok(fitted[id] >= 220 && fitted[id] < widths[id], id);
+  // The widest gives up the most.
+  assert.ok(widths['dock-evaluation'] - fitted['dock-evaluation'] > widths['dock-console'] - fitted['dock-console']);
+  // Not even the minimums fit: each at its minimum (the row then scrolls).
+  assert.deepEqual(rows.fitPaneWidths(ids, widths, { rowWidth: 500, flexMin: 220, handles: 3 }), { 'dock-console': 220, 'dock-terminal': 220, 'dock-evaluation': 220 });
+  // Width unknown yet (first render): their own widths.
+  assert.deepEqual(rows.fitPaneWidths(ids, widths, { rowWidth: 0, flexMin: 220, handles: 3 }), widths);
+  // The row follows its width and fits the panes on every render (startup, resize, a pane shown or hidden).
+  const row = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  assert.match(row, /new ResizeObserver\(\(\[entry\]\) => setRowWidth\(Math\.round\(entry\.contentRect\.width\)\)\)/);
+  assert.match(row, /const fitted = fitPaneWidths\(fixedIds, widths, \{ rowWidth, flexMin, handles: fixedIds\.length \}\)/);
 });

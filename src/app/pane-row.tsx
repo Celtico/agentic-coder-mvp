@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { Box, Flex } from "@chakra-ui/react"
-import { draggedPair, paneMinWidth, paneWidth } from "./row-sizes"
+import { draggedPair, fitPaneWidths, paneMinWidth } from "./row-sizes"
 
 export type RowItem = { id: string; node: ReactNode }
 
@@ -28,6 +28,21 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   useEffect(() => () => endDragRef.current?.(), [])
   const flexWidth = () => rowRef.current?.querySelector<HTMLElement>("[data-pane-flex]")?.getBoundingClientRect().width ?? 0
   const flexMin = paneMinWidth(flexId)
+  // The row's width, followed as the window changes: the panes' widths are fitted to it (src/app/row-sizes.ts),
+  // so the row never runs past the window on a smaller screen.
+  const [rowWidth, setRowWidth] = useState(0)
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(([entry]) => setRowWidth(Math.round(entry.contentRect.width)))
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [])
+  const fixedIds = items.filter((item) => item.id !== flexId).map((item) => item.id)
+  const fitted = fitPaneWidths(fixedIds, widths, { rowWidth, flexMin, handles: fixedIds.length })
+  const paneWidth = (id: string, _widths: Record<string, number>) => fitted[id]
+  // Not even the minimums fit (a very narrow window): the row scrolls sideways instead of cutting panes off.
+  const tooNarrow = rowWidth > 0 && fixedIds.reduce((sum, id) => sum + paneMinWidth(id), 0) + flexMin + fixedIds.length * 6 > rowWidth
   // The pane on the right of a pane's divider, and how wide each one is when a drag starts.
   const rightOf = (id: string) => items[items.findIndex((item) => item.id === id) + 1]?.id ?? flexId
   const pair = (id: string, delta: number, starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }) =>
@@ -82,7 +97,7 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   }
 
   return (
-    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflowX="clip" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
+    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflowX={tooNarrow ? "auto" : "clip"} aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
       {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer onPointerUp={() => setDragging(null)}/>}
       {items.map((item) => {
         // The panes clip their own content (their Card); these boxes do not, so a pane's shadow («amb ombra») shows round its corners.
