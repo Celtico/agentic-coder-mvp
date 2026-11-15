@@ -283,3 +283,9 @@ test('no pane body paints its own background: the card’s own (and its shadow�
   }
   assert.doesNotMatch(app, /<Box ref=\{setTerminalContainer\}[^>]*bg=/, 'the terminal neither: xterm paints the same colour as its card');
 });
+
+test('the second row of a pane is the pane’s own surface in every tone, so it follows «Fons de les finestres»', () => {
+  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
+  const toolbar = recipes.slice(recipes.indexOf('export const paneToolbarRecipe'), recipes.indexOf('defaultVariants', recipes.indexOf('export const paneToolbarRecipe')));
+  for (const tone of ['brand', 'mono', 'tinted']) assert.match(toolbar, new RegExp(`${tone}: \\{ root: \\{ bg: "transparent" \\} \\}`), tone);
+});

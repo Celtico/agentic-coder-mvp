@@ -39,7 +39,9 @@ export const paneToolbarRecipe = defineSlotRecipe({
     tone: {
       brand: { root: { bg: "transparent" } },
       mono: { root: { bg: "transparent" } },
-      tinted: { root: { bg: "bg.subtle" } },
+      // The second row is the panel's own surface in every tone (only its line underneath): it follows
+      // «Fons de les finestres» like the body.
+      tinted: { root: { bg: "transparent" } },
     },
   },
   defaultVariants: { tone: "brand" },
