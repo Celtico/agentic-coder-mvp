@@ -94,7 +94,7 @@ test('with the panel closed the request to the model and its generation are the 
   assert.match(main, /const llmTrace = \{ open: false, logprobs: false \};/);
   assert.match(main, /path\.join\(app\.getPath\('userData'\), 'logs', 'llm-calls\.jsonl'\)/);
   const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
-  assert.match(panel, /return \(\) => \{ stop\(\); void window\.agentic\.setLlmTrace\(\{ open: false \}\) \}/);
+  assert.match(panel, /return \(\) => \{ stop\?\.\(\); void window\.agentic\.setLlmTrace\?\.\(\{ open: false \}\)\?\.catch\(\(\) => \{\}\) \}/);
 });
 
 test('mlx_trace.py: the context window from the config, and the tokens of each part (no model needed)', () => {
@@ -127,6 +127,13 @@ test('the panel: an icon in the bar, the five views of a call, and the logprobs 
 
 test('the panel over an app started before it: a clear message, not a spinner that never ends', () => {
   const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
-  assert.match(panel, /No handler registered\/\.test\(text\) \? "Aquest panell necessita l’app reiniciada \(⌘Q i npm start\)/);
+  assert.match(panel, /const errorMessage = ipcErrorText/);
+  // One helper for every panel with new calls: the same restart notice, and no list left waiting.
+  const helper = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'ipc-errors.ts'), 'utf8');
+  assert.match(helper, /export const RESTART_NOTICE = "Cal reiniciar l’app per activar aquesta funció: tanca-la \(⌘Q\) i torna-la a obrir\."/);
+  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /Error invoking remote method/, 'no panel strips Electron’s text on its own');
+  assert.doesNotMatch(app, /'Cal reiniciar l’app/, 'the notice is written once, in the helper');
+  assert.match(app, /catch \(error\) \{ setModelManageError\(ipcErrorText\(error\)\); setManaged\(\(current\) => current \?\? \{ models: \[\], download: null \}\); \}/);
   assert.match(panel, /catch \(caught\) \{ setError\(errorMessage\(caught\)\); setCalls\(\(current\) => current \?\? \[\]\) \}/);
 });

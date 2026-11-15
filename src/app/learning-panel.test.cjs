@@ -77,10 +77,12 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
 });
 
 test('a function the running main process does not have yet says «restart the app» instead of nothing', () => {
-  assert.match(app, /const missingInMain = \(error: unknown\) => error instanceof TypeError && \/is not a function\/\.test\(error\.message\) \|\| \/No handler registered\/i/);
+  const helper = require('node:fs').readFileSync(require('node:path').join(__dirname, 'ipc-errors.ts'), 'utf8');
+  assert.match(helper, /export const missingInMain = \(error: unknown\) => error instanceof TypeError && \/is not a function\/\.test\(error\.message\) \|\| \/No handler registered\/i/);
   assert.match(app, /async function showPreparedData\(\) \{[\s\S]*?catch \(error\) \{ learningError\(error\); \}/);
   assert.match(app, /async function downloadPreparedData\(\) \{[\s\S]*?catch \(error\) \{ learningError\(error\); \}/);
-  assert.match(app, /Cal reiniciar l’app per activar aquesta funció: tanca-la \(⌘Q\) i torna-la a obrir\./);
+  assert.match(helper, /Cal reiniciar l’app per activar aquesta funció: tanca-la \(⌘Q\) i torna-la a obrir\./);
+  assert.match(app, /missingInMain\(error\) \? RESTART_NOTICE : errorText\(error\)/);
 });
 
 test('Entrenament: a separator (Chakra’s) between its sections, Dataset | Beta | Estable', () => {

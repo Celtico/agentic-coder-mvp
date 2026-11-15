@@ -4,6 +4,7 @@ import { LuCopy as Copy, LuFolderOpen as FolderOpen, LuRefreshCw as RefreshCw, L
 import type { LlmCallRecord, LlmToolRecord, LlmTraceEvent } from "../core/assistant/llm-trace"
 import { Pane, PaneHeader, PaneToolbar } from "./pane-header"
 import { scrollArea } from "../theme/scroll-area"
+import { ipcErrorText } from "./ipc-errors"
 
 /**
  * Log del model: each call to the model, newest first — what went in (the final prompt after the chat
@@ -18,11 +19,8 @@ const PANE_ACCORDION = "pane" as unknown as "plain"
 const mono = { fontFamily: "mono", fontSize: "xs", whiteSpace: "pre-wrap", overflowWrap: "anywhere", bg: "bg.subtle", borderRadius: "md", px: "2", py: "1.5", maxH: "80", ...scrollArea } as const
 const number = (value: number | null | undefined, suffix = "") => value === null || value === undefined ? "—" : `${value.toLocaleString("ca")}${suffix}`
 const sourcePalette = (source: string) => source === "revisor" ? "purple" : source.startsWith("avalua") || source.startsWith("benchmark") ? "orange" : source === "agent delegat" ? "blue" : "agentic"
-// A window reloaded (⌘R) over an app started before this panel existed: its main process has no log yet.
-const errorMessage = (error: unknown) => {
-  const text = error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "") : String(error)
-  return /No handler registered/.test(text) ? "Aquest panell necessita l’app reiniciada (⌘Q i npm start): l’app oberta és d’abans del log." : text
-}
+// The shared notice when the app was started before this panel existed (src/app/ipc-errors.ts).
+const errorMessage = ipcErrorText
 
 /** A token coloured by how sure the model was of it; the five likeliest at that step on hover. */
 const confidence = (p: number) => p >= 0.9 ? {} : p >= 0.5 ? { bg: "yellow.subtle", color: "yellow.fg" } : { bg: "red.subtle", color: "red.fg" }
@@ -98,15 +96,15 @@ export function LlmLogPane() {
   }, [])
   // Recording is on while the panel is open, and off when it closes.
   useEffect(() => {
-    void window.agentic.setLlmTrace({ open: true }).then((state) => setLogprobs(state.logprobs), () => {})
+    void window.agentic.setLlmTrace?.({ open: true })?.then((state) => setLogprobs(state.logprobs), () => {})
     void reload()
-    const stop = window.agentic.onLlmEvent((event: LlmTraceEvent) => {
+    const stop = window.agentic.onLlmEvent?.((event: LlmTraceEvent) => {
       if (event.type === "start") setLive({ id: event.id, source: event.source, model: event.model, text: "" })
       else if (event.type === "token") setLive((current) => current && current.id === event.id ? { ...current, text: current.text + event.text } : current)
       else if (event.type === "call") { setLive((current) => current?.id === event.call.id ? null : current); setCalls((current) => [{ ...event.call, tools: [] }, ...(current || [])].slice(0, 50)) }
       else if (event.type === "tool") setCalls((current) => current?.map((call) => call.id === event.tool.callId ? { ...call, tools: [...call.tools, event.tool] } : call) ?? current)
     })
-    return () => { stop(); void window.agentic.setLlmTrace({ open: false }) }
+    return () => { stop?.(); void window.agentic.setLlmTrace?.({ open: false })?.catch(() => {}) }
   }, [reload])
 
   const toolbar = <PaneToolbar>

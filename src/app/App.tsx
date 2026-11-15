@@ -18,6 +18,7 @@ import {
 import type { IconType } from 'react-icons';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { LlmLogPane } from './llm-log';
+import { ipcErrorText, missingInMain, RESTART_NOTICE } from './ipc-errors';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
 import { withPaneWidths } from './row-sizes';
@@ -135,11 +136,6 @@ const DialogHeading = ({ icon, title, subtitle }: { icon: IconType; title: strin
 const focusDialogContent = () => document.querySelector<HTMLElement>('[data-scope="dialog"][data-part="content"][data-state="open"] [data-initial-focus]');
 /** The app's mark as a pane header's icon (the chat's), the size of the other icons. */
 const ChatMark: IconType = ({ size }) => <Mark size={typeof size === 'number' ? size : 16} color="currentColor"/>;
-/**
- * An error from a call the main process does not know yet (it was started before the update): Electron
- * says «No handler registered», and an older preload has no such function at all.
- */
-const missingInMain = (error: unknown) => error instanceof TypeError && /is not a function/.test(error.message) || /No handler registered/i.test(String((error as Error)?.message ?? error));
 /** A bg token's value in one mode, as the theme defines it («{gray.100}», «{white}»), for Preferències. */
 const tokenValue = (system: ReturnType<typeof useChakraContext>, token: string, mode: '_light' | '_dark') => {
   const group = (system as unknown as { _config?: { theme?: { semanticTokens?: { colors?: Record<string, Record<string, { value?: Record<string, string> }>> } } } })._config?.theme?.semanticTokens?.colors?.bg;
@@ -428,10 +424,10 @@ export function App(): React.JSX.Element {
   const [modelManageError, setModelManageError] = useState('');
   const [modelManageNote, setModelManageNote] = useState('');
   const refreshManaged = useCallback(async () => {
-    try { setManaged(await window.agentic.manageModels()); } catch (error) { setModelManageError(error instanceof Error ? error.message : String(error)); }
+    try { setManaged(await window.agentic.manageModels()); } catch (error) { setModelManageError(ipcErrorText(error)); setManaged((current) => current ?? { models: [], download: null }); }
   }, []);
   useEffect(() => { void refreshManaged(); }, [refreshManaged]);
-  useEffect(() => window.agentic.onModelDownload((event) => {
+  useEffect(() => window.agentic.onModelDownload?.((event) => {
     if (event.step === 'progress') setManaged((current) => current && { ...current, download: { id: event.id || '', label: event.label, done: event.done || 0, total: event.total || 0 } });
     else {
       setModelManageError(event.step === 'failed' ? event.message || '' : '');
@@ -444,7 +440,7 @@ export function App(): React.JSX.Element {
   const afterModelsChange = (next: ManagedModels) => { setManaged(next); setModelManageError(''); void window.agentic.listModels().then((available) => setModelOptions(available.models)); };
   const modelAction = async (action: () => Promise<ManagedModels | unknown>) => {
     try { const next = await action(); if (next && typeof next === 'object' && 'models' in next) afterModelsChange(next as ManagedModels); else void refreshManaged(); }
-    catch (error) { setModelManageError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(error)); }
+    catch (error) { setModelManageError(ipcErrorText(error)); }
   };
   const refreshLearningVersions = useCallback(async () => {
     try { setLearningVersions(await window.agentic.learningVersions()); } catch { /* the panel keeps what it showed */ }
@@ -1297,7 +1293,7 @@ export function App(): React.JSX.Element {
   // A function added after the app was started: the window has it, the main process not yet. Said plainly
   // (in the panel and in the status bar) instead of failing without a word.
   const learningError = (error: unknown) => {
-    const text = missingInMain(error) ? 'Cal reiniciar l’app per activar aquesta funció: tanca-la (⌘Q) i torna-la a obrir.' : errorText(error);
+    const text = missingInMain(error) ? RESTART_NOTICE : errorText(error);
     setLearningStatus(text);
     setStatus(text);
   };
@@ -1340,7 +1336,7 @@ export function App(): React.JSX.Element {
       setStatus('Cas desat: comptarà per a la propera beta.');
       void refreshLearningCounts();
     } catch (error) {
-      setManualCaseErrors({ form: missingInMain(error) ? 'Cal reiniciar l’app per activar aquesta funció: tanca-la (⌘Q) i torna-la a obrir.' : errorText(error) });
+      setManualCaseErrors({ form: missingInMain(error) ? RESTART_NOTICE : errorText(error) });
     } finally { setManualCaseBusy(false); }
   }
 
@@ -2644,7 +2640,7 @@ export function App(): React.JSX.Element {
               <ChakraButton size="sm" variant="outline" onClick={() => setModelAdd(null)}>Cancel·la</ChakraButton>
               {modelAdd?.check?.ok
                 ? <ChakraButton size="sm" colorPalette="agentic" onClick={() => { const request = { repo: modelAdd.repo.trim(), label: modelAdd.label.trim() }; setModelAdd(null); void modelAction(() => window.agentic.addModel(request)); }}><Download size={14}/>Baixa ({modelAdd.check.size})</ChakraButton>
-                : <ChakraButton size="sm" colorPalette="agentic" disabled={!modelAdd?.repo.trim() || modelAdd?.busy} onClick={() => { const repo = modelAdd?.repo.trim() || ''; setModelAdd((current) => current && { ...current, busy: true }); setModelManageError(''); window.agentic.checkModelRepository(repo).then((check) => setModelAdd((current) => current && { ...current, check, busy: false }), (error) => { setModelManageError(error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(error)); setModelAdd((current) => current && { ...current, busy: false }); }); }}>{modelAdd?.busy ? <Spinner size="xs"/> : <Check size={14}/>}Comprova</ChakraButton>}
+                : <ChakraButton size="sm" colorPalette="agentic" disabled={!modelAdd?.repo.trim() || modelAdd?.busy} onClick={() => { const repo = modelAdd?.repo.trim() || ''; setModelAdd((current) => current && { ...current, busy: true }); setModelManageError(''); window.agentic.checkModelRepository(repo).then((check) => setModelAdd((current) => current && { ...current, check, busy: false }), (error) => { setModelManageError(ipcErrorText(error)); setModelAdd((current) => current && { ...current, busy: false }); }); }}>{modelAdd?.busy ? <Spinner size="xs"/> : <Check size={14}/>}Comprova</ChakraButton>}
             </Dialog.Footer>
           </Dialog.Content>
         </Dialog.Positioner>
