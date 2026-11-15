@@ -92,7 +92,7 @@ async function ownModels(modelsRoot, platform = process.platform) {
       const meta = JSON.parse(await fs.readFile(path.join(root, entry.name, 'agentic-model.json'), 'utf8'));
       if (typeof meta.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(meta.id) || typeof meta.label !== 'string') continue;
       if (builtInModels.some((model) => model.id === meta.id)) continue;
-      found.push({ id: meta.id, label: meta.label.slice(0, 80), modelId: typeof meta.modelId === 'string' ? meta.modelId : meta.id, runtime: engineFor(platform), dir, folder: entry.name, own: true, aliases: [] });
+      found.push({ id: meta.id, label: meta.label.slice(0, 80), modelId: typeof meta.modelId === 'string' ? meta.modelId : meta.id, runtime: engineFor(platform), dir, folder: entry.name, own: true, ...(meta.stable === true ? { stable: true } : {}), aliases: [] });
     } catch { /* not one of ours */ }
   }
   return found.sort((a, b) => a.label.localeCompare(b.label));

@@ -255,12 +255,14 @@ async function promoteStable({ candidate, name, base, modelsRoot, python, launch
   if (!cleanName || cleanName.length > 60) throw new Error('Tria un nom (fins a 60 caràcters).');
   const slug = `${slugify(cleanName)}-estable`;
   let version = 1;
-  for (const entry of await fs.readdir(path.join(modelsRoot, 'mlx')).catch(() => [])) {
+  // A stable version goes with the engine's models: models/mlx on a Mac, models/hf on Linux.
+  const modelsDir = require('./mlx-models.cjs').modelsFolder();
+  for (const entry of await fs.readdir(path.join(modelsRoot, modelsDir)).catch(() => [])) {
     const match = new RegExp(`^${slug}-v(\\d+)$`).exec(entry);
     if (match) version = Math.max(version, Number(match[1]) + 1);
   }
   const folder = `${slug}-v${version}`;
-  const savePath = path.join(modelsRoot, 'mlx', folder);
+  const savePath = path.join(modelsRoot, modelsDir, folder);
   await fs.mkdir(path.dirname(savePath), { recursive: true });
   const result = await run(python, [...(launcher ? [launcher] : ['-m', 'mlx_lm']), 'fuse', '--model', base.directory, '--adapter-path', candidate.adapterPath, '--save-path', savePath], {});
   if (result.code !== 0) { await fs.rm(savePath, { recursive: true, force: true }).catch(() => {}); throw new Error(`No s’ha pogut fusionar (codi ${result.code}).`); }

@@ -1396,6 +1396,9 @@ ipcMain.handle('learning:prepare-dataset', async () => {
   return { prepared: true, directory: candidate.directory, manifest: candidate.manifest };
 });
 
+// What trains and fuses: mlx_lm on a Mac (with the GPU lock), PEFT on Linux (src/core/assistant/cuda-lora.py,
+// the same command line).
+const trainingLauncher = () => path.join(__dirname, '..', 'core', 'assistant', mlxModels.engineFor() === 'mlx' ? 'mlx-locked.py' : 'cuda-lora.py');
 // Training a version of our own from the verified cases (src/electron/learning-training.cjs), in the
 // background: one run at a time, with progress sent to the window and cancellable.
 let trainingRun = null;
@@ -1569,7 +1572,8 @@ ipcMain.handle('learning:train-cancel', async () => { trainingRun?.controller.ab
 async function trainingBase() {
   const model = await currentModel();
   const base = model.beta ? (await allModels()).find((item) => item.id === model.baseId) : model;
-  if (!base || base.own) throw new Error('Tria un model base (no un d’entrenat) al selector per entrenar-ne versions.');
+  // A Mac trains on its built-in models; Linux on the ones added (not on a stable version made here).
+  if (!base || (base.own && (mlxModels.engineFor() === 'mlx' || base.stable))) throw new Error('Tria un model base (no un d’entrenat) al selector per entrenar-ne versions.');
   const directory = await mlxModels.modelDirectory(base, projectModelsDirectory());
   if (!directory) throw new Error('El model base no és disponible en aquest Mac.');
   return { id: base.id, label: base.label, modelId: base.modelId, directory };
@@ -1597,7 +1601,7 @@ async function startVersionRun(kind) {
   trainingRun = { controller, name: kind, base: base.label, baseId: base.id };
   (async () => {
     try {
-      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming, onProgress: sendTraining, signal: controller.signal });
+      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: trainingLauncher(), run: runStreaming, onProgress: sendTraining, signal: controller.signal });
       if (kind === 'beta') {
         sendTraining({ step: 'finished', published: true, message: `Beta ${adapter.number} a punt: ${base.label} beta · ${adapter.cases} ${adapter.cases === 1 ? 'cas' : 'casos'}${adapter.truncated ? ` (${adapter.truncated} retallats)` : ''}. Tria-la al selector per provar-la.` });
         return;
@@ -1641,7 +1645,7 @@ ipcMain.handle('learning:promote-stable', async (_e, name) => {
   const base = await trainingBase();
   const candidate = await versions.latestCandidate(projectModelsDirectory(), base.id);
   await stopModelWorker();
-  const meta = await versions.promoteStable({ candidate, name, base, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: path.join(__dirname, '..', 'core', 'assistant', 'mlx-locked.py'), run: runStreaming });
+  const meta = await versions.promoteStable({ candidate, name, base, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: trainingLauncher(), run: runStreaming });
   return { label: meta.label, id: meta.id, models: await getAvailableModels() };
 });
 ipcMain.handle('learning:delete-beta', async (_e, folder) => {

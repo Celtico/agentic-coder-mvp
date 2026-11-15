@@ -54,6 +54,11 @@ try:
     if adapter_path:
         from peft import PeftModel
 
+        # The app names a beta's weights adapters.safetensors (as mlx_lm does); PEFT reads adapter_model.safetensors.
+        named = os.path.join(adapter_path, "adapter_model.safetensors")
+        if not os.path.exists(named) and os.path.exists(os.path.join(adapter_path, "adapters.safetensors")):
+            os.symlink("adapters.safetensors", named)
+
         model = PeftModel.from_pretrained(model, adapter_path)
     model.eval()
     LOAD_SECONDS = round(time.perf_counter() - started, 2)

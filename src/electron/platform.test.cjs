@@ -72,3 +72,28 @@ test('the agent picks the engine from the runtime: cuda → CudaInferenceEngine 
   assert.match(worker, /BitsAndBytesConfig\(load_in_4bit=True/);
   assert.match(read('scripts/evaluate-agent.cjs'), /const engine = createEngine\(model\.runtime\);/);
 });
+
+test('LoRA on Linux: the same command line as mlx_lm, only the answer learnt, and the adapter where the app looks', () => {
+  const { spawnSync } = require('node:child_process');
+  const dir = path.join(root, 'src', 'core', 'assistant');
+  const result = spawnSync('python3', ['-I', '-c', `import sys, json, importlib.util; sys.path.insert(0, ${JSON.stringify(dir)})
+spec = importlib.util.spec_from_file_location('cuda_lora', ${JSON.stringify(path.join(dir, 'cuda-lora.py'))}); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+a = m.arguments(['lora', '--model', '/b', '--train', '--data', '/d', '--adapter-path', '/a', '--iters', '30', '--batch-size', '1', '--num-layers', '8', '--learning-rate', '1e-05', '--max-seq-length', '64', '--grad-checkpoint', '--mask-prompt', '--seed', '0', '--steps-per-report', '5', '--steps-per-eval', '20', '--save-every', '50'])
+class T:
+    def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+        ids = [ord(c) for m in messages for c in m['content']]
+        return ids + ([0] if add_generation_prompt else [])
+ids, labels = m.encode(T(), [{'role': 'user', 'content': 'ab'}, {'role': 'assistant', 'content': 'cd'}], 64, True)
+class C: num_hidden_layers = 32
+print(json.dumps([a.command, a.iters, a.num_layers, a.mask_prompt, ids, labels, m.last_layers(C(), 8)[:2], m.ADAPTER_FILE]))`], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  const [command, iters, layers, mask, ids, labels, last, file] = JSON.parse(result.stdout.trim());
+  assert.deepEqual([command, iters, layers, mask], ['lora', 30, 8, true]);
+  assert.deepEqual(ids, [97, 98, 99, 100]);
+  assert.deepEqual(labels, [-100, -100, -100, 100], 'the prompt (and the generation marker) is not learnt');
+  assert.deepEqual(last, [24, 25]);
+  assert.equal(file, 'adapters.safetensors');
+  const main = read('src/electron/main.cjs');
+  assert.match(main, /mlxModels\.engineFor\(\) === 'mlx' \? 'mlx-locked\.py' : 'cuda-lora\.py'/);
+  assert.equal((main.match(/launcher: trainingLauncher\(\)/g) || []).length, 2, 'beta and stable');
+});
