@@ -90,3 +90,15 @@ test('a divider changes only the two panes beside it: one wider, the other narro
   const widths = { 'nav-conversations': 200, 'nav-files': 240, 'side-browser': 500, 'side-evaluation': 400 };
   assert.deepEqual(rows.withPaneWidths(widths, { 'nav-files': 300, 'side-browser': 440 }), { 'nav-conversations': 200, 'nav-files': 300, 'side-browser': 440, 'side-evaluation': 400 });
 });
+
+test('while a divider is dragged nothing gets selected: the row stops selecting text and a layer keeps the cursor', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'pane-row.tsx'), 'utf8');
+  assert.match(source, /handle\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(source, /setDragging\(id\)\n\s*window\.getSelection\(\)\?\.removeAllRanges\(\)/);
+  assert.match(source, /userSelect=\{dragging \? "none" : undefined\}/);
+  assert.match(source, /\{dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer\/>\}/);
+  // And it all goes back when the drag ends or is cancelled.
+  assert.match(source, /handle\.removeEventListener\("pointercancel", end\)\n\s*if \(handle\.hasPointerCapture\(event\.pointerId\)\) handle\.releasePointerCapture\(event\.pointerId\)\n\s*setDragging\(null\)/);
+  // Not dragging: no layer, text can be selected.
+  assert.doesNotMatch(ui.render({}), /data-pane-drag-layer/);
+});

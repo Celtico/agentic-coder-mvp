@@ -1,4 +1,4 @@
-import { Fragment, useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
+import { Fragment, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { Box, Flex } from "@chakra-ui/react"
 import { draggedPair, paneMinWidth, paneWidth } from "./row-sizes"
 
@@ -20,6 +20,9 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   label: string
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null)
+  // While a divider is dragged nothing in the panes is selected: the row stops selecting text, and a
+  // layer over the whole window (a webview or the terminal would take the pointer) keeps the resize cursor.
+  const [dragging, setDragging] = useState<string | null>(null)
   const flexWidth = () => rowRef.current?.querySelector<HTMLElement>("[data-pane-flex]")?.getBoundingClientRect().width ?? 0
   const flexMin = paneMinWidth(flexId)
   // The pane on the right of a pane's divider, and how wide each one is when a drag starts.
@@ -35,6 +38,8 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
     const startX = event.clientX
     const starts = { left: paneWidth(id, widths), right: rightOf(id) === flexId ? flexWidth() : paneWidth(rightOf(id), widths) }
     let changes = pair(id, 0, starts)
+    setDragging(id)
+    window.getSelection()?.removeAllRanges()
     const move = (moved: globalThis.PointerEvent) => {
       changes = pair(id, moved.clientX - startX, starts)
       onWidth(changes)
@@ -43,6 +48,8 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
       handle.removeEventListener("pointermove", move)
       handle.removeEventListener("pointerup", end)
       handle.removeEventListener("pointercancel", end)
+      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+      setDragging(null)
       onCommit(changes)
     }
     handle.addEventListener("pointermove", move)
@@ -58,7 +65,8 @@ export function PaneRow({ items, flexId, widths, onWidth, onCommit, label }: {
   }
 
   return (
-    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflow="hidden" aria-label={label} data-pane-row>
+    <Flex ref={rowRef} h="full" w="full" minW="0" minH="0" overflow="hidden" aria-label={label} data-pane-row userSelect={dragging ? "none" : undefined} data-dragging={dragging ? "" : undefined}>
+      {dragging && <Box position="fixed" inset="0" zIndex="4000" cursor="col-resize" userSelect="none" data-pane-drag-layer/>}
       {items.map((item) => {
         if (item.id === flexId) return <Flex key={item.id} flex="1" minW={`${flexMin}px`} minH="0" h="full" overflow="hidden" data-pane-flex data-pane-id={item.id}>{item.node}</Flex>
         const width = paneWidth(item.id, widths)
