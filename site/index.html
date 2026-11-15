@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agentic Coder · Entrena el teu propi model</title>
+  <meta name="description" content="Una eina per entrenar el teu propi model llm. Com més potent la teva màquina, més gran el model. Agent de programació local, LoRA, privat i de codi obert.">
+  <meta name="theme-color" content="#0a0c12">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Agentic Coder · Entrena el teu propi model">
+  <meta property="og:description" content="Un agent de programació local que aprèn de tu. Com més potent la teva màquina, més gran el model.">
+  <meta property="og:image" content="https://celtico.github.io/agentic-coder-mvp/assets/cover.png">
+  <meta property="og:url" content="https://celtico.github.io/agentic-coder-mvp/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- The texts are Catalan for now; each section is one block, so an English page can mirror it later. -->
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Agentic Coder, a l'inici">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 1 31 16 16 31 1 16Z" fill="currentColor"/><path d="M16 9 23 16 16 23 9 16Z" fill="var(--bg)"/></svg>
+      <span>Agentic Coder</span>
+    </a>
+    <nav aria-label="Seccions">
+      <a href="#cicle">Com funciona</a>
+      <a href="#log">Per dins</a>
+      <a href="#descarrega">Descàrrega</a>
+      <a class="nav-github" href="https://github.com/Celtico/agentic-coder-mvp">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow reveal">Codi obert · Local · LoRA</p>
+      <h1 class="reveal">Una eina per entrenar el teu propi model llm.</h1>
+      <p class="claim reveal">Com més potent la teva màquina, més gran el model.</p>
+      <p class="lead reveal">Un agent de programació que funciona al teu ordinador i aprèn de tu. Tu el guies, tu decideixes què val la pena, i amb això en fas el teu model.</p>
+      <div class="ctas reveal">
+        <a class="button primary" id="download" href="https://github.com/Celtico/agentic-coder-mvp/releases/latest">Descarrega</a>
+        <a class="button ghost" href="https://github.com/Celtico/agentic-coder-mvp">Codi a GitHub</a>
+      </div>
+      <p class="platform-note reveal" id="download-note">Mac amb Apple Silicon · Linux i Windows amb GPU NVIDIA</p>
+      <figure class="shot reveal">
+        <img src="assets/app.png" width="2400" height="1490" alt="L'app Agentic Coder: converses i fitxers, editor, navegador, avaluació, xat amb l'agent i, a baix, Git, aprenentatge, consola i terminal.">
+      </figure>
+    </section>
+
+    <section id="cicle" class="section">
+      <h2 class="reveal">Un model que aprèn de com treballes</h2>
+      <p class="section-lead reveal">No l'entrenes amb textos de ningú: l'entrenes amb la teva feina.</p>
+      <ol class="steps">
+        <li class="card reveal">
+          <span class="step-n">1</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H8l-4 4z"/></svg>
+          <h3>Guia</h3>
+          <p>L'agent llegeix el projecte, escriu codi, passa les proves i mira la pàgina. Si s'encalla, li dius per on.</p>
+        </li>
+        <li class="card reveal">
+          <span class="step-n">2</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg>
+          <h3>Desa</h3>
+          <p>Quan una feina surt bé, la deses com a cas verificat. Des del primer cas ja l'ajuda com a exemple.</p>
+        </li>
+        <li class="card reveal">
+          <span class="step-n">3</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a5 5 0 0 0-5 5v1a4 4 0 0 0 0 8 5 5 0 0 0 10 0 4 4 0 0 0 0-8V8a5 5 0 0 0-5-5zM12 8v8"/></svg>
+          <h3>Entrena</h3>
+          <p>Amb els teus casos n'entrenes una versió pròpia amb LoRA. Sempre des de l'original, que mai es toca.</p>
+        </li>
+        <li class="card reveal">
+          <span class="step-n">4</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <h3>Compara</h3>
+          <p>Passa les mateixes tasques amb comprovacions objectives. Si la teva versió és millor, te la quedes.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="log" class="section split">
+      <div class="split-text">
+        <h2 class="reveal">El que els xats del núvol no t'ensenyen</h2>
+        <p class="section-lead reveal">El Log del model obre cada crida per dins, perquè entenguis com funciona un LLM de debò.</p>
+        <ul class="checks reveal">
+          <li>El prompt sencer que rep el model, amb els tokens especials</li>
+          <li>D'on surt cada part: instruccions, historial, eines i casos recuperats</li>
+          <li>El text tal com el genera, i les crides a eines que se n'extreuen</li>
+          <li>La probabilitat de cada token i les alternatives que s'ha plantejat</li>
+          <li>Temps fins al primer token, tokens per segon i memòria</li>
+        </ul>
+      </div>
+      <figure class="log reveal" aria-label="Exemple d'una crida al Log del model">
+        <div class="log-bar"><span class="pill">xat</span><span>5.837 → 42 tokens · 3,1 s · 44 tok/s</span></div>
+        <pre class="log-prompt"><span class="tok">&lt;|im_start|&gt;</span>system
+Ets un agent de programació local…<span class="tok">&lt;|im_end|&gt;</span>
+<span class="tok">&lt;|im_start|&gt;</span>user
+Arregla la prova que falla<span class="tok">&lt;|im_end|&gt;</span>
+<span class="tok">&lt;|im_start|&gt;</span>assistant</pre>
+        <p class="log-label">Sortida, amb la seguretat de cada token</p>
+        <p class="log-tokens"><span>Miro</span> <span>el</span> <span class="mid" title="62 %">fitxer</span> <span>de</span> <span>la</span> <span class="low" title="31 %">prova</span><span>…</span> <span class="tool">&lt;tool_call&gt;read_file&lt;/tool_call&gt;</span></p>
+        <div class="log-legend"><span><i class="hi"></i>segur</span><span><i class="mid"></i>dubta</span><span><i class="low"></i>poc segur</span></div>
+      </figure>
+    </section>
+
+    <section class="section">
+      <h2 class="reveal">Creix amb la teva màquina</h2>
+      <p class="section-lead reveal">El que li ensenyes avui ho portes a un model més gran demà.</p>
+      <div class="machines">
+        <div class="card machine reveal"><p class="machine-name">Mac amb Apple Silicon · 16 GB</p><p class="machine-size">7–12B</p><p class="machine-engine">MLX</p></div>
+        <div class="card machine reveal"><p class="machine-name">Mac amb 32–128 GB</p><p class="machine-size">30–70B</p><p class="machine-engine">MLX</p></div>
+        <div class="card machine reveal"><p class="machine-name">PC amb GPU NVIDIA</p><p class="machine-size">segons la VRAM</p><p class="machine-engine">CUDA · Linux i Windows</p></div>
+      </div>
+    </section>
+
+    <section class="section private">
+      <div class="card wide reveal">
+        <svg class="icon big" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <div>
+          <h2>Local i privat</h2>
+          <p>El model, les converses, els casos i l'entrenament es queden al teu ordinador. Sense núvol, sense comptes i sense enviar el teu codi enlloc.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="descarrega" class="section">
+      <h2 class="reveal">Descàrrega</h2>
+      <p class="section-lead reveal">Els models es baixen des de l'app. La primera vegada cal preparar el motor de Python: la guia ho explica pas a pas.</p>
+      <div class="downloads">
+        <a class="card download reveal" data-os="mac" href="https://github.com/Celtico/agentic-coder-mvp/releases/latest">
+          <h3>Mac</h3><p>Apple Silicon · <code>.dmg</code></p><span class="badge ok">Provat</span>
+        </a>
+        <a class="card download reveal" data-os="linux" href="https://github.com/Celtico/agentic-coder-mvp/releases/latest">
+          <h3>Linux</h3><p>GPU NVIDIA · <code>.AppImage</code> · <code>.deb</code></p><span class="badge">En proves</span>
+        </a>
+        <a class="card download reveal" data-os="windows" href="https://github.com/Celtico/agentic-coder-mvp/releases/latest">
+          <h3>Windows</h3><p>GPU NVIDIA · <code>.exe</code></p><span class="badge">En proves</span>
+        </a>
+      </div>
+      <p class="fineprint reveal">Les apps no estan signades. Al Mac, la primera vegada: clic dret › Obre. Guies: <a href="https://github.com/Celtico/agentic-coder-mvp/blob/main/docs/guia.md">general</a>, <a href="https://github.com/Celtico/agentic-coder-mvp/blob/main/docs/linux.md">Linux</a>, <a href="https://github.com/Celtico/agentic-coder-mvp/blob/main/docs/windows.md">Windows</a>.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Agentic Coder és de codi obert (MIT). <a href="https://github.com/Celtico/agentic-coder-mvp">github.com/Celtico/agentic-coder-mvp</a></p>
+  </footer>
+
+  <script>
+    // The download button names the visitor's system; every link goes to the latest Release.
+    (function () {
+      var ua = navigator.userAgent || '';
+      var os = /Mac/i.test(ua) ? 'mac' : /Win/i.test(ua) ? 'windows' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : null;
+      var names = { mac: 'Descarrega per a Mac', windows: 'Descarrega per a Windows', linux: 'Descarrega per a Linux' };
+      if (os) {
+        document.getElementById('download').textContent = names[os];
+        var card = document.querySelector('.download[data-os="' + os + '"]');
+        if (card) card.classList.add('current');
+      }
+    })();
+    // Sections fade in as they come into view (not with reduced motion: CSS shows them at once).
+    (function () {
+      var items = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) { items.forEach(function (el) { el.classList.add('in'); }); return; }
+      var seen = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) { if (entry.isIntersecting) { entry.target.classList.add('in'); seen.unobserve(entry.target); } });
+      }, { rootMargin: '0px 0px -8% 0px' });
+      items.forEach(function (el) { seen.observe(el); });
+    })();
+  </script>
+</body>
+</html>

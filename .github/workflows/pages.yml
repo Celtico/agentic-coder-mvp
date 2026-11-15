@@ -1,0 +1,33 @@
+# The landing page (site/) on GitHub Pages: published on every push to main that changes it, or by hand.
+# Once: Settings › Pages › Source: GitHub Actions. Address: https://celtico.github.io/agentic-coder-mvp/
+name: Pàgina web
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/configure-pages@v6.0.0
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
