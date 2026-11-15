@@ -1714,7 +1714,7 @@ export function App(): React.JSX.Element {
   );
 
   const browserPane = (
-    <Flex h="full" w="full" minW="0" direction="column" bg="bg">
+    <Flex h="full" w="full" minW="0" direction="column">
       <PaneToolbar>
         <IconButton icon={ArrowLeft} label="Enrere" onClick={() => { if (webviewRef.current?.canGoBack()) webviewRef.current.goBack(); }}/>
         <IconButton icon={ArrowRight} label="Endavant" onClick={() => { if (webviewRef.current?.canGoForward()) webviewRef.current.goForward(); }}/>
@@ -1726,8 +1726,8 @@ export function App(): React.JSX.Element {
         </Box>
       </PaneToolbar>
       {browserUrl === 'about:blank'
-        ? <Box flex="1" minH="0" bg="bg"/>
-        : <WebView ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" display="flex" flex="1" w="full" h="full" minH="0" borderWidth="0" bg="bg"/>}
+        ? <Box flex="1" minH="0"/>
+        : <WebView ref={attachWebview} src={browserUrl} partition="persist:agentic-browser" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" display="flex" flex="1" w="full" h="full" minH="0" borderWidth="0"/>}
     </Flex>
   );
 
@@ -1735,7 +1735,7 @@ export function App(): React.JSX.Element {
     <PaneCard header={<PaneHeader icon={TerminalIcon} title="Terminal" subtitle={project?.path || 'Cap projecte seleccionat'} subtitleTitle={project?.path} actions={terminalStatus ? <Text fontSize="xs" color="fg.muted" whiteSpace="nowrap">{terminalStatus}</Text> : undefined}/>}>
       {/* The margin round the text has the terminal's own colour (bg, as xterm's theme), so it shows no frame of
           the panel's colour whatever the panel style. */}
-      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" bg={paneSurface} aria-label="Terminal del projecte" data-terminal/>
+      <Box ref={setTerminalContainer} flex="1" minH="0" minW="0" px="2" py="1" aria-label="Terminal del projecte" data-terminal/>
     </PaneCard>
   );
 
@@ -1743,7 +1743,7 @@ export function App(): React.JSX.Element {
   const editorPane = (
     // Monaco goes edge to edge (full bleed): only the tabs row has padding, with a line under it like
     // the panes' secondary bar.
-    <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
+    <Flex h="full" minH="0" minW="0" direction="column">
       <Flex flex="none" align="center" justify="space-between" gap="2" px="3" minW="0" borderBottomWidth="1px" borderColor="border" data-editor-tabs>
         {/* One tab per open file; its × closes it (a dot before the name: changes not saved). */}
         <Tabs.Root flex="1" minW="0" size="sm" variant="line" value={editingPath ?? ''} onValueChange={({ value }) => { if (value) void openEditor(value); }} activationMode="manual">
@@ -1783,7 +1783,7 @@ export function App(): React.JSX.Element {
   );
 
   const gitPane = (
-    <Flex h="full" minH="0" direction="column" bg="bg">
+    <Flex h="full" minH="0" direction="column">
       <PaneToolbar field={<><Badge colorPalette="agentic" variant="subtle" me="2">Log</Badge>{project?.path}</>} fieldTitle={project?.path}/>
       {gitLoading && !gitHistory ? <HStack p="4" color="fg.muted"><Spinner size="sm"/><Text>Carregant l’historial de Git…</Text></HStack>
         : !gitHistory?.available ? <Box p="3"><Notice tone="info">{gitHistory?.reason || gitSnapshot?.reason || 'Encara no s’ha consultat el repositori.'}</Notice></Box>
@@ -1969,7 +1969,7 @@ export function App(): React.JSX.Element {
   }
   const consoleTone = { error: 'fg.error', warn: 'fg.warning', info: 'fg.muted' } as const;
   const consolePane = (
-    <Flex h="full" minH="0" minW="0" direction="column" bg="bg">
+    <Flex h="full" minH="0" minW="0" direction="column">
       <PaneToolbar field={browserUrl === 'about:blank' ? 'Cap pàgina oberta' : browserAddress} fieldTitle={browserAddress}>
         <Button variant="ghost" size="xs" onClick={useConsoleContext} disabled={!consoleEntries.some((entry) => entry.level !== 'info')}>Passa els errors al xat</Button>
         <Button variant="ghost" size="xs" onClick={() => setConsoleEntries([])} disabled={consoleEntries.length === 0}>Buida</Button>

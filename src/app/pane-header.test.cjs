@@ -252,7 +252,7 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
 test('the editor: Monaco goes edge to edge, only the tabs row has padding and a line under it', () => {
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const editor = app.slice(app.indexOf('const editorPane = ('), app.indexOf('<Editor\n', app.indexOf('const editorPane = (')));
-  assert.match(editor, /<Flex h="full" minH="0" minW="0" direction="column" bg="bg">/);
+  assert.match(editor, /<Flex h="full" minH="0" minW="0" direction="column">/);
   assert.doesNotMatch(editor, /direction="column" p="3"/, 'no padding around Monaco');
   assert.match(editor, /<Flex flex="none" align="center" justify="space-between" gap="2" px="3" minW="0" borderBottomWidth="1px" borderColor="border" data-editor-tabs>/);
 });
@@ -271,4 +271,15 @@ test('Preferències: each tab with its icon, in the colour of the panes’ heade
   for (const [icon, label] of [['Cpu', 'Model'], ['Bot', 'Agent'], ['Brain', 'Aprenentatge'], ['Palette', 'Aparença']]) assert.match(app, new RegExp(`<PaneIcon icon=\\{${icon}\\}/>${label}</Tabs\\.Trigger>`), label);
   const pane = fs.readFileSync(path.join(__dirname, 'pane-header.tsx'), 'utf8');
   assert.match(pane, /export const PaneIcon = [\s\S]*?useSlotRecipe\(\{ recipe: paneHeaderRecipe \}\)\(\{ tone: useContext\(PaneToneContext\) \}\)[\s\S]*?css=\{styles\.icon\}/);
+});
+
+test('no pane body paints its own background: the card’s own (and its shadow’s light inner edge) shows round every pane', () => {
+  const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
+  for (const name of ['browserPane', 'editorPane', 'consolePane', 'gitPane', 'learningPane']) {
+    const start = app.indexOf(`const ${name} = (`);
+    assert.ok(start > -1, name);
+    const head = app.slice(start, app.indexOf('\n', app.indexOf('\n', start) + 1));
+    assert.doesNotMatch(head, /bg="bg"|bg=\{paneSurface\}/, name);
+  }
+  assert.doesNotMatch(app, /<Box ref=\{setTerminalContainer\}[^>]*bg=/, 'the terminal neither: xterm paints the same colour as its card');
 });
