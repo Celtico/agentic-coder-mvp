@@ -525,6 +525,8 @@ ipcMain.handle('window:set-translucent', async (_event, on) => {
   win.setBackgroundColor(on === true ? '#00000000' : '#171717');
   return on === true;
 });
+// The app's version (package.json, through Electron): shown under the mark in the left bar.
+ipcMain.handle('app:version', async () => app.getVersion());
 ipcMain.handle('llm:set', async (_event, change) => {
   if (typeof change?.open === 'boolean') llmTrace.open = change.open;
   if (typeof change?.logprobs === 'boolean') llmTrace.logprobs = change.logprobs;

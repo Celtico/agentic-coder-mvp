@@ -432,6 +432,9 @@ export function App(): React.JSX.Element {
   // Aprenentatge local › Gestiona els models: the list, the model being removed, the add dialog and the download.
   // Avaluació › Comparativa: the run shown per model (its id, or «all»); unset, the newest complete one.
   const [comparisonChoice, setComparisonChoice] = useState<Record<string, string>>({});
+  // The app's version (package.json, through the main process), under the mark in the left bar.
+  const [appVersion, setAppVersion] = useState('');
+  useEffect(() => { void window.agentic.appVersion?.().then(setAppVersion, () => {}); }, []);
   const [managed, setManaged] = useState<ManagedModels | null>(null);
   const [modelToRemove, setModelToRemove] = useState<ManagedModel | null>(null);
   const [modelAdd, setModelAdd] = useState<{ repo: string; label: string; check?: Awaited<ReturnType<typeof window.agentic.checkModelRepository>>; busy?: boolean } | null>(null);
@@ -2460,6 +2463,8 @@ export function App(): React.JSX.Element {
           {/* The app's mark in its own slot at the top of the bar, always in the brand green (not the accent),
               with clear space before the first group of icons. It turns while the model works. */}
           <Tip label={loading ? 'Agentic Coder · treballant' : 'Agentic Coder · preparat'}><Center flex="none" w="full" h="10" pt="2" mb="3" role="img" aria-label="Agentic Coder"><Mark size={28} gradient/></Center></Tip>
+          {/* The app's version (package.json), small, under the mark. */}
+          {appVersion && <Text flex="none" mt="-2" mb="2" w="full" textAlign="center" fontSize="2xs" color="fg.subtle" lineHeight="1" data-app-version>v{appVersion}</Text>}
           {/* The panes: each group opens its panes in its own row; an icon can be dragged to the other group. */}
           {railGroup('top')}
           {railGroup('bottom')}
