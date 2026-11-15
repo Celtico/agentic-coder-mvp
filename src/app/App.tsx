@@ -2781,7 +2781,7 @@ export function App(): React.JSX.Element {
       <FloatingPanel.Positioner zIndex="1000">
         <FloatingPanel.Content w="min(96vw, 1120px)" h="min(90vh, 720px)" minW="0" {...DIALOG_MATERIALS[appearance.dialogs].content} borderWidth="1px" borderRadius="xl" boxShadow="2xl" color="fg" {...surfaceText} overflow="hidden" aria-label={fileHistoryPath ? `Historial local de ${fileHistoryPath}` : 'Historial local'}>
         <RestoreWindowStage stage={fileHistoryStage}/>
-        <WindowTitleBar name="l’historial" stage={fileHistoryStage} title={<PaneTitle icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath}/>}/>
+        <WindowTitleBar name="l’historial" stage={fileHistoryStage} icon={History} title="Historial local" subtitle={fileHistoryScopePath || project?.path || fileHistoryPath || undefined}/>
         <FloatingPanel.Body display="flex" flexDirection="column" p="0" flex="1" minH="0" overflow="hidden">
         <Grid h="full" minH="0" minW="0" templateColumns="260px minmax(0, 1fr)">
           <Flex direction="column" minH="0" borderRightWidth="1px" borderColor="border">

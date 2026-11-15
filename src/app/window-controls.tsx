@@ -1,8 +1,8 @@
-import { FloatingPanel, IconButton, useFloatingPanelContext, useSlotRecipe, type IconButtonProps } from "@chakra-ui/react"
+import { FloatingPanel, IconButton, useFloatingPanelContext, type IconButtonProps } from "@chakra-ui/react"
+import type { IconType } from "react-icons"
 import { LuMinus as Minus, LuPlus as Plus, LuX as X } from "react-icons/lu"
-import { useContext, useEffect, type ReactNode } from "react"
-import { paneHeaderRecipe } from "../theme/pane-recipes"
-import { PaneToneContext } from "./pane-header"
+import { useEffect, type ReactNode } from "react"
+import { PaneHeader } from "./pane-header"
 
 export type WindowStage = "default" | "minimized" | "maximized"
 
@@ -44,27 +44,29 @@ function Light({ color, label, children, ...trigger }: Omit<IconButtonProps, "co
  * window (double click maximizes or restores it). `stage` is the panel's current stage (from its
  * Root's onStageChange): yellow and green turn into "restore" when the window is already in theirs.
  */
-export function WindowTitleBar({ title, stage, name }: { title: ReactNode; stage: WindowStage; name: string }) {
+export function WindowTitleBar({ icon, title, subtitle, subtitleTitle, stage, name }: { icon: IconType; title: string; subtitle?: ReactNode; subtitleTitle?: string; stage: WindowStage; name: string }) {
   const minimized = stage === "minimized"
   const maximized = stage === "maximized"
-  // The bar is painted like the panes' headers for the tone chosen (tinted: the accent's subtle colour).
-  const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: useContext(PaneToneContext) })
+  const lights = (
+    <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic" me="1">
+      <FloatingPanel.CloseTrigger asChild>
+        <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
+      </FloatingPanel.CloseTrigger>
+      <FloatingPanel.StageTrigger stage={minimized ? "default" : "minimized"} hidden={false} asChild>
+        <Light color="window.minimize" label={minimized ? `Restaura ${name}` : `Minimitza ${name}`}><Minus size={8} strokeWidth={3}/></Light>
+      </FloatingPanel.StageTrigger>
+      <FloatingPanel.StageTrigger stage={maximized ? "default" : "maximized"} hidden={false} asChild>
+        <Light color="window.maximize" label={maximized ? `Restaura la mida de ${name}` : `Fes gran ${name}`}><Plus size={8} strokeWidth={3}/></Light>
+      </FloatingPanel.StageTrigger>
+    </FloatingPanel.Control>
+  )
+  // The panes' own header (same height, padding, icon, title, subtitle, line and tone), with the traffic
+  // lights first; the whole of it drags the window.
   return (
-    <FloatingPanel.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0">
-      {/* The pane header's box: 40 px, centred vertically, its padding and its line underneath. */}
-      <FloatingPanel.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border" colorPalette="agentic" bg={(styles.root as { bg?: string }).bg}>
-        <FloatingPanel.Control data-group display="flex" alignItems="center" gap="windowLightGap" colorPalette="agentic">
-          <FloatingPanel.CloseTrigger asChild>
-            <Light color="window.close" label={`Tanca ${name}`}><X size={8} strokeWidth={3}/></Light>
-          </FloatingPanel.CloseTrigger>
-          <FloatingPanel.StageTrigger stage={minimized ? "default" : "minimized"} hidden={false} asChild>
-            <Light color="window.minimize" label={minimized ? `Restaura ${name}` : `Minimitza ${name}`}><Minus size={8} strokeWidth={3}/></Light>
-          </FloatingPanel.StageTrigger>
-          <FloatingPanel.StageTrigger stage={maximized ? "default" : "maximized"} hidden={false} asChild>
-            <Light color="window.maximize" label={maximized ? `Restaura la mida de ${name}` : `Fes gran ${name}`}><Plus size={8} strokeWidth={3}/></Light>
-          </FloatingPanel.StageTrigger>
-        </FloatingPanel.Control>
-        <FloatingPanel.Title display="flex" flex="1" minW="0" textAlign="start">{title}</FloatingPanel.Title>
+    <FloatingPanel.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0" display="block">
+      <FloatingPanel.Title srOnly>{title}</FloatingPanel.Title>
+      <FloatingPanel.DragTrigger display="block" w="full" p="0">
+        <PaneHeader icon={icon} title={title} subtitle={subtitle} subtitleTitle={subtitleTitle} leading={lights}/>
       </FloatingPanel.DragTrigger>
     </FloatingPanel.Header>
   )

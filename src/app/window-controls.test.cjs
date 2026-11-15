@@ -14,11 +14,12 @@ function render(stage) {
     import { renderToStaticMarkup } from "react-dom/server"
     import { system } from ${JSON.stringify(path.join(__dirname, '..', 'theme', 'system.ts'))}
     import { WindowTitleBar } from ${JSON.stringify(path.join(__dirname, 'window-controls.tsx'))}
+    import { LuHistory } from "react-icons/lu"
     export default (stage) => renderToStaticMarkup(
       <ChakraProvider value={system}>
         <FloatingPanel.Root open defaultStage={stage === "default" ? undefined : stage}>
           <FloatingPanel.Positioner><FloatingPanel.Content>
-            <WindowTitleBar name="l’historial" stage={stage} title="Historial local: /p"/>
+            <WindowTitleBar name="l’historial" stage={stage} icon={LuHistory} title="Historial local" subtitle="/p"/>
           </FloatingPanel.Content></FloatingPanel.Positioner>
         </FloatingPanel.Root>
       </ChakraProvider>)
@@ -36,20 +37,17 @@ test('the three traffic lights are on the left, then the title, left-aligned, an
   const lights = buttons(html);
   assert.deepEqual(lights.map(label), ['Tanca l’historial', 'Minimitza l’historial', 'Fes gran l’historial']);
   assert.ok(lights.every((button) => !/\shidden/.test(button)));
-  assert.ok(html.indexOf('Fes gran') < html.indexOf('Historial local: /p'), 'the lights come before the title');
+  assert.ok(html.indexOf('Fes gran') < html.lastIndexOf('Historial local'), 'the lights come before the title');
   // The whole bar is the drag handle: the lights are inside it (zag ignores a drag that starts on a button).
   const drag = html.indexOf('data-part="drag-trigger"');
   assert.ok(drag > -1 && drag < html.indexOf('Tanca l’historial'));
   // Left-aligned, 40 px like the panes' headers, with nothing to keep it centred.
   assert.doesNotMatch(html, /text-align:\s*center|text-align_center/);
+  // The panes' own header, the traffic lights as its first item: same height, padding, line and tone.
+  assert.match(html, /data-pane-header/);
+  assert.ok(html.indexOf('data-pane-header') < html.indexOf('Tanca l’historial'), 'the lights inside the pane header');
   const source = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
-  assert.match(source, /<FloatingPanel\.DragTrigger flex="1" minW="0" h="10" display="flex" alignItems="center" gap="3" px="3" py="0" borderBottomWidth="thin" borderColor="border" colorPalette="agentic" bg=\{\(styles\.root as \{ bg\?: string \}\)\.bg\}>/);
-  // Painted like the panes' headers for the tone chosen.
-  assert.match(source, /useSlotRecipe\(\{ recipe: paneHeaderRecipe \}\)\(\{ tone: useContext\(PaneToneContext\) \}\)/);
-  // The same box as the panes' header (src/theme/pane-recipes.ts).
-  const recipes = fs.readFileSync(path.join(__dirname, '..', 'theme', 'pane-recipes.ts'), 'utf8');
-  assert.match(recipes, /root: \{ colorPalette: "agentic", display: "flex", flex: "none", h: "10", alignItems: "center", gap: "2", px: "3", minW: "0", borderBottomWidth: "1px", borderColor: "border" \}/);
-  assert.match(source, /<FloatingPanel\.Title display="flex" flex="1" minW="0" textAlign="start">/);
+  assert.match(source, /<PaneHeader icon=\{icon\} title=\{title\} subtitle=\{subtitle\} subtitleTitle=\{subtitleTitle\} leading=\{lights\}\/>/);
 });
 
 test('each light is the trigger itself: it gets the trigger’s click and attributes', () => {
@@ -81,7 +79,7 @@ test('the floating window: a Mac window’s rounder corners and a header of the 
 
 test('the floating window’s corners and header are set on the elements too, so nothing overrides them', () => {
   const controls = fs.readFileSync(path.join(__dirname, 'window-controls.tsx'), 'utf8');
-  assert.match(controls, /<FloatingPanel\.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0">/);
+  assert.match(controls, /<FloatingPanel\.Header p="0" gap="0" minH="0" bg="transparent" borderBottomWidth="0" display="block">/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   assert.match(app, /<FloatingPanel\.Content [^>]*borderRadius="xl" boxShadow="2xl"[^>]*overflow="hidden"/);
 });

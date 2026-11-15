@@ -30,12 +30,13 @@ export const Pane = ({ header, toolbar, children, label, variant }: { header: Re
   )
 }
 
-export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, actions, tone }: { icon: IconType; title: string; subtitle?: ReactNode; subtitleTitle?: string; badge?: ReactNode; actions?: ReactNode; tone?: PaneHeaderTone }) => {
+export const PaneHeader = ({ icon: Icon, title, subtitle, subtitleTitle, badge, actions, tone, leading }: { icon: IconType; title: string; subtitle?: ReactNode; subtitleTitle?: string; badge?: ReactNode; actions?: ReactNode; tone?: PaneHeaderTone; /** Before the icon: a floating window's traffic lights. */ leading?: ReactNode }) => {
   const contextTone = useContext(PaneToneContext)
   const chosen = tone ?? contextTone
   const styles = useSlotRecipe({ recipe: paneHeaderRecipe })({ tone: chosen })
   return (
     <chakra.div css={styles.root} data-pane-header data-tone={chosen}>
+      {leading}
       <chakra.span css={styles.icon}><Icon size={16} aria-hidden="true"/></chakra.span>
       <chakra.span css={styles.title}>{title}</chakra.span>
       {subtitle && <chakra.span css={styles.subtitle} title={subtitleTitle}>{subtitle}</chakra.span>}

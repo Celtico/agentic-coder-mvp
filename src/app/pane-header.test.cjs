@@ -168,7 +168,7 @@ test('every dialog and the floating Historial local window speak the panes’ la
   assert.match(recipes, /header: \{ \.\.\.chakraDialog\.base\.header, p: "0", display: "block" \}/);
   // Historial local: panel background, the panes' title in its bar, plain labels, the selection in brand.
   assert.match(app, /<FloatingPanel\.Content [^>]*\{\.\.\.DIALOG_MATERIALS\[appearance\.dialogs\]\.content\}/);
-  assert.match(app, /title=\{<PaneTitle icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath\}\/>\}/);
+  assert.match(app, /<WindowTitleBar name="l’historial" stage=\{fileHistoryStage\} icon=\{History\} title="Historial local" subtitle=\{fileHistoryScopePath \|\| project\?\.path \|\| fileHistoryPath \|\| undefined\}\/>/);
   assert.doesNotMatch(app, />CARPETA<|>HISTORIAL DELS FITXERS</);
   assert.match(app, /fileHistoryVersionPath === version\.path \? 'agentic' : 'gray'/);
   assert.match(app, /<ChakraButton size="sm" variant="outline" onClick=\{\(\) => setFileHistoryPath\(null\)\}>Tanca<\/ChakraButton>/);
