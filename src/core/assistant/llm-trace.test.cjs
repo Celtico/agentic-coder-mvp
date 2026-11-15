@@ -138,12 +138,11 @@ test('the panel over an app started before it: a clear message, not a spinner th
   assert.match(panel, /catch \(caught\) \{ setError\(errorMessage\(caught\)\); setCalls\(\(current\) => current \?\? \[\]\) \}/);
 });
 
-test('the logprobs switch: no visible label (it wrapped), the text in a tooltip and as its accessible name', () => {
+test('the logprobs switch: a one-word label that never wraps, the whole text in a tooltip and as its accessible name', () => {
   const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
   assert.match(panel, /const LOGPROBS_LABEL = "Probabilitat de cada token \(més lent\)"/);
-  assert.match(panel, /<Switch\.HiddenInput aria-label=\{LOGPROBS_LABEL\}\/><Switch\.Control\/>/);
+  assert.match(panel, /<Switch\.HiddenInput aria-label=\{LOGPROBS_LABEL\}\/><Switch\.Control\/><Switch\.Label fontSize="xs" color="fg\.muted" whiteSpace="nowrap">Probabilitats<\/Switch\.Label>/);
   assert.match(panel, /<Tooltip\.Content maxW="280px">\{LOGPROBS_LABEL\}<\/Tooltip\.Content>/);
-  assert.doesNotMatch(panel, /<Switch\.Label/);
 });
 
 test('the toolbar’s buttons: only their icons, their names in a tooltip and as aria-label; Esborra still asks twice', () => {

@@ -118,11 +118,11 @@ export function LlmLogPane() {
 
   const toolbar = <PaneToolbar>
     <HStack flex="1" gap="2" minW="0">
-      {/* The switch alone, its meaning in a tooltip (a visible label wrapped over several lines). */}
+      {/* The switch with a short label (one word, so it never wraps); the whole meaning in a tooltip. */}
       <Tooltip.Root openDelay={250} closeDelay={0} positioning={{ gutter: 6 }}>
         <Tooltip.Trigger asChild>
           <Switch.Root size="sm" colorPalette="agentic" checked={logprobs} onCheckedChange={({ checked }) => void window.agentic.setLlmTrace({ logprobs: checked }).then((state) => setLogprobs(state.logprobs))}>
-            <Switch.HiddenInput aria-label={LOGPROBS_LABEL}/><Switch.Control/>
+            <Switch.HiddenInput aria-label={LOGPROBS_LABEL}/><Switch.Control/><Switch.Label fontSize="xs" color="fg.muted" whiteSpace="nowrap">Probabilitats</Switch.Label>
           </Switch.Root>
         </Tooltip.Trigger>
         <Portal><Tooltip.Positioner><Tooltip.Content maxW="280px">{LOGPROBS_LABEL}</Tooltip.Content></Tooltip.Positioner></Portal>
