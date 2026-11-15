@@ -34,7 +34,7 @@ def normalize_tool_calls(text, tools, start, end, parser):
         out += before
         try:
             for call in _tool_call_objects(body):
-                out += "<tool_call>" + json.dumps({"name": call["name"], "arguments": call.get("arguments") or {}}, ensure_ascii=False) + "</tool_call>"
+                out += "<tool_call>" + json.dumps({"name": call["name"], "arguments": _arguments(call)}, ensure_ascii=False) + "</tool_call>"
             continue
         except Exception:
             pass
@@ -49,6 +49,14 @@ def normalize_tool_calls(text, tools, start, end, parser):
     return out + rest
 
 
+def _arguments(call):
+    """A call's arguments; some models name them «parameters» or «parameter»."""
+    for key in ("arguments", "parameters", "parameter"):
+        if isinstance(call.get(key), dict):
+            return call[key]
+    return {}
+
+
 def _tool_call_objects(body):
     """A tool call written as JSON, also after a «call:» prefix (Gemma 4 sometimes mixes both forms)."""
     text = body.strip()
@@ -60,6 +68,9 @@ def _tool_call_objects(body):
         return [{"name": tagged.group(1), "arguments": json.loads(tagged.group(2))}]
     # Qwen3-Coder's XML (<function=name><parameter=key>value</parameter>…), read without mlx_lm's parser.
     xml = re.fullmatch(r"<function=([\w.-]+)>(.*)</function>", text, re.DOTALL)
+    # A call without arguments: <function=run_tests></function>.
+    if xml and not xml.group(2).strip():
+        return [{"name": xml.group(1), "arguments": {}}]
     if xml and "<parameter=" in xml.group(2):
         arguments = {}
         for key, value in re.findall(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", xml.group(2), re.DOTALL):

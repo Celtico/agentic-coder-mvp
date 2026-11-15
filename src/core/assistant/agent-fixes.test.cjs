@@ -189,3 +189,10 @@ test('an answer that says it is done before any tool ran is marked «claimed don
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, 'agent.ts'), 'utf8');
   assert.match(source, /\.\.\.\(claimedWithoutTools \? \{ claimedDoneWithoutTools: true \} : \{\}\)/);
 });
+
+test('a call whose arguments are named «parameter» or «parameters» runs with them (MiMo with vision)', async (t) => {
+  for (const [response, file] of [['{"type":"tool_call","name":"read_file","parameter":{"path":"a.txt"}}</function></tool_call>', 'a.txt'], ['<tool_call>{"name": "read_file", "parameters": {"path": "b.txt"}}</tool_call>', 'b.txt']]) {
+    const { calls } = await run(t, { request: 'quin és el contingut del fitxer?', responses: [response], tool: async () => ({ content: 'hola' }) });
+    assert.deepEqual([calls[0]?.name, calls[0]?.arguments?.path], ['read_file', file], response);
+  }
+});

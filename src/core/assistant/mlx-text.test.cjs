@@ -92,9 +92,11 @@ test('without a parser: JSON inside <function=…>, and the XML parameters, stil
   const result = spawnSync('python3', ['-I', '-c', `import sys, json; sys.path.insert(0, ${JSON.stringify(__dirname)})
 import mlx_text
 n = lambda t: mlx_text.normalize_tool_calls(t, None, None, None, None)
-print(json.dumps([n('Vull revisar.<tool_call><function=read_file>{"path": "src/math.cjs"}</function></tool_call><tool_call><function=run_tests>{}</function></tool_call>'), n('<tool_call>\\n<function=write_file>\\n<parameter=path>\\na.txt\\n</parameter>\\n<parameter=content>\\nhola\\n</parameter>\\n</function>\\n</tool_call>'), n('Sense cap eina.'), n('<tool_call>no és una crida</tool_call>')]))`], { encoding: 'utf8' });
+print(json.dumps([n('Vull revisar.<tool_call><function=read_file>{"path": "src/math.cjs"}</function></tool_call><tool_call><function=run_tests>{}</function></tool_call>'), n('<tool_call>\\n<function=write_file>\\n<parameter=path>\\na.txt\\n</parameter>\\n<parameter=content>\\nhola\\n</parameter>\\n</function>\\n</tool_call>'), n('Sense cap eina.'), n('<tool_call>no és una crida</tool_call>'), n('<tool_call><function=run_tests></function></tool_call>'), n('<tool_call>{"name": "read_file", "parameter": {"path": "a"}}</tool_call>')]))`], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  const [tagged, xml, plain, broken] = JSON.parse(result.stdout.trim());
+  const [tagged, xml, plain, broken, empty, named] = JSON.parse(result.stdout.trim());
+  assert.equal(empty, '<tool_call>{"name": "run_tests", "arguments": {}}</tool_call>', 'a call without arguments');
+  assert.equal(named, '<tool_call>{"name": "read_file", "arguments": {"path": "a"}}</tool_call>', 'arguments named «parameter»');
   assert.equal(tagged, 'Vull revisar.<tool_call>{"name": "read_file", "arguments": {"path": "src/math.cjs"}}</tool_call><tool_call>{"name": "run_tests", "arguments": {}}</tool_call>');
   assert.equal(xml, '<tool_call>{"name": "write_file", "arguments": {"path": "a.txt", "content": "hola"}}</tool_call>');
   assert.equal(plain, 'Sense cap eina.');

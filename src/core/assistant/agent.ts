@@ -173,10 +173,12 @@ function parseAction(raw: string): AgentAction | null {
       const action = value as Record<string, unknown>;
       if (action.type === 'final' && typeof action.content === 'string') return { type: 'final', content: action.content };
       if (action.type === 'plan' && typeof action.content === 'string') return { type: 'plan', content: action.content };
-      if (action.type === 'tool_call' && typeof action.name === 'string') return { type: 'tool_call', name: action.name, arguments: action.arguments };
+      // Some models name the arguments «parameters» or «parameter» (MiMo with vision, 15-11-2026).
+      const args = action.arguments ?? action.parameters ?? action.parameter;
+      if (action.type === 'tool_call' && typeof action.name === 'string') return { type: 'tool_call', name: action.name, arguments: args };
       // The bare {"name", "arguments"} form counts only for a real tool: a package.json the model
       // quotes in its answer also has a "name", and it is not a call.
-      if (typeof action.name === 'string' && agentToolDefinitions.some((tool) => tool.function.name === action.name)) return { type: 'tool_call', name: action.name, arguments: action.arguments };
+      if (typeof action.name === 'string' && agentToolDefinitions.some((tool) => tool.function.name === action.name)) return { type: 'tool_call', name: action.name, arguments: args };
     } catch {}
     return null;
   };
@@ -256,7 +258,7 @@ function parseAction(raw: string): AgentAction | null {
       const value: unknown = JSON.parse(match[1].trim());
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         const call = value as Record<string, unknown>;
-        if (typeof call.name === 'string') action = { type: 'tool_call', name: call.name, arguments: call.arguments };
+        if (typeof call.name === 'string') action = { type: 'tool_call', name: call.name, arguments: call.arguments ?? call.parameters ?? call.parameter };
       }
     } catch {
       // A file's content with real line breaks, or a missing closing brace.
