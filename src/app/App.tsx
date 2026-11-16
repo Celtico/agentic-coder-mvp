@@ -22,6 +22,7 @@ import { ipcErrorText, missingInMain, RESTART_NOTICE } from './ipc-errors';
 import { splitToolCallMarkup } from './tool-call-markup';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
+import { ENGINE_CHARTS, engineNumber, engineWinners } from './engine-podium';
 import { withPaneWidths } from './row-sizes';
 import { scrollArea } from '../theme/scroll-area';
 import { PaneRow } from './pane-row';
@@ -173,17 +174,8 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 const STOP_CONFIRM_MS = 3000;
 /** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
 // Benchmark de motors: its charts, one bar per engine for each figure (the longest bar is the largest value).
-const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
 // One fixed colour per engine, the same in every chart and in the legend.
 const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
-const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null | undefined, string, string][] = [
-  ['Càrrega del model', (engine) => engine.loadSeconds, 's', 'menys és millor'],
-  ['Lectura, prompt llarg', (engine) => engine.long.promptTps, 'tok/s', 'més és millor'],
-  ['Generació', (engine) => engine.generationTps, 'tok/s', 'més és millor'],
-  ['Primer token, prompt curt', (engine) => engine.short.firstTokenSeconds, 's', 'menys és millor'],
-  ['2n missatge amb memòria cau: primer token', (engine) => engine.second.firstTokenSeconds, 's', 'menys és millor'],
-  ['Memòria màxima (MLX)', (engine) => engine.peakMemoryGb, 'GB', 'menys és millor'],
-];
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
 /** Dades preparades › Mostra: the splits and why a case was left out. */
 const DATASET_SPLITS = [['train', 'Entrenament'], ['validation', 'Validació'], ['test', 'Prova']] as const;
@@ -2320,6 +2312,10 @@ export function App(): React.JSX.Element {
                 </HStack>)}
               </Box>;
             })}</Stack>
+            {report.engines.length > 1 && (() => { const podium = engineWinners(report); return <Box mt="3" pt="2" borderTopWidth="1px" borderColor="border">
+              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><Text fontSize="2xs" color="fg.muted">{[...podium.wins.map((item) => `${item.name} ${item.wins}`), `empat ${podium.ties}`].join(' · ')}</Text></HStack>
+              {podium.figures.map((figure) => <Text key={figure.label} fontSize="2xs" color="fg.muted">{figure.winner ? '● ' : '○ '}{figure.label}: {figure.detail}</Text>)}
+            </Box>; })()}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
         </Accordion.ItemBody></Accordion.ItemContent>
