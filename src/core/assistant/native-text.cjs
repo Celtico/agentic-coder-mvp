@@ -10,6 +10,24 @@ function pyJson(value) {
   return JSON.stringify(value === undefined ? null : value);
 }
 
+// A model that repeats one piece of text over and over (greedy decoding can get stuck: «Dades de prova» hundreds of
+// times inside a file, 16-11-2026) is stopped: the end of its answer is one chunk repeated at least
+// REPEAT_MIN_COUNT times in a row, over at least REPEAT_MIN_CHARS characters. Normal code (similar lines, a dozen
+// identical short lines, a table) stays far from that. The same rule as mlx_text.repeating_tail.
+const REPEAT_MIN_COUNT = 20;
+const REPEAT_MIN_CHARS = 600;
+const REPEAT_MAX_CHUNK = 400;
+
+function repeatingTail(text) {
+  for (let size = 1; size <= REPEAT_MAX_CHUNK; size++) {
+    const span = Math.max(REPEAT_MIN_CHARS, size * REPEAT_MIN_COUNT);
+    if (span > text.length) break;
+    const tail = text.slice(-span);
+    if (tail.slice(size) === tail.slice(0, -size)) return true;
+  }
+  return false;
+}
+
 /** Removes the hidden reasoning section (start … end) a reasoning model writes before answering. */
 function stripThinking(text, start, end) {
   if (!start || !end) return text;
@@ -184,4 +202,4 @@ function contextLimit(modelDir) {
   return null;
 }
 
-module.exports = { pyJson, stripThinking, toolCallObjects, qwen3CoderParser, normalizeToolCalls, nativeHistory, toolParserType, contextLimit };
+module.exports = { repeatingTail, pyJson, stripThinking, toolCallObjects, qwen3CoderParser, normalizeToolCalls, nativeHistory, toolParserType, contextLimit };

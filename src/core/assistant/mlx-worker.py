@@ -273,7 +273,7 @@ for line in sys.stdin:
             # Log del model (the panel is open): the same generation, streamed and measured.
             answer, trace = mlx_trace.traced_generate(
                 stream, model, tokenizer, prompt, int(request.get("max_tokens", 700)),
-                make_sampler(temp=float(request.get("temperature", 0.0))), LOGITS_PROCESSORS or None, emit,
+                make_sampler(temp=float(request.get("temperature", 0.0))), LOGITS_PROCESSORS or None, emit, stop=mlx_text.repeating_tail,
                 logprobs=bool(request.get("logprobs")),
             )
             trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")),
@@ -282,7 +282,7 @@ for line in sys.stdin:
             continue
         # generate() is stream_generate's text joined: the same, here through the prompt cache.
         # "finishReason": "length" when the answer was cut at max_tokens, so the agent does not act on half an answer.
-        answer, finish = "", None
+        answer, finish, checked = "", None, 0
         for response in stream(
             model,
             tokenizer,
@@ -293,6 +293,12 @@ for line in sys.stdin:
         ):
             answer += response.text
             finish = response.finish_reason
+            # Stuck repeating the same text: stop here (mlx_text.repeating_tail; checked every 64 new characters).
+            if len(answer) - checked >= 64:
+                checked = len(answer)
+                if mlx_text.repeating_tail(answer):
+                    finish = "repetition"
+                    break
         emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "finishReason": finish})
     except Exception as error:
         emit({"type": "result", "error": f"Error generant amb MLX: {error}"})

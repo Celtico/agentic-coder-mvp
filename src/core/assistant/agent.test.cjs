@@ -1760,3 +1760,29 @@ test('does not write a file from an answer cut at the token limit', async (t) =>
   assert.ok(!calls.includes('write_file'), calls.join(', '));
   assert.ok(prompts.some((text) => /s’ha tallat al límit de tokens/.test(text)));
 });
+
+test('does not write a file from an answer stopped for repeating itself', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-repeating-answer-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+  const answers = [
+    ['{"type":"plan","content":"Escriure src/a.test.js."}', 'stop'],
+    ['{"type":"tool_call","name":"write_file","arguments":{"path":"src/a.test.js","content":"' + 'Dades de prova\\n'.repeat(60), 'repetition'],
+    ['{"type":"final","content":"No l’he pogut escriure."}', 'stop'],
+  ];
+  const prompts = [];
+  const engine = {
+    lastFinishReason: null,
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages[messages.length - 1].content); const [text, finish] = answers.shift() ?? ['{"type":"final","content":"fet"}', 'stop']; engine.lastFinishReason = finish; return text; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Escriu un test a src/a.test.js.', projectRoot, async (tool) => { calls.push(tool.name); return { applied: true }; });
+  assert.ok(!calls.includes('write_file'), calls.join(', '));
+  assert.ok(prompts.some((text) => /el model repetia el mateix text/.test(text)));
+});

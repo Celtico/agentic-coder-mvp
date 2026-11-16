@@ -68,17 +68,22 @@ function generate(request, messages, tools, onPiece) {
   const started = performance.now();
   let first = null;
   let answer = '';
-  let pieces = 0;
+  let repeating = false;
+  let checked = 0;
   for (const piece of chat.streamIds(ids, { maxTokens, temperature: Number(request.temperature ?? 0), ban, cache: cacheBytes > 0, cacheBytes })) {
     if (first === null) first = performance.now();
     answer += piece;
-    pieces += 1;
     onPiece(piece);
+    // Stuck repeating the same text: stop here (checked every 64 new characters).
+    if (answer.length - checked >= 64) {
+      checked = answer.length;
+      if (text.repeatingTail(answer)) { repeating = true; break; }
+    }
   }
   const end = performance.now();
   const stats = chat.model.lastPrompt || { reused: 0, total: ids.length };
   const generated = chat.model.lastGenerated ?? null;
-  return { prompt, answer, ids, stats, generated, maxTokens, started, first, end, pieces };
+  return { prompt, answer, ids, stats, generated, maxTokens, started, first, end, repeating };
 }
 
 const lines = readline.createInterface({ input: process.stdin });
@@ -94,7 +99,8 @@ lines.on('line', (line) => {
     const run = generate(request, messages, tools, trace ? (piece) => emit({ type: 'token', text: piece }) : () => {});
     const result = text.normalizeToolCalls(text.stripThinking(run.answer, thinkStart, thinkEnd), tools, '<tool_call>', '</tool_call>', parser).trim();
     // «length» when the answer was cut at max_tokens, as mlx-worker.py says, so the agent does not act on half an answer.
-    const finishReason = run.generated !== null && run.generated >= run.maxTokens ? 'length' : 'stop';
+    // «repetition» when it was stopped for repeating the same text (mlx_text.repeating_tail).
+    const finishReason = run.repeating ? 'repetition' : run.generated !== null && run.generated >= run.maxTokens ? 'length' : 'stop';
     if (!trace) { emit({ type: 'result', text: result, finishReason }); return; }
     const firstSeconds = run.first === null ? null : (run.first - run.started) / 1000;
     const generationTokens = run.generated ?? null;

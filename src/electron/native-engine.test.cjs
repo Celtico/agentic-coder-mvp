@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { runtimeFor, nativeSupported } = require('./mlx-models.cjs');
 const text = require('../core/assistant/native-text.cjs');
+const { spawnSync } = require('node:child_process');
 
 function modelFolder(config, weights = ['model.layers.0.mlp.gate_proj.weight']) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'native-model-'));
@@ -62,4 +63,27 @@ test('the agent’s history goes back as tool_calls and tool messages; reasoning
   ]);
   assert.strictEqual(text.stripThinking('<think>pensa</think>Resposta', '<think>', '</think>'), 'Resposta');
   assert.strictEqual(text.stripThinking('pensa</think>Resposta', '<think>', '</think>'), 'Resposta');
+});
+
+// The rule that stops a model stuck repeating itself (native-text.cjs and mlx_text.py, the same).
+const imports = "import { test } from 'node:test'\nimport assert from 'node:assert/strict'\nimport { suma } from './suma.js'\n\n";
+const repetitionCases = [
+  // 16-11-2026: «Dades de prova» hundreds of times inside a test file.
+  ['stuck', imports + 'Dades de prova\n\n'.repeat(60), true],
+  // Normal code: similar lines that differ, a dozen identical short lines, a table, a long but varied file.
+  ['similar assertions', imports + Array.from({ length: 40 }, (_, i) => `test('suma ${i}', () => assert.equal(suma(${i}, 1), ${i + 1}))\n`).join(''), false],
+  ['identical short lines', imports + '  assert.ok(true)\n'.repeat(12), false],
+  ['a table', '| a | b |\n|---|---|\n' + Array.from({ length: 30 }, (_, i) => `| ${i} | ${i * 2} |\n`).join(''), false],
+  ['a short run of one character', 'x'.repeat(599), false],
+];
+
+test('a model repeating the same text is stopped; normal code is not', () => {
+  for (const [name, value, stuck] of repetitionCases) assert.strictEqual(text.repeatingTail(value), stuck, name);
+});
+
+test('the Python worker uses the same rule (mlx_text.repeating_tail)', { skip: spawnSync('python3', ['--version']).status !== 0 && 'no python3' }, () => {
+  const dir = path.join(__dirname, '..', 'core', 'assistant');
+  const result = spawnSync('python3', ['-I', '-c', `import sys, json; sys.path.insert(0, ${JSON.stringify(dir)})\nimport mlx_text\nprint(json.dumps([mlx_text.repeating_tail(v) for v in json.load(sys.stdin)]))`], { input: JSON.stringify(repetitionCases.map(([, value]) => value)), encoding: 'utf8' });
+  assert.strictEqual(result.status, 0, result.stderr);
+  assert.deepStrictEqual(JSON.parse(result.stdout), repetitionCases.map(([, , stuck]) => stuck));
 });

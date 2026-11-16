@@ -1190,6 +1190,9 @@ export class LocalCodingAgent {
         } else if (tool.name === 'write_file' && this.engine.lastFinishReason === 'length') {
           // The answer was cut at the token limit: its file content is incomplete, so nothing is written.
           result = { applied: false, error: 'La resposta s’ha tallat al límit de tokens abans d’acabar i el fitxer no s’ha escrit.' };
+        } else if (tool.name === 'write_file' && this.engine.lastFinishReason === 'repetition') {
+          // The worker stopped the answer because the model was repeating the same text over and over.
+          result = { applied: false, error: 'La resposta s’ha tallat perquè el model repetia el mateix text una vegada i una altra, i el fitxer no s’ha escrit.' };
         } else result = await executeTool(tool);
         toolsRun += 1;
       }

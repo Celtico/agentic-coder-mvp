@@ -54,7 +54,7 @@ def alternatives(logprobs, token, decode, k=5):
     }
 
 
-def traced_generate(stream_generate, model, tokenizer, prompt, max_tokens, sampler, logits_processors, emit, logprobs=False):
+def traced_generate(stream_generate, model, tokenizer, prompt, max_tokens, sampler, logits_processors, emit, logprobs=False, stop=None):
     """Generates as generate() does, sending each piece of text as it comes ({"type": "token"}), and
     returns the text and what was measured."""
     started = time.perf_counter()
@@ -62,6 +62,7 @@ def traced_generate(stream_generate, model, tokenizer, prompt, max_tokens, sampl
     text = ""
     last = None
     tokens = []
+    stopped = False
     for response in stream_generate(model, tokenizer, prompt=prompt, max_tokens=max_tokens, sampler=sampler, logits_processors=logits_processors):
         if first is None:
             first = time.perf_counter() - started
@@ -73,8 +74,13 @@ def traced_generate(stream_generate, model, tokenizer, prompt, max_tokens, sampl
                 tokens.append({"t": response.text, **alternatives(response.logprobs, response.token, tokenizer.decode)})
             except Exception:
                 pass
+        # The worker's stop rule (mlx_text.repeating_tail): the model is repeating itself.
+        if stop and len(text) % 64 < len(response.text) and stop(text):
+            stopped = True
+            break
     return text, {
         **metrics(last, started),
+        **({"finishReason": "repetition"} if stopped else {}),
         "firstTokenSeconds": round(first, 3) if first is not None else None,
         **({"tokens": tokens} if logprobs else {}),
     }

@@ -4,6 +4,27 @@ import os
 import re
 
 
+# A model that repeats one piece of text over and over (greedy decoding can get stuck: «Dades de prova» hundreds of
+# times inside a file, 16-11-2026) is stopped: the end of its answer is one chunk repeated at least REPEAT_MIN_COUNT
+# times in a row, over at least REPEAT_MIN_CHARS characters. Normal code (similar lines, a dozen identical short
+# lines, a table) stays far from that. The same rule as native-text.cjs.
+REPEAT_MIN_COUNT = 20
+REPEAT_MIN_CHARS = 600
+REPEAT_MAX_CHUNK = 400
+
+
+def repeating_tail(text):
+    """Whether the end of `text` is one chunk repeated REPEAT_MIN_COUNT times, over REPEAT_MIN_CHARS or more."""
+    for size in range(1, REPEAT_MAX_CHUNK + 1):
+        span = max(REPEAT_MIN_CHARS, size * REPEAT_MIN_COUNT)
+        if span > len(text):
+            break
+        tail = text[-span:]
+        if tail[size:] == tail[:-size]:
+            return True
+    return False
+
+
 def strip_thinking(text, start, end):
     """Removes the hidden reasoning section (start ... end) a reasoning model writes before answering."""
     if not start or not end:
