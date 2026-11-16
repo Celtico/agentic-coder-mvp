@@ -18,11 +18,8 @@ export const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number |
   ['Memòria màxima (MLX)', (engine) => engine.peakMemoryGb, 'GB', 'menys és millor'],
 ];
 
-/** Differences under this share of the other value are a tie; for times, also those under TIE_SECONDS. */
-export const TIE_SHARE = 0.02;
-export const TIE_SECONDS = 0.1;
 
-/** Who wins each figure (a tie under 2%, or under 0,1 s for a time), how many each engine wins, the ties, and the overall winner (null on a tie). */
+/** Who wins each figure (any difference wins; a tie only with the same value to the 3 decimals shown), how many each engine wins, the ties, and the overall winner (null on a tie). */
 export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
   const figures = ENGINE_CHARTS.map(([label, value, unit, better]) => {
     const values = report.engines.map((engine) => ({ engine, value: value(engine) })).filter((item): item is { engine: EngineBenchmarkEngine; value: number } => typeof item.value === 'number');
@@ -32,8 +29,8 @@ export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
     const [best, next] = sorted;
     const gap = Math.abs(best.value - next.value) / Math.max(Math.abs(next.value), 1e-9);
     const entries = sorted.map((item) => ({ name: item.engine.name, runtime: item.engine.runtime, text: engineNumber(item.value, unit) }));
-    // Memory: only the same value (to the 3 decimals shown) is a tie; times and speeds: under 2%, and times under 0,1 s.
-    const tie = unit === 'GB' ? Math.round(best.value * 1000) === Math.round(next.value * 1000) : gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS);
+    // Any difference wins: only the same value, to the 3 decimals shown, is a tie.
+    const tie = Math.round(best.value * 1000) === Math.round(next.value * 1000);
     if (tie) {
       return { label, winner: null, tie: true, entries, note: `empat (${engineNumber(best.value, unit)})`, detail: `empat (${engineNumber(best.value, unit)})` };
     }
