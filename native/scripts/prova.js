@@ -17,6 +17,19 @@ if (!modelDir) {
 }
 const maxTokens = Number(opt('--max', 200));
 
+// With --compare, the native run goes in a child process that exits (and frees
+// the model) before mlx-lm loads it: two 9B models at once do not fit in 16 GB.
+if (flag('--compare') && !process.env.PROVA_DUMP) {
+  const dump = path.join(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'prova-')), 'run.json');
+  execFileSync(process.execPath, [__filename, ...args.filter((a) => a !== '--compare')], {
+    stdio: 'inherit', env: { ...process.env, PROVA_DUMP: dump },
+  });
+  const { messages, ids, out } = JSON.parse(fs.readFileSync(dump, 'utf8'));
+  fs.rmSync(path.dirname(dump), { recursive: true });
+  compare(messages, ids, out);
+  process.exit(0);
+}
+
 let t0 = Date.now();
 const chat = new ChatModel(modelDir);
 console.log(`Model carregat en ${((Date.now() - t0) / 1000).toFixed(1)} s (Metal: ${require('..').metal})`);
@@ -42,7 +55,9 @@ console.log(`Prompt: ${ids.length} tokens en ${((first - t0) / 1000).toFixed(2)}
 console.log(`Generació: ${out.length} tokens, ${((out.length - 1) / ((end - first) / 1000)).toFixed(1)} tok/s`);
 console.log(`Memòria: activa ${(mem.active / 2 ** 30).toFixed(2)} GB, pic ${(mem.peak / 2 ** 30).toFixed(2)} GB`);
 
-if (flag('--compare')) {
+if (process.env.PROVA_DUMP) fs.writeFileSync(process.env.PROVA_DUMP, JSON.stringify({ messages, ids, out }));
+
+function compare(messages, ids, out) {
   const python = process.env.MLX_PYTHON ?? path.join(__dirname, '..', '..', 'models', '.mlx-venv', 'bin', 'python');
   const script = `
 import json, sys

@@ -63,12 +63,19 @@ example = {"messages": [{"role": "user", "content": "Fes una app"},
 for f in ["train", "valid"]:
     (work / "data" / f"{f}.jsonl").write_text(json.dumps(example) + "\n")
 (work / "lora.yaml").write_text("lora_parameters:\n  rank: 4\n  scale: 20.0\n  dropout: 0.0\n")
-subprocess.run([sys.executable, "-m", "mlx_lm", "lora", "--model", str(d), "--train",
-                "--data", str(work / "data"), "--iters", "3", "--batch-size", "1",
-                "--num-layers", "4", "--learning-rate", "1e-3", "--mask-prompt",
-                "--resume-adapter-file", str(d / "adapters_init.safetensors"),
-                "--adapter-path", str(d / "mlx_lm_trained"), "-c", str(work / "lora.yaml"),
-                "--val-batches", "1", "--steps-per-eval", "1000"], check=True,
-               stdout=subprocess.DEVNULL)
-json.dump(example, open(d / "mlx_lm_trained" / "example.json", "w"))
-print("mlx_lm lora reference in", d / "mlx_lm_trained")
+# `mlx_lm lora` compiles its train step (mx.compile), which fuses kernels and
+# rounds bf16 differently; the native engine does not compile. So there are two
+# references: as is, and with mx.compile turned off (the same math, op by op).
+NO_COMPILE = ("import sys, runpy, mlx.core as mx; "
+              "mx.compile = lambda f=None, **kw: f if f is not None else (lambda g: g); "
+              "sys.argv = ['mlx_lm'] + sys.argv[1:]; runpy.run_module('mlx_lm', run_name='__main__')")
+for out, launcher in [("mlx_lm_trained", ["-m", "mlx_lm"]), ("mlx_lm_trained_nocompile", ["-c", NO_COMPILE])]:
+    subprocess.run([sys.executable, *launcher, "lora", "--model", str(d), "--train",
+                    "--data", str(work / "data"), "--iters", "3", "--batch-size", "1",
+                    "--num-layers", "4", "--learning-rate", "1e-3", "--mask-prompt",
+                    "--resume-adapter-file", str(d / "adapters_init.safetensors"),
+                    "--adapter-path", str(d / out), "-c", str(work / "lora.yaml"),
+                    "--val-batches", "1", "--steps-per-eval", "1000"], check=True,
+                   stdout=subprocess.DEVNULL)
+    json.dump(example, open(d / out / "example.json", "w"))
+    print("mlx_lm lora reference in", d / out)

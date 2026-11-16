@@ -82,10 +82,16 @@ array Lora::masked_ce(const array& batch, int offset, int length, bool checkpoin
   auto targets = mx::slice(batch, {0, 1}, {1, T + 1});
   auto logits = model_.forward_train(inputs, checkpoint);
 
-  // nn.losses.cross_entropy (non-fused path), in the logits dtype.
-  logits = mx::subtract(logits, mx::stop_gradient(mx::max(logits, -1, true)));
-  auto score = mx::squeeze(mx::take_along_axis(logits, mx::expand_dims(targets, -1), -1), -1);
-  auto ce = mx::subtract(mx::logsumexp(logits, -1), score);
+  // nn.losses.cross_entropy (mlx 0.32.4): on the GPU the fused kernel, which
+  // accumulates in float32; elsewhere the plain path, in the logits dtype.
+  array ce(0.0f);
+  if (mx::default_device() == mx::Device::gpu) {
+    ce = mx::astype(mx::fast::cross_entropy(logits, targets), logits.dtype());
+  } else {
+    logits = mx::subtract(logits, mx::stop_gradient(mx::max(logits, -1, true)));
+    auto score = mx::squeeze(mx::take_along_axis(logits, mx::expand_dims(targets, -1), -1), -1);
+    ce = mx::subtract(mx::logsumexp(logits, -1), score);
+  }
 
   auto steps = mx::arange(1, T + 1, mx::int32);
   auto mask = mx::logical_and(mx::greater_equal(steps, array(offset)),

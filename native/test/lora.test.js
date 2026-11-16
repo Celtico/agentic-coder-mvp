@@ -70,12 +70,20 @@ test('trainLora gives the same adapters as `mlx_lm lora`', { skip }, async () =>
   });
   assert.strictEqual(reports.length, 3);
   const got = readSafetensors(path.join(out, 'adapters.safetensors'));
-  const want = readSafetensors(path.join(refDir, 'adapters.safetensors'));
-  assert.deepStrictEqual(Object.keys(got).sort(), Object.keys(want).sort());
-  let worst = 0;
-  for (const k of Object.keys(want)) worst = Math.max(worst, maxDiff(got[k].values, want[k].values));
-  console.log(`losses ${reports.map((r) => r.trainLoss.toFixed(4)).join(', ')}; max diff vs mlx_lm lora: ${worst}`);
-  assert.ok(worst < 1e-6, `adapters differ by ${worst}`);
+  const diffTo = (ref) => {
+    const want = readSafetensors(path.join(ref, 'adapters.safetensors'));
+    assert.deepStrictEqual(Object.keys(got).sort(), Object.keys(want).sort());
+    let worst = 0;
+    for (const k of Object.keys(want)) worst = Math.max(worst, maxDiff(got[k].values, want[k].values));
+    return worst;
+  };
+  // Same ops as `mlx_lm lora` with mx.compile off: identical. With compile,
+  // fused kernels round bf16 differently, so only close.
+  const exact = diffTo(path.join(dir, 'mlx_lm_trained_nocompile'));
+  const compiled = diffTo(refDir);
+  console.log(`losses ${reports.map((r) => r.trainLoss.toFixed(4)).join(', ')}; max diff vs mlx_lm lora: ${exact} (no compile), ${compiled} (compiled)`);
+  assert.ok(exact < 1e-6, `adapters differ by ${exact} from mlx_lm lora without compile`);
+  assert.ok(compiled < 0.02, `adapters differ by ${compiled} from mlx_lm lora`);
 
   // The result loads back as a beta.
   const cfg = JSON.parse(fs.readFileSync(path.join(out, 'adapter_config.json'), 'utf8'));

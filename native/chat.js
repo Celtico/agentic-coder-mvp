@@ -53,6 +53,9 @@ class ChatModel {
         shown = '';
       }
     }
+    // Generation ended mid-character: show what is left, as decode() does.
+    const text = this.tokenizer.decode(pending, { skip_special_tokens: false });
+    if (text.length > shown.length) yield text.slice(shown.length);
   }
 }
 
