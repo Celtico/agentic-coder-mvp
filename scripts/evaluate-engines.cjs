@@ -74,6 +74,9 @@ async function main() {
     engine.traceContext = { source: 'benchmark de motors' };
     const write = engine.tracer.record.bind(engine.tracer);
     engine.tracer.record = (record) => { if (record.type === 'call') last = record; write(record); };
+    // Live, as the chat's calls: each event of the Model log (the tokens as they come, the finished call) on its
+    // own line, which the app passes on to the window.
+    engine.tracer.onEvent = (event) => process.stdout.write(`LLMEVENT ${JSON.stringify(event)}\n`);
     const started = Date.now();
     await engine.loadModel(() => {});
     const loadSeconds = Math.round((Date.now() - started) / 100) / 10;

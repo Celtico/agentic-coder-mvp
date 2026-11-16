@@ -1534,7 +1534,11 @@ ipcMain.handle('engines:start', async () => {
       result = await runStreaming(nodeExecutable, [script, '--model', model.id, '--out', out], {
         signal: controller.signal,
         env: { AGENT_MLX_LOCK_LABEL: 'el benchmark de motors', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_LLM_CALLS_LOG: llmCallsLog(), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
-        onLine: (line) => { if (/^MOTOR /.test(line)) sendBenchmark({ step: 'progress', message: line.replace(/^MOTOR /, 'Motor ').slice(0, 300) }); },
+        onLine: (line) => {
+          if (/^MOTOR /.test(line)) sendBenchmark({ step: 'progress', message: line.replace(/^MOTOR /, 'Motor ').slice(0, 300) });
+          // The Model log live, as with the chat's calls (scripts/evaluate-engines.cjs prints each event).
+          else if (line.startsWith('LLMEVENT ')) { try { const event = JSON.parse(line.slice(9)); if (win && !win.isDestroyed()) win.webContents.send('llm:event', event); } catch { /* not a whole event */ } }
+        },
       });
     } finally {
       benchmarkRun = null;
