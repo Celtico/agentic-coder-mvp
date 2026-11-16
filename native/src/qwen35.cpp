@@ -366,6 +366,17 @@ void Qwen35::reset() {
   offset_ = 0;
 }
 
+size_t CacheState::nbytes() const {
+  size_t n = 0;
+  for (auto& c : kv)
+    if (c.keys) n += c.keys->nbytes() + c.values->nbytes();
+  for (auto& c : lin) {
+    if (c.conv) n += c.conv->nbytes();
+    if (c.state) n += c.state->nbytes();
+  }
+  return n;
+}
+
 std::vector<array> Qwen35::cache_arrays() const {
   std::vector<array> out;
   for (auto& c : kv_) {

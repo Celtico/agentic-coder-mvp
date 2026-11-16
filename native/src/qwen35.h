@@ -66,6 +66,16 @@ struct LinearState {
   std::optional<mx::array> state; // [1, Hv, Dv, Dk] float32
 };
 
+// The whole cache at one point. A copy shares the arrays; MLX never changes an
+// array that something else still holds (slice_update then copies), so a saved
+// state stays as it was while the model goes on.
+struct CacheState {
+  std::vector<KVCache> kv;
+  std::vector<LinearState> lin;
+  int offset = 0;
+  size_t nbytes() const;
+};
+
 struct Layer {
   bool is_linear = false;
   mx::array input_norm{0.0f}, post_norm{0.0f};
@@ -95,6 +105,12 @@ class Qwen35 {
   void clear_lora();
   void reset();
   int offset() const { return offset_; }
+  CacheState save_cache() const { return {kv_, lin_, offset_}; }
+  void load_cache(const CacheState& s) {
+    kv_ = s.kv;
+    lin_ = s.lin;
+    offset_ = s.offset;
+  }
   // All arrays that hold cache state, to evaluate them together.
   std::vector<mx::array> cache_arrays() const;
   const Config& config() const { return cfg_; }

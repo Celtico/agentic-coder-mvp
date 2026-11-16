@@ -41,13 +41,49 @@ class NativeModel {
   }
 
   // Yields token ids until EOS or maxTokens. Sampling: temperature, topP, topK, seed.
-  *generate(promptIds, { maxTokens = 512, ...sampling } = {}) {
-    this.engine.start(Int32Array.from(promptIds), sampling);
+  // The prompt cache is on (cache: false turns it off); this.lastPrompt says
+  // how many prompt tokens came from it ({ reused, total }).
+  *generate(promptIds, { maxTokens = 512, ...options } = {}) {
+    const ids = Array.from(promptIds);
+    const checkpoints = options.cache === false ? [] : this.checkpoints(ids);
+    this.lastPrompt = this.engine.start(Int32Array.from(ids), { checkpoints, ...options });
     for (let i = 0; i < maxTokens; i++) {
       const id = this.engine.next();
       if (this.eos.has(id)) return;
       yield id;
     }
+  }
+
+  // Where to keep a copy of the prompt's state, as the Python worker does
+  // (CachedStream in mlx-worker.py): the end of the first turn (the tools the
+  // template lists first), where this prompt stops being the previous one,
+  // the start every prompt so far shares, and all but the last token (the
+  // next call of a tool loop starts with this whole prompt).
+  checkpoints(ids) {
+    const common = (a, b) => {
+      let i = 0;
+      while (i < a.length && i < b.length && a[i] === b[i]) i++;
+      return i;
+    };
+    const firstTurnEnd = ids.findIndex((id) => this.eos.has(id)) + 1;
+    const shared = Math.min(common(ids, this.previousPrompt ?? []), ids.length - 1);
+    this.previousPrompt = ids;
+    const points = [firstTurnEnd, shared, ids.length - 1];
+    if (!this.stablePrompt) {
+      this.stablePrompt = ids;
+    } else {
+      const stable = common(ids, this.stablePrompt);
+      if (stable >= 256) {
+        this.stablePrompt = this.stablePrompt.slice(0, stable);
+        points.push(stable);
+      }
+    }
+    return points;
+  }
+
+  // Forgets the saved prompt states.
+  clearCache() {
+    this.engine.cacheClear();
   }
 
   // Applies LoRA adapters made by mlx_lm or trainLora (a folder with

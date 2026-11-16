@@ -1,11 +1,14 @@
 // N-API binding: exposes the native MLX engine to Node.
 //
 //   const engine = new Engine(modelDir, config)   // config from index.js
-//   engine.start(Int32Array prompt, { temperature, topP, topK, seed, prefillStep })
+//   engine.start(Int32Array prompt, { temperature, topP, topK, seed, prefillStep,
+//                cache, checkpoints, checkpointMin, cacheEntries, cacheBytes })
+//                            -> { reused, total } prompt tokens
 //   engine.next()            -> next token id (number)
 //   engine.logits(Int32Array) -> Float32Array of the last position (tests)
 //   engine.reset()
-//   engine.memory()          -> { active, peak, cache } bytes
+//   engine.cacheClear()      // forgets the saved prompt states
+//   engine.memory()          -> { active, peak, cache, promptCache } bytes, promptEntries
 //   engine.close()           // frees the model; the engine can't be used after
 //
 // LoRA (same files and maths as mlx_lm):
@@ -26,6 +29,7 @@
 #include <memory>
 
 #include "lora.h"
+#include "prompt_cache.h"
 #include "qwen35.h"
 
 namespace {
@@ -132,6 +136,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
                             InstanceMethod("trainStep", &Engine::TrainStep),
                             InstanceMethod("loraLoss", &Engine::LoraLoss),
                             InstanceMethod("loraGradients", &Engine::LoraGradients),
+                            InstanceMethod("cacheClear", &Engine::CacheClear),
                             InstanceMethod("close", &Engine::Close)});
     exports.Set("Engine", cls);
     exports.Set("metal", Napi::Boolean::New(env, mx::metal::is_available()));
@@ -160,13 +165,22 @@ class Engine : public Napi::ObjectWrap<Engine> {
   }
 
  private:
-  // Prefill the prompt and queue the first sampled token.
+  // Prefill the prompt and queue the first sampled token. With the prompt
+  // cache (on unless cache: false), it starts from the longest saved state the
+  // prompt begins with, saves one at each of `checkpoints` (token counts) at
+  // least checkpointMin tokens apart, and the state after generation is saved
+  // at the next start: as the Python worker does. Returns { reused, total }.
   Napi::Value Start(const Napi::CallbackInfo& info) {
     auto env = info.Env();
     try {
       auto tokens = to_tokens(info[0]);
+      auto ta = info[0].As<Napi::Int32Array>();
+      std::vector<int32_t> ids(ta.Data(), ta.Data() + ta.ElementLength());
       sampling_ = {};
       int chunk = 2048;  // mlx_lm prefill_step_size
+      bool use_cache = true;
+      int checkpoint_min = 256;
+      std::vector<int> checkpoints;
       if (info.Length() > 1 && info[1].IsObject()) {
         auto o = info[1].As<Napi::Object>();
         sampling_.temperature = get_float(o, "temperature", 0.0f);
@@ -174,25 +188,82 @@ class Engine : public Napi::ObjectWrap<Engine> {
         sampling_.top_k = get_int(o, "topK", 0);
         if (o.Get("seed").IsNumber()) mx::random::seed(get_int(o, "seed", 0));
         chunk = std::max(1, get_int(o, "prefillStep", chunk));
+        use_cache = !o.Has("cache") || o.Get("cache").ToBoolean();
+        checkpoint_min = get_int(o, "checkpointMin", checkpoint_min);
+        prompts_.max_entries = get_int(o, "cacheEntries", static_cast<int>(prompts_.max_entries));
+        if (o.Get("cacheBytes").IsNumber()) prompts_.max_bytes = static_cast<size_t>(o.Get("cacheBytes").As<Napi::Number>().DoubleValue());
+        auto c = o.Get("checkpoints");
+        if (c.IsArray()) {
+          auto arr = c.As<Napi::Array>();
+          for (uint32_t i = 0; i < arr.Length(); ++i) checkpoints.push_back(arr.Get(i).As<Napi::Number>().Int32Value());
+        }
       }
-      model().reset();
+      // What the last generation left in the cache (its prompt and every token next() gave).
+      if (live_ok_ && use_cache) {
+        mx::eval(model().cache_arrays());
+        prompts_.insert(live_, model().save_cache());
+      }
+      live_ok_ = false;
+      pending_.reset();
+
       int n = tokens.shape(1);
       int pos = 0;
-      while (n - pos > 1) {
-        int end = std::min(pos + chunk, n - 1);
-        model().forward(mx::slice(tokens, {0, pos}, {1, end}));
-        mx::eval(model().cache_arrays());
-        mx::clear_cache();
-        pos = end;
+      auto hit = use_cache ? prompts_.find(ids) : std::nullopt;
+      if (hit) {
+        model().load_cache(hit->second);
+        pos = static_cast<int>(hit->first);
+      } else {
+        model().reset();
       }
+      int reused = pos;
+      auto read = [&](int end) {
+        while (pos < end) {
+          int stop = std::min(pos + chunk, end);
+          model().forward(mx::slice(tokens, {0, pos}, {1, stop}));
+          mx::eval(model().cache_arrays());
+          mx::clear_cache();
+          pos = stop;
+        }
+      };
+      if (use_cache) {
+        std::sort(checkpoints.begin(), checkpoints.end());
+        for (int b : checkpoints) {
+          if (b >= n || b - pos < checkpoint_min || prompts_.has(ids, b)) continue;
+          read(b);
+          prompts_.insert(std::vector<int32_t>(ids.begin(), ids.begin() + b), model().save_cache());
+        }
+      }
+      read(n - 1);
       auto logits = model().forward(mx::slice(tokens, {0, pos}, {1, n}));
       pending_ = sample(last(logits), sampling_);
       mx::async_eval({*pending_});
-      return env.Undefined();
+      live_ = std::move(ids);
+      live_ok_ = use_cache;
+
+      auto out = Napi::Object::New(env);
+      out.Set("reused", Napi::Number::New(env, reused));
+      out.Set("total", Napi::Number::New(env, n));
+      return out;
     } catch (const std::exception& e) {
       Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
       return env.Undefined();
     }
+  }
+
+  // Forgets every saved prompt state (and what the last generation left).
+  Napi::Value CacheClear(const Napi::CallbackInfo& info) {
+    prompts_.clear();
+    live_ok_ = false;
+    mx::clear_cache();
+    return info.Env().Undefined();
+  }
+
+  // Saved states depend on the weights: a LoRA change drops them.
+  void weights_changed() {
+    prompts_.clear();
+    live_ok_ = false;
+    pending_.reset();
+    model().reset();
   }
 
   // Return the queued token and start computing the one after it, so the GPU
@@ -210,7 +281,9 @@ class Engine : public Napi::ObjectWrap<Engine> {
       mx::async_eval({*pending_});
       mx::eval({current});
       if (++steps_ % 256 == 0) mx::clear_cache();
-      return Napi::Number::New(env, current.item<int32_t>());
+      int32_t id = current.item<int32_t>();
+      live_.push_back(id);  // it is in the cache now
+      return Napi::Number::New(env, id);
     } catch (const std::exception& e) {
       Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
       return env.Undefined();
@@ -221,6 +294,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
   Napi::Value Logits(const Napi::CallbackInfo& info) {
     auto env = info.Env();
     try {
+      live_ok_ = false;
       auto out = mx::astype(last(model().forward(to_tokens(info[0]))), mx::float32);
       mx::eval({out});
       auto result = Napi::Float32Array::New(env, out.size());
@@ -236,6 +310,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
     return guard(info, [&]() -> Napi::Value {
       model().reset();
       pending_.reset();
+      live_ok_ = false;
       mx::clear_cache();
       return info.Env().Undefined();
     });
@@ -245,6 +320,8 @@ class Engine : public Napi::ObjectWrap<Engine> {
   // afterwards; another process can then load a model safely.
   Napi::Value Close(const Napi::CallbackInfo& info) {
     pending_.reset();
+    prompts_.clear();
+    live_ok_ = false;
     lora_.reset();
     model_.reset();
     mx::clear_cache();
@@ -257,6 +334,8 @@ class Engine : public Napi::ObjectWrap<Engine> {
     o.Set("active", Napi::Number::New(env, static_cast<double>(mx::get_active_memory())));
     o.Set("peak", Napi::Number::New(env, static_cast<double>(mx::get_peak_memory())));
     o.Set("cache", Napi::Number::New(env, static_cast<double>(mx::get_cache_memory())));
+    o.Set("promptCache", Napi::Number::New(env, static_cast<double>(prompts_.bytes())));
+    o.Set("promptEntries", Napi::Number::New(env, static_cast<double>(prompts_.size())));
     return o;
   }
 
@@ -287,7 +366,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
             o.keys.push_back(arr.Get(i).As<Napi::String>().Utf8Value());
         }
       }
-      model().reset();
+      weights_changed();
       lora().init(o);
       return info.Env().Undefined();
     });
@@ -295,7 +374,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
 
   Napi::Value LoraLoad(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      model().reset();
+      weights_changed();
       lora().load(info[0].As<Napi::String>().Utf8Value(),
                   info[1].As<Napi::Number>().FloatValue());
       return info.Env().Undefined();
@@ -311,7 +390,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
 
   Napi::Value LoraRemove(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      model().reset();
+      weights_changed();
       lora().remove();
       return info.Env().Undefined();
     });
@@ -333,8 +412,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
         lr = get_float(o, "learningRate", lr);
         ckpt = o.Get("gradCheckpoint").ToBoolean();
       }
-      pending_.reset();
-      model().reset();
+      weights_changed();
       auto r = lora().step(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
                            info[2].As<Napi::Number>().Int32Value(), lr, ckpt);
       mx::clear_cache();
@@ -354,6 +432,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
   Napi::Value LoraGradients(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
       model().reset();
+      live_ok_ = false;
       auto g = lora().gradients(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
                                 info[2].As<Napi::Number>().Int32Value(), info[4].ToBoolean());
       mx::save_safetensors(info[3].As<Napi::String>().Utf8Value(), g);
@@ -378,6 +457,9 @@ class Engine : public Napi::ObjectWrap<Engine> {
   std::unique_ptr<Qwen35> model_;
   std::unique_ptr<Lora> lora_;
   std::optional<array> pending_;
+  PromptCache prompts_;
+  std::vector<int32_t> live_;  // tokens the model's cache has read
+  bool live_ok_ = false;       // live_ matches the cache (start() then next() only)
   Sampling sampling_;
   int steps_ = 0;
 };

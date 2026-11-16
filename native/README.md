@@ -15,6 +15,11 @@ V2.6 9B OptiQ 4-bit ho és).
   `reset`, `memory`) i el mostreig (temperatura, top-p, top-k) igual que mlx-lm.
 - `index.js`: llegeix el `config.json` del model (inclosa la quantització
   4/8 bits per capa) i crea l'`Engine`.
+- `src/prompt_cache.h`: memòria cau de prompts com la del worker Python
+  (`LRUPromptCache`, 8 entrades, 1 GB). Desa còpies de la memòria cau del model
+  (al final de la generació i als mateixos punts de control que el worker, a
+  partir de 256 tokens) i el missatge següent només llegeix el que és nou.
+  `generate(..., { cache: false })` la desactiva; canviar adaptadors la buida.
 - `chat.js`: tokenitzador i plantilla de xat en JS (`@huggingface/tokenizers`,
   `@huggingface/jinja`) i text en streaming.
 - `src/lora.cpp` i `lora.js`: LoRA com `mlx_lm lora` (mateixos noms de
@@ -71,7 +76,6 @@ TINY_MODEL=/tmp/tiny npm test
 ## Què falta
 
 - Integrar-lo a l'app com a motor alternatiu al worker de Python.
-- Memòria cau de prompts entre missatges (ara cada `start` comença de zero).
 - LoRA: lots de més d'un exemple, acumulació de gradients, programació del
   learning rate i DoRA (l'app fa servir lots d'1, que ja funciona).
 - Visió (imatges).
