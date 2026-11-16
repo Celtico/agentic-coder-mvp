@@ -36,7 +36,10 @@ export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
     if (tie) {
       return { label, winner: null, tie: true, entries, note: `empat (${engineNumber(best.value, unit)})`, detail: `empat (${engineNumber(best.value, unit)})` };
     }
-    const note = `(${Math.round(gap * 100)}% ${lower ? 'menys' : 'més'})`;
+    // Memory as the megabytes between them; otherwise the percentage (with decimals under 1%, never «0%»).
+    const percent = gap * 100;
+    const amount = unit === 'GB' ? `${Math.round(Math.abs(best.value - next.value) * 1000).toLocaleString('ca')} MB` : `${(percent < 1 ? Math.round(percent * 100) / 100 : Math.round(percent)).toLocaleString('ca')}%`;
+    const note = `(${amount} ${lower ? 'menys' : 'més'})`;
     return { label, winner: best.engine.name, tie: false, entries, note, detail: `${entries.map((entry) => `${entry.name} ${entry.text}`).join(' · ')} ${note}` };
   });
   const wins = report.engines.map((engine) => ({ name: engine.name, runtime: engine.runtime, wins: figures.filter((figure) => figure.winner === engine.name).length })).sort((a, b) => b.wins - a.wins);
