@@ -13,7 +13,7 @@ import { normalizePaneWidths } from "./row-sizes"
 export const VIEW_STATE_KEY = "agentic-view-state-v1"
 
 // «navigation» is from before the side panel had two columns; it is read but no longer decides anything.
-export type PanelName = "navigation" | "conversations" | "files" | "browser" | "evaluation" | "git" | "learning" | "llmlog" | "console" | "terminal"
+export type PanelName = "navigation" | "conversations" | "files" | "browser" | "evaluation" | "chat" | "git" | "learning" | "llmlog" | "console" | "terminal"
 export type Panels = Record<PanelName, boolean>
 export type ProjectView = { browserUrl?: string; editorPath?: string; editorTabs?: string[]; historyPath?: string }
 export type ViewState = {
@@ -31,10 +31,10 @@ export type ViewState = {
 
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem">
 
-const PANELS: PanelName[] = ["navigation", "conversations", "files", "browser", "evaluation", "git", "learning", "llmlog", "console", "terminal"]
+const PANELS: PanelName[] = ["navigation", "conversations", "files", "browser", "evaluation", "chat", "git", "learning", "llmlog", "console", "terminal"]
 
 export const defaultViewState = (): ViewState => ({
-  panels: { navigation: true, conversations: true, files: true, browser: false, evaluation: false, git: false, learning: false, llmlog: false, console: false, terminal: false },
+  panels: { navigation: true, conversations: true, files: true, browser: false, evaluation: false, chat: true, git: false, learning: false, llmlog: false, console: false, terminal: false },
   rail: defaultRailLayout(),
   appearance: defaultAppearance(),
   evaluationSections: [],

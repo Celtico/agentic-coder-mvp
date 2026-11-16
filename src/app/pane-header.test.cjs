@@ -247,7 +247,7 @@ test('Converses and Fitxers: their lists scroll inside the pane, and a handle be
   const conversations = app.slice(app.indexOf('const conversationsColumn = ('), app.indexOf('const filesColumn = ('));
   assert.doesNotMatch(conversations, /\.slice\(0, 12\)/);
   // Each with its own divider, as every pane of the row (src/app/pane-row.tsx).
-  assert.match(app, /<PaneRow items=\{topItems\} flexId="chat"/);
+  assert.match(app, /<PaneRow items=\{topItems\} flexId=\{topFlex\}/);
   assert.doesNotMatch(app, /templateColumns=\{`repeat\(\$\{navigationColumns\}/, 'no fixed grid of equal columns');
 });
 

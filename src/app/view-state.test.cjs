@@ -43,9 +43,9 @@ test('panels, evaluation sections and the history window come back as they were 
 test('the layout of the left bar comes back, made safe for icons it does not know', () => {
   const storage = memoryStorage();
   view.updateViewState(storage, (state) => { state.rail = { top: ['terminal'], bottom: ['browser', 'git'] }; });
-  assert.deepEqual(view.loadViewState(storage).rail, { top: ['conversations', 'files', 'terminal', 'evaluation'], bottom: ['browser', 'git', 'console', 'learning', 'llmlog'] });
+  assert.deepEqual(view.loadViewState(storage).rail, { top: ['conversations', 'files', 'terminal', 'evaluation', 'chat'], bottom: ['browser', 'git', 'console', 'learning', 'llmlog'] });
   const withEditor = memoryStorage({ [view.VIEW_STATE_KEY]: JSON.stringify({ rail: { top: ['x', 'editor', 'git'], bottom: 7 } }) });
-  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['conversations', 'files', 'git', 'browser', 'evaluation'], bottom: ['console', 'terminal', 'learning', 'llmlog'] });
+  assert.deepEqual(view.loadViewState(withEditor).rail, { top: ['conversations', 'files', 'git', 'browser', 'evaluation', 'chat'], bottom: ['console', 'terminal', 'learning', 'llmlog'] });
 });
 
 test('Converses and Fitxers are shown unless hidden, also with a state saved before they had icons', () => {
@@ -114,4 +114,12 @@ test('the history window opens, moves and grows only inside the area below the a
   assert.match(app, /h="9" align="center" justify="center"/);
   assert.match(app, /chakraSystem\.token\('sizes\.9', '36px'\)/);
   assert.match(app, /clampWindowRect\(saved, \{ x: 0, y: top/);
+});
+
+test('the chat is a pane like the others: shown by default, last on top, with a note when every pane is hidden', () => {
+  assert.equal(view.loadViewState(memoryStorage()).panels.chat, true);
+  assert.deepEqual(view.loadViewState(memoryStorage()).rail.top.slice(-1), ['chat']);
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /chat: \{ icon: ChatIcon, label: chatOpen \? 'Amaga el xat' : 'Mostra el xat'/);
+  assert.match(app, /No hi ha cap finestra oberta/);
 });

@@ -8,7 +8,8 @@
 // Converses and Fitxers are panes too: with their icons in the top group they are the columns of the
 // side panel (beside the chat), in the bottom group they are panes of the bottom row, like the others.
 export type SideColumn = "conversations" | "files"
-export type RailPanel = SideColumn | "browser" | "evaluation" | "console" | "terminal" | "git" | "learning" | "llmlog"
+// The chat is a pane too: last on top by default (where it always was), and it can be hidden or moved like the others.
+export type RailPanel = SideColumn | "browser" | "evaluation" | "chat" | "console" | "terminal" | "git" | "learning" | "llmlog"
 export const SIDE_COLUMNS: SideColumn[] = ["conversations", "files"]
 export const isSideColumn = (panel: string): panel is SideColumn => (SIDE_COLUMNS as string[]).includes(panel)
 /** A pane: one with an icon in the bar, or the editor (which has none and is always first on top). */
@@ -16,8 +17,8 @@ export type Pane = RailPanel | "editor"
 export type RailGroup = "top" | "bottom"
 export type RailLayout = Record<RailGroup, RailPanel[]>
 
-export const RAIL_PANELS: RailPanel[] = ["conversations", "files", "browser", "evaluation", "console", "terminal", "git", "learning", "llmlog"]
-const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { conversations: "top", files: "top", browser: "top", evaluation: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom", llmlog: "bottom" }
+export const RAIL_PANELS: RailPanel[] = ["conversations", "files", "browser", "evaluation", "chat", "console", "terminal", "git", "learning", "llmlog"]
+const DEFAULT_GROUP: Record<RailPanel, RailGroup> = { conversations: "top", files: "top", browser: "top", evaluation: "top", chat: "top", console: "bottom", terminal: "bottom", git: "bottom", learning: "bottom", llmlog: "bottom" }
 
 export const defaultRailLayout = (): RailLayout => ({
   top: RAIL_PANELS.filter((panel) => DEFAULT_GROUP[panel] === "top"),

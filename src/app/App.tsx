@@ -10,7 +10,7 @@ import {
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuTrophy as Trophy, LuHandshake as Handshake, LuEye as Eye2, LuPencilLine as PencilLine, LuType as TypeIcon, LuMemoryStick as MemoryStick, LuHardDriveDownload as HardDriveDownload, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuMessageSquare as ChatIcon, LuTrophy as Trophy, LuHandshake as Handshake, LuEye as Eye2, LuPencilLine as PencilLine, LuType as TypeIcon, LuMemoryStick as MemoryStick, LuHardDriveDownload as HardDriveDownload, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -299,6 +299,8 @@ export function App(): React.JSX.Element {
   const [llmLogOpen, setLlmLogOpen] = useState(initialView.panels.llmlog);
   // The evaluation panel runs the agent benchmark with the selected model and shows what it did.
   const [evaluationOpen, setEvaluationOpen] = useState(initialView.panels.evaluation);
+  // The chat is a pane like the others: shown by default, it can be hidden from its icon.
+  const [chatOpen, setChatOpen] = useState(initialView.panels.chat);
   const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
   // Benchmark de motors (scripts/evaluate-engines.cjs): its runs, newest first.
   const [engineReports, setEngineReports] = useState<EngineBenchmark[]>([]);
@@ -1506,8 +1508,8 @@ export function App(): React.JSX.Element {
   // Saving is the user's decision. Each save keeps the previous version in the local history.
   // The app opens as it was left (src/app/view-state.ts): which panels were open…
   useEffect(() => {
-    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, conversations: conversationsOpen, files: filesOpen, browser: browserOpen, evaluation: evaluationOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen, console: consoleOpen, terminal: terminalOpen }; });
-  }, [navigationOpen, conversationsOpen, filesOpen, browserOpen, evaluationOpen, gitOpen, learningOpen, llmLogOpen, consoleOpen, terminalOpen]);
+    updateViewState(localStorage, (state) => { state.panels = { navigation: navigationOpen, conversations: conversationsOpen, files: filesOpen, browser: browserOpen, evaluation: evaluationOpen, chat: chatOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen, console: consoleOpen, terminal: terminalOpen }; });
+  }, [navigationOpen, conversationsOpen, filesOpen, browserOpen, evaluationOpen, chatOpen, gitOpen, learningOpen, llmLogOpen, consoleOpen, terminalOpen]);
   // …and, per project, the page in the browser, the file in the editor (if it still exists) and the
   // local history. They are put back once per project, before anything is saved for it.
   // Panes that come back open load what they show, as if their icon had been clicked.
@@ -2406,7 +2408,7 @@ export function App(): React.JSX.Element {
               </Box>
             </PaneCard>
   );
-  const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen };
+  const paneOpen: Record<Pane, boolean> = { conversations: conversationsOpen, files: filesOpen, editor: editorOpen, browser: browserOpen, evaluation: evaluationOpen, chat: chatOpen, console: consoleOpen, terminal: terminalOpen, git: gitOpen, learning: learningOpen, llmlog: llmLogOpen };
   const paneNode = (panel: Pane, row: RailGroup): React.JSX.Element => {
     const frame = row === 'top' ? sidePane : dockPane;
     switch (panel) {
@@ -2422,6 +2424,7 @@ export function App(): React.JSX.Element {
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
       case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
       case 'llmlog': return <LlmLogPane/>;
+      case 'chat': return chatPane;
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
       case 'terminal': return terminalDock;
     }
@@ -2432,6 +2435,7 @@ export function App(): React.JSX.Element {
     files: { icon: FolderClosed, label: filesOpen ? 'Amaga els fitxers' : 'Mostra els fitxers', palette: filesOpen ? 'agentic' : 'gray', onClick: () => setFilesOpen((open) => !open) },
     browser: { icon: Globe2, label: browserOpen ? 'Tanca el navegador' : 'Obre el navegador', palette: browserOpen ? 'agentic' : 'gray', onClick: () => setBrowserOpen((current) => !current) },
     evaluation: { icon: ChartBar, label: evaluationOpen ? 'Tanca l’avaluació' : 'Avaluació dels models', palette: evaluationOpen ? 'agentic' : 'gray', onClick: () => void openEvaluationPanel() },
+    chat: { icon: ChatIcon, label: chatOpen ? 'Amaga el xat' : 'Mostra el xat', palette: chatOpen ? 'agentic' : 'gray', onClick: () => setChatOpen((open) => !open) },
     console: { icon: Bug, label: consoleOpen ? 'Tanca la consola' : consoleErrorCount ? `Obre la consola (${consoleErrorCount} ${consoleErrorCount === 1 ? 'error' : 'errors'})` : 'Obre la consola', palette: consoleOpen ? 'agentic' : consoleErrorCount ? 'red' : 'gray', onClick: () => setConsoleOpen((open) => !open) },
     terminal: { icon: TerminalIcon, label: terminalOpen ? 'Tanca el terminal' : 'Obre el terminal', palette: terminalOpen ? 'agentic' : 'gray', onClick: () => { if (!project) setStatus('Selecciona primer un projecte'); else setTerminalOpen((current) => !current); } },
     git: { icon: GitBranch, label: gitOpen ? 'Tanca Git' : 'Mostra l’estat de Git', palette: gitOpen ? 'agentic' : 'gray', onClick: () => void openGitPanel() },
@@ -2507,15 +2511,18 @@ export function App(): React.JSX.Element {
       {dockItems.length === 1 ? dockItems[0].node : <PaneRow items={dockItems} flexId={dockItems[dockItems.length - 1].id} widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila inferior de panells"/>}
     </Flex>
   );
-  // The top row: Converses | Fitxers (while their icons are on top) | the panes of the top group | the
-  // chat. Each pane has its own width and the divider on its right changes only that one; the chat takes
-  // what is left (src/app/pane-row.tsx).
+  // The top row: Converses | Fitxers (while their icons are on top) | the panes of the top group, the chat
+  // among them (last by default). Each pane has its own width and the divider on its right changes only
+  // that one; the chat takes what is left, or the last pane when the chat is not in this row
+  // (src/app/pane-row.tsx). With every pane hidden, a short note says how to open one.
   const topItems = [
     ...sideColumns.map((column) => ({ id: `nav-${column}`, node: column === 'conversations' ? conversationsColumn : filesColumn })),
     ...sideItems,
-    { id: 'chat', node: chatPane },
   ];
-  const topRow = topItems.length === 1 ? chatPane : <PaneRow items={topItems} flexId="chat" widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila superior de panells"/>;
+  const topFlex = topItems.some((item) => item.id === 'side-chat') ? 'side-chat' : topItems[topItems.length - 1]?.id;
+  const topRow = topItems.length === 0
+    ? <Center h="full" px="6" data-no-panes><Stack gap="1" align="center" textAlign="center"><Text fontSize="sm" fontWeight="medium">No hi ha cap finestra oberta</Text><Text fontSize="xs" color="fg.muted">Obre’n una des de la barra de l’esquerra, com el xat.</Text></Stack></Center>
+    : topItems.length === 1 ? topItems[0].node : <PaneRow items={topItems} flexId={topFlex} widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila superior de panells"/>;
 
   return (
     <PaneToneContext.Provider value={appearance.paneTone}><PaneStyleContext.Provider value={appearance.paneStyle}><PaneBgContext.Provider value={appearance.paneBg}>

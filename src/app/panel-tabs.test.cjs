@@ -44,7 +44,9 @@ test('the bar: the app’s mark on top, no fold toggle, no «new chat» or edito
   assert.match(app, /<PaneHeader icon=\{FolderClosed\} title="Fitxers" subtitle=/);
   assert.match(app, /<Menu\.Trigger asChild><IconButton icon=\{Plus\} label="Nou document o carpeta"/);
   // The visible side columns are the first panes of the top row's one splitter, in the order of their icons.
-  assert.match(app, /\.\.\.sideColumns\.map\(\(column\) => \(\{ id: `nav-\$\{column\}`, node: column === 'conversations' \? conversationsColumn : filesColumn \}\)\),\n\s*\.\.\.sideItems,\n\s*\{ id: 'chat', node: chatPane \},/);
+  // The chat is one of the top group's panes (sideItems), not a fixed last item.
+  assert.match(app, /\.\.\.sideColumns\.map\(\(column\) => \(\{ id: `nav-\$\{column\}`, node: column === 'conversations' \? conversationsColumn : filesColumn \}\)\),\n\s*\.\.\.sideItems,\n\s*\];/);
+  assert.match(app, /case 'chat': return chatPane;/);
   // The same column is a side column or a pane of the bottom row, as its icon's group says.
   assert.match(app, /const sideColumns = sideColumnsShown\(railLayout, /);
   assert.match(app, /case 'conversations': return conversationsColumn;\n\s*case 'files': return filesColumn;/);
