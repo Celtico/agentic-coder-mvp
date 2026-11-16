@@ -2214,7 +2214,7 @@ export function App(): React.JSX.Element {
               {(evaluationList?.runs || []).map((run) => {
                 const report = evaluationReports[run.id];
                 return <Accordion.Item key={run.id} value={run.id}>
-                  <Accordion.ItemTrigger>{rowHeader(<><Text as="span" color="fg">{run.model}</Text><Text as="span" color="fg.muted"> · {new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}{run.adapter ? ' · amb adaptador' : ''}</Text></>, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
+                  <Accordion.ItemTrigger>{rowHeader(<><Text as="span" color="fg">{run.model}</Text><Text as="span" color="fg.muted"> · {new Date(run.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}{run.adapter ? ' · amb adaptador' : ''}{run.runtime ? ` · motor ${({ native: 'natiu', mlx: 'Python', cuda: 'CUDA' } as Record<string, string>)[run.runtime] || run.runtime}` : ''}</Text></>, `${run.summary.passed}/${run.summary.runs}`)}</Accordion.ItemTrigger>
                   <Accordion.ItemContent><Accordion.ItemBody pt="0">
                     {!report ? <HStack gap="2"><Spinner size="xs"/><Text fontSize="xs">Carregant…</Text></HStack>
                       : <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="outline">

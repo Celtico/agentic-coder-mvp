@@ -47,11 +47,13 @@ async function main() {
   if (!model) throw new Error(`Model desconegut: ${options.model} (opcions: ${(await mlxModels.listModels(modelsRoot)).map((item) => [item.id, ...item.aliases].join('/')).join(', ')})`);
   const modelDirectory = await mlxModels.modelDirectory(model, modelsRoot);
   if (!modelDirectory) throw new Error(`No s’han trobat els pesos de ${model.label} a models/.`);
+  // The engine the chat would use: the native one for the models it runs, unless «Motor Python» is on (AGENT_PYTHON_ENGINE=1).
+  const runtime = await mlxModels.runtimeFor(model, modelDirectory, { python: process.env.AGENT_PYTHON_ENGINE === '1' });
   // The same environment the app gives its model worker (src/electron/main.cjs), set before the
   // runtime is loaded because it reads some of it at load time.
   Object.assign(process.env, {
     AGENT_MODEL_CACHE: modelsRoot,
-    AGENT_MODEL_RUNTIME: model.runtime,
+    AGENT_MODEL_RUNTIME: runtime,
     AGENT_MODEL: model.modelId,
     AGENT_MLX_PYTHON: process.env.AGENT_MLX_PYTHON || mlxModels.enginePython(modelsRoot),
     // No prompt cache in an evaluation (src/core/assistant/mlx-worker.py): its answers are not always
@@ -63,8 +65,8 @@ async function main() {
 
   const { LocalCodingAgent, createEngine } = require('../src/core/assistant/agent-runtime.cjs');
   const { runBenchmark, summarize } = require('./agent-benchmark/run.cjs');
-  const engine = createEngine(model.runtime);
-  console.error(`Model: ${model.modelId} (${model.runtime}). Carregant…`);
+  const engine = createEngine(runtime);
+  console.error(`Model: ${model.modelId} (${runtime}). Carregant…`);
   const loadStarted = Date.now();
   await engine.loadModel((message) => console.error(message));
   const loadSeconds = Number(((Date.now() - loadStarted) / 1000).toFixed(1));
@@ -74,7 +76,7 @@ async function main() {
   // written): a run stopped before its end (the app closed, a crash) keeps the tasks it finished, and the
   // evaluation panel shows it as incomplete. The finished report replaces it.
   const partial = out.replace(/\.json$/, '.partial.json');
-  const header = { at: new Date().toISOString(), model: model.modelId, runtime: model.runtime, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null, loadSeconds, repeat: options.repeat };
+  const header = { at: new Date().toISOString(), model: model.modelId, runtime, adapter: process.env.AGENT_MLX_ADAPTER_PATH || null, loadSeconds, repeat: options.repeat };
   const finished = [];
   const savePartial = (total) => {
     const temporary = `${partial}.tmp`;

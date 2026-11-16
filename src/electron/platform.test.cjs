@@ -70,7 +70,8 @@ test('the agent picks the engine from the runtime: cuda → CudaInferenceEngine 
   assert.match(worker, /import mlx_text  # noqa: E402/, 'the tool-call reading is shared, not copied');
   assert.match(worker, /"device_map": "auto"/);
   assert.match(worker, /BitsAndBytesConfig\(load_in_4bit=True/);
-  assert.match(read('scripts/evaluate-agent.cjs'), /const engine = createEngine\(model\.runtime\);/);
+  // The evaluation picks the engine as the chat does (mlx-models.cjs runtimeFor: native or the model's own).
+  assert.match(read('scripts/evaluate-agent.cjs'), /const runtime = await mlxModels\.runtimeFor\(model, modelDirectory, [^\n]*\);[\s\S]*const engine = createEngine\(runtime\);/);
 });
 
 test('LoRA on Linux: the same command line as mlx_lm, only the answer learnt, and the adapter where the app looks', () => {

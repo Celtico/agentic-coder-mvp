@@ -1443,7 +1443,7 @@ async function runBenchmarkProcess({ modelId, adapterPath = '', out, turnLog = '
   return runStreaming(nodeExecutable, [script, '--model', modelId, '--repeat', String(repeat), '--out', out, ...(keepIn ? ['--keep'] : []), ...(tasks.length ? ['--task', tasks.join(',')] : [])], {
     signal, onLine,
     // The project's npm, npx and Vite run on that same Node.
-    env: { PATH: [path.dirname(nodeExecutable), process.env.PATH || ''].join(path.delimiter), ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(llmTrace.open ? { AGENT_LLM_TRACE: '1', AGENT_LLM_TRACE_SOURCE: adapterPath ? 'benchmark de beta' : 'avaluació', AGENT_LLM_CALLS_LOG: llmCallsLog() } : {}), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+    env: { PATH: [path.dirname(nodeExecutable), process.env.PATH || ''].join(path.delimiter), ...(keepIn ? { AGENT_BENCHMARK_WORKDIR: keepIn } : {}), AGENT_MLX_LOCK_LABEL: adapterPath ? 'el benchmark d’un entrenament' : 'una avaluació d’Agentic Coder', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_PYTHON_ENGINE: agentPreferences.pythonEngine ? '1' : '', AGENT_MLX_ADAPTER_PATH: adapterPath || '', AGENT_TURN_LOG: turnLog, ...(llmTrace.open ? { AGENT_LLM_TRACE: '1', AGENT_LLM_TRACE_SOURCE: adapterPath ? 'benchmark de beta' : 'avaluació', AGENT_LLM_CALLS_LOG: llmCallsLog() } : {}), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   });
 }
 
@@ -1536,7 +1536,7 @@ ipcMain.handle('benchmark:list', async () => {
   }
   return {
     comparison: comparisonByModel(reports, { labels, incomplete }),
-    runs: reports.map((report) => ({ id: report.id, at: report.at, model: labels[report.model] || report.model, adapter: report.adapter || null, summary: report.summary })).reverse(),
+    runs: reports.map((report) => ({ id: report.id, at: report.at, model: labels[report.model] || report.model, adapter: report.adapter || null, runtime: report.runtime || null, summary: report.summary })).reverse(),
     models,
     chart: models.length ? renderBenchmarkSvg(models) : '',
   };
