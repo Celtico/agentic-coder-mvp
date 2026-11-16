@@ -564,7 +564,8 @@ async function startModelWorker() {
     env: {
       ...process.env,
       AGENT_MODEL_CACHE: projectModelsDirectory(),
-      AGENT_MODEL_RUNTIME: (await currentModel()).runtime,
+      // The native engine (Node, no Python) for the models it runs, unless Preferències › Agent chooses Python.
+      AGENT_MODEL_RUNTIME: await mlxModels.runtimeFor(await currentModel(), await mlxModels.modelDirectory(await currentModel(), projectModelsDirectory()), { python: agentPreferences.pythonEngine }),
       AGENT_MODEL: (await currentModel()).modelId,
       // An installed app must not write inside its own bundle: the turn log goes to the data folder.
       ...(app.isPackaged && !process.env.AGENT_TURN_LOG ? { AGENT_TURN_LOG: path.join(app.getPath('userData'), 'logs', 'agent-turns.jsonl') } : {}),
@@ -1819,8 +1820,11 @@ ipcMain.handle('dictation:transcribe', async (_event, audio) => {
 // Preferències › Model and Agent: the limits and switches of the agent, kept in settings.json.
 ipcMain.handle('preferences:agent', async () => ({ values: agentPreferences, defaults: defaultAgentPreferences(), limits: AGENT_LIMITS }));
 ipcMain.handle('preferences:set-agent', async (_event, change) => {
+  const before = agentPreferences.pythonEngine;
   agentPreferences = normalizeAgentPreferences(change, agentPreferences);
   await saveSettings();
+  // Another engine: the chat's model is unloaded (as when choosing another model) and the next message loads it with that one.
+  if (agentPreferences.pythonEngine !== before && activeModelRequestId === null && !trainingRun && !benchmarkRun) await stopModelWorker();
   return agentPreferences;
 });
 ipcMain.handle('permissions:set', async (_event, mode) => {

@@ -115,4 +115,29 @@ async function findModel(modelsRoot, idOrAlias, platform = process.platform) {
   return (await listModels(modelsRoot, platform)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
 }
 
-module.exports = { engineFor, modelsFolder, enginePython, builtInModels, listModels, findModel, modelDirectory, hasVision, DEFAULT_MODEL_ID, defaultModel };
+// The native engine (native/, Node without Python) runs Qwen 3.5 text models such as MiMo. It is built
+// for a Mac; its addon is native/build/Release/agentic_mlx.node.
+const nativeAddon = path.join(__dirname, '..', '..', 'native', 'build', 'Release', 'agentic_mlx.node');
+
+/** Whether the native engine can run the weights in `directory`: a Qwen 3.5 text model (dense, no vision tower), read from its config.json. */
+async function nativeSupported(directory, addon = nativeAddon) {
+  if (!directory) return false;
+  try {
+    await fs.access(addon);
+    const config = JSON.parse(await fs.readFile(path.join(directory, 'config.json'), 'utf8'));
+    const text = config.text_config || config;
+    const family = ['qwen3_5', 'qwen3_5_text'].includes(config.model_type) || text.model_type === 'qwen3_5_text';
+    return family && !(text.num_experts > 0) && !await hasVision(directory);
+  } catch { return false; }
+}
+
+/**
+ * The runtime for a model on this machine: «native» (native-worker.cjs) for the MLX models the native engine
+ * supports, unless the Python engine is chosen in Preferències; otherwise the model's own (Python on a Mac).
+ */
+async function runtimeFor(model, directory, { python = false, addon = nativeAddon } = {}) {
+  if (model.runtime === 'mlx' && !python && await nativeSupported(directory, addon)) return 'native';
+  return model.runtime;
+}
+
+module.exports = { engineFor, modelsFolder, enginePython, builtInModels, listModels, findModel, modelDirectory, hasVision, nativeSupported, runtimeFor, DEFAULT_MODEL_ID, defaultModel };

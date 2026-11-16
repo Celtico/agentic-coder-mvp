@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { CudaInferenceEngine, MlxInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine, type InferenceToolDefinition } from './inference-engine';
+import { CudaInferenceEngine, MlxInferenceEngine, NativeInferenceEngine, TransformersJsInferenceEngine, type ChatTurn, type InferenceEngine, type InferenceToolDefinition } from './inference-engine';
 import { prompt as promptText, toolDescriptions } from './prompts';
 import { splitSystem, type TraceContext } from './llm-trace';
 import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperience } from './local-embeddings';
@@ -87,6 +87,7 @@ const COMPACT_MANIFEST_ENTRIES = 80;
 /** The engine for a runtime: «cuda» on Linux with NVIDIA GPUs, «transformers» for ONNX in Node, else MLX (a Mac). */
 export function createEngine(runtime: string | undefined): InferenceEngine {
   if (runtime === 'cuda') return new CudaInferenceEngine();
+  if (runtime === 'native') return new NativeInferenceEngine();
   if (runtime === 'transformers') return new TransformersJsInferenceEngine();
   return new MlxInferenceEngine();
 }
@@ -1418,5 +1419,5 @@ export class LocalCodingAgent {
 }
 
 export { LocalExperienceEmbedder, cosineSimilarity, rankExperiences } from './local-embeddings';
-export { CudaInferenceEngine, MlxInferenceEngine, TransformersJsInferenceEngine } from './inference-engine';
+export { CudaInferenceEngine, MlxInferenceEngine, NativeInferenceEngine, TransformersJsInferenceEngine } from './inference-engine';
 export { prompt as promptText, toolDescriptions, promptsDirectory } from './prompts';

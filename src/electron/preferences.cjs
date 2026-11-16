@@ -17,6 +17,8 @@ function defaultAgentPreferences(env = process.env) {
     // and contradicted demands, and its note taught the model to answer «done» before doing anything.
     review: env.AGENT_REVIEW === '1',
     webSearch: env.AGENT_WEB_SEARCH === '1',
+    // The Python worker (mlx-lm) for every model, instead of the native engine where it can run one.
+    pythonEngine: env.AGENT_PYTHON_ENGINE === '1',
   };
 }
 
@@ -28,7 +30,7 @@ function normalizeAgentPreferences(value, base = defaultAgentPreferences()) {
     const number = typeof saved[key] === 'number' ? saved[key] : typeof saved[key] === 'string' && saved[key].trim() ? Number(saved[key]) : NaN;
     if (Number.isFinite(number)) result[key] = Math.min(limit.max, Math.max(limit.min, Math.round(number)));
   }
-  for (const key of ['review', 'webSearch']) if (typeof saved[key] === 'boolean') result[key] = saved[key];
+  for (const key of ['review', 'webSearch', 'pythonEngine']) if (typeof saved[key] === 'boolean') result[key] = saved[key];
   return result;
 }
 

@@ -2795,7 +2795,7 @@ export function App(): React.JSX.Element {
                     <Text mt="1" fontSize="xs" color="fg.muted">El mateix que el botó del xat: «Demana» pregunta abans d’instal·lar paquets (un cop per projecte).</Text>
                   </Box>
                   {agentPreferences && <>
-                    {([['review', 'Revisor automàtic', 'Després d’escriure fitxers, una segona lectura comprova el que ha fet el programador.'], ['webSearch', 'Cerca web', 'L’agent pot cercar a Internet a més de llegir les adreces que li donis.']] as const).map(([key, label, help]) => <Box key={key}>
+                    {([['review', 'Revisor automàtic', 'Després d’escriure fitxers, una segona lectura comprova el que ha fet el programador.'], ['webSearch', 'Cerca web', 'L’agent pot cercar a Internet a més de llegir les adreces que li donis.'], ['pythonEngine', 'Motor Python', 'Fa servir Python (mlx-lm) també per als models que el motor natiu de Node pot fer anar (MiMo). Els altres models sempre van amb Python.']] as const).map(([key, label, help]) => <Box key={key}>
                       <Switch.Root colorPalette="agentic" checked={agentPreferences.values[key]} onCheckedChange={({ checked }) => void changeAgentPreferences({ [key]: checked })}>
                         <Switch.HiddenInput/><Switch.Control/><Switch.Label fontSize="sm" fontWeight="medium">{label}</Switch.Label>
                       </Switch.Root>

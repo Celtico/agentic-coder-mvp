@@ -6,7 +6,7 @@ const { AGENT_LIMITS, AGENT_PREFERENCES_VERSION, defaultAgentPreferences, normal
 test('the defaults are what the agent did before there were preferences', () => {
   // 20 messages of history by default: the whole conversation (up to 100) made every step slower and the model
   // copied the shape of its earlier answers. A value already saved in Preferències is kept.
-  assert.deepEqual(defaultAgentPreferences({}), { answerTokens: 2400, maxIterations: 28, historyMessages: 20, review: false, webSearch: false });
+  assert.deepEqual(defaultAgentPreferences({}), { answerTokens: 2400, maxIterations: 28, historyMessages: 20, review: false, webSearch: false, pythonEngine: false });
   assert.equal(normalizeAgentPreferences({ historyMessages: 100 }, defaultAgentPreferences({})).historyMessages, 100);
   assert.equal(defaultAgentPreferences({ AGENT_REVIEW: '0' }).review, false);
   assert.equal(defaultAgentPreferences({ AGENT_WEB_SEARCH: '1' }).webSearch, true);
@@ -38,7 +38,7 @@ test('saved preferences move to the new defaults once: history 100 → 20 and th
   const old = { answerTokens: 2400, maxIterations: 28, historyMessages: 100, review: true, webSearch: true };
   const moved = migrateAgentPreferences(old, undefined);
   assert.equal(moved.migrated, true);
-  assert.deepEqual(normalizeAgentPreferences(moved.agent, defaultAgentPreferences({})), { answerTokens: 2400, maxIterations: 28, historyMessages: 20, review: false, webSearch: true });
+  assert.deepEqual(normalizeAgentPreferences(moved.agent, defaultAgentPreferences({})), { answerTokens: 2400, maxIterations: 28, historyMessages: 20, review: false, webSearch: true, pythonEngine: false });
   // A value the user chose (not the old default) is kept.
   assert.equal(migrateAgentPreferences({ historyMessages: 40, review: false }, undefined).agent.historyMessages, 40);
   // Already at the current version: nothing moves, not even a reviewer turned back on or 100 messages.

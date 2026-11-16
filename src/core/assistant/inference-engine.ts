@@ -56,11 +56,11 @@ export class MlxInferenceEngine implements InferenceEngine {
     if (this.ready) return this.ready;
     this.state = 'loading';
     this.ready = new Promise<void>((resolve, reject) => {
-      const python = process.env.AGENT_MLX_PYTHON;
       const modelPath = process.env.AGENT_MLX_MODEL_PATH;
-      if (!python || !modelPath) { reject(new Error(`No s’ha configurat el runtime ${this.runtimeName} ni la carpeta del model.`)); return; }
+      const command = modelPath ? this.workerCommand(modelPath) : null;
+      if (!command) { reject(new Error(`No s’ha configurat el runtime ${this.runtimeName} ni la carpeta del model.`)); return; }
       onStatus(this.runtimeName === 'MLX' ? 'Iniciant el runtime MLX d’Apple…' : `Iniciant el runtime ${this.runtimeName}…`);
-      const child = spawn(python, ['-u', path.join(__dirname, this.workerScript), modelPath], { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
+      const child = spawn(command.file, command.args, { stdio: ['pipe', 'pipe', 'pipe'], env: command.env });
       this.child = child;
       let stderr = '';
       child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-8000); });
@@ -83,7 +83,7 @@ export class MlxInferenceEngine implements InferenceEngine {
           else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));
         }
       });
-      child.once('error', (error) => { if (current()) this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar Python/${this.runtimeName}: ${error.message}`)); });
+      child.once('error', (error) => { if (current()) this.state = 'unloaded'; reject(new Error(`No s’ha pogut iniciar el runtime ${this.runtimeName}: ${error.message}`)); });
       child.once('exit', (code) => {
         if (!current()) { reject(new Error(`S’ha aturat el runtime ${this.runtimeName}.`)); return; }
         const wasReady = this.state === 'ready';
@@ -99,6 +99,12 @@ export class MlxInferenceEngine implements InferenceEngine {
         : `Carregant ${this.modelId} a la memòria unificada; la primera vegada pot trigar fins a mig minut…`);
     }).catch((error) => { this.state = 'unloaded'; throw error; }).finally(() => { this.ready = null; });
     return this.ready;
+  }
+
+  /** The worker process: the runtime's Python with the worker script and the model folder. */
+  protected workerCommand(modelPath: string): { file: string; args: string[]; env: NodeJS.ProcessEnv } | null {
+    const python = process.env.AGENT_MLX_PYTHON;
+    return python ? { file: python, args: ['-u', path.join(__dirname, this.workerScript), modelPath], env: process.env } : null;
   }
 
   async generateResponse(messages: ChatTurn[], options: GenerationOptions): Promise<string> {
@@ -171,6 +177,19 @@ export class MlxInferenceEngine implements InferenceEngine {
 export class CudaInferenceEngine extends MlxInferenceEngine {
   protected readonly workerScript = 'cuda-worker.py';
   protected readonly runtimeName = 'CUDA';
+}
+
+/**
+ * A Mac without Python: the same engine with native-worker.cjs (the native MLX engine in native/, run by this
+ * Node or Electron binary as Node), the same JSON protocol, tool-call reading and Log del model. Chosen with
+ * AGENT_MODEL_RUNTIME=native, for the models it supports (src/electron/mlx-models.cjs, runtimeFor).
+ */
+export class NativeInferenceEngine extends MlxInferenceEngine {
+  protected readonly workerScript = 'native-worker.cjs';
+  protected readonly runtimeName = 'MLX natiu';
+  protected workerCommand(modelPath: string) {
+    return { file: process.execPath, args: [path.join(__dirname, this.workerScript), modelPath], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } };
+  }
 }
 
 export class TransformersJsInferenceEngine implements InferenceEngine {
