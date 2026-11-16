@@ -123,3 +123,9 @@ test('the chat is a pane like the others: shown by default, last on top, with a 
   assert.match(app, /chat: \{ icon: ChatIcon, label: chatOpen \? 'Amaga el xat' : 'Mostra el xat'/);
   assert.match(app, /No hi ha cap finestra oberta/);
 });
+
+test('the progress of an answer shows only in the conversation it belongs to; another one says the model is busy', () => {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
+  assert.match(app, /loading && inFlightConversationRef\.current && inFlightConversationRef\.current\.sessionId !== activeSessionId && <HStack[^>]*data-busy-elsewhere/);
+  assert.match(app, /loading && \(!inFlightConversationRef\.current \|\| inFlightConversationRef\.current\.sessionId === activeSessionId\) && <HStack gap="2\.5"/);
+});
