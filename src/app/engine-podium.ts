@@ -2,7 +2,7 @@
 // podium under the charts). Without any UI, so it can be tested.
 import type { EngineBenchmark, EngineBenchmarkEngine } from '../types';
 
-export const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
+export const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 1000) / 1000).toLocaleString('ca', { maximumFractionDigits: 3 })} ${unit}` : '–');
 
 /** The figures of a run: label, value, unit, and whether less or more is better. */
 export const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null | undefined, string, string][] = [
