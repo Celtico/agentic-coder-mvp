@@ -148,6 +148,7 @@ export interface AgenticBridge {
   listBenchmarks(): Promise<BenchmarkList>;
   startEngineBenchmark(): Promise<{ started: boolean; id: string }>;
   listEngineBenchmarks(): Promise<EngineBenchmark[]>;
+  deleteEngineBenchmark(id: string): Promise<{ deleted: string }>;
   benchmarkReport(id: string): Promise<BenchmarkReport>;
   openBenchmarkProject(id: string, index: number): Promise<ProjectInfo>;
   listBenchmarkProjects(): Promise<BenchmarkProject[]>;

@@ -1546,6 +1546,13 @@ ipcMain.handle('engines:start', async () => {
   })();
   return { started: true, id };
 });
+// One run of the engine benchmark, by its id (only a report that is there).
+ipcMain.handle('engines:delete', async (_e, id) => {
+  const names = await fs.readdir(engineReportsDirectory()).catch(() => []);
+  if (typeof id !== 'string' || !names.includes(`${id}.json`)) throw new Error('Aquesta passada ja no hi és.');
+  await fs.rm(path.join(engineReportsDirectory(), `${id}.json`));
+  return { deleted: id };
+});
 ipcMain.handle('engines:list', async () => {
   const reports = [];
   for (const name of (await fs.readdir(engineReportsDirectory()).catch(() => [])).filter((item) => item.endsWith('.json')).sort().reverse()) {

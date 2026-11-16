@@ -43,5 +43,6 @@ test('the long prompt is fixed text from this repository (about 4.000 tokens)', 
 test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button and table', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?defaultValue=\{initialView\.evaluationSections\}/);
-  assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?startEngineBenchmark\(\)[\s\S]*?Passa el benchmark de motors[\s\S]*?ENGINE_ROWS\.map[\s\S]*?ENGINE_CHARTS\.map/);
+  assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?startEngineBenchmark\(\)[\s\S]*?Passa el benchmark de motors[\s\S]*?ENGINE_CHARTS\.map/);
+  assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });

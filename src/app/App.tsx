@@ -7,7 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { EngineBenchmark, EngineBenchmarkEngine, AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image, Table
+  Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -173,6 +173,7 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 const STOP_CONFIRM_MS = 3000;
 /** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
 // Benchmark de motors: its charts, one bar per engine for each figure (the longest bar is the largest value).
+const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
 // One fixed colour per engine, the same in every chart and in the legend.
 const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
 const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null | undefined, string, string][] = [
@@ -182,19 +183,6 @@ const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null |
   ['Primer token, prompt curt', (engine) => engine.short.firstTokenSeconds, 's', 'menys és millor'],
   ['2n missatge amb memòria cau: primer token', (engine) => engine.second.firstTokenSeconds, 's', 'menys és millor'],
   ['Memòria màxima (MLX)', (engine) => engine.peakMemoryGb, 'GB', 'menys és millor'],
-];
-// Benchmark de motors: the rows of its table (one column per engine).
-const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
-const ENGINE_ROWS: [string, (engine: EngineBenchmarkEngine) => string][] = [
-  ['Càrrega del model', (engine) => engineNumber(engine.loadSeconds, 's')],
-  ['Primer token, prompt curt', (engine) => engineNumber(engine.short.firstTokenSeconds, 's')],
-  ['Lectura, prompt curt', (engine) => engineNumber(engine.short.promptTps, 'tok/s')],
-  ['Lectura, prompt llarg', (engine) => `${engineNumber(engine.long.promptTps, 'tok/s')}${engine.long.promptTokens ? ` (${engine.long.promptTokens} tokens)` : ''}`],
-  ['Primer token, prompt llarg', (engine) => engineNumber(engine.long.firstTokenSeconds, 's')],
-  ['Generació', (engine) => engineNumber(engine.generationTps, 'tok/s')],
-  ['2n missatge amb memòria cau: primer token', (engine) => engineNumber(engine.second.firstTokenSeconds, 's')],
-  ['2n missatge: tokens de la memòria cau', (engine) => (engine.second.cachedTokens != null ? `${engine.second.cachedTokens} de ${engine.second.promptTokens ?? '–'}` : '–')],
-  ['Memòria màxima (MLX)', (engine) => engineNumber(engine.peakMemoryGb, 'GB')],
 ];
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
 /** Dades preparades › Mostra: the splits and why a case was left out. */
@@ -2312,16 +2300,15 @@ export function App(): React.JSX.Element {
             <Button size="xs" flex="none" variant="ghost" colorPalette="agentic" disabled={loading || evaluationRunning} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>
           </HStack>
           {engineReports.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
-          <Stack gap="3">{engineReports.map((report) => <Box key={report.id}>
-            <Text fontSize="xs" fontWeight="medium" mb="1">{report.label} · {new Date(report.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}</Text>
-            <Table.Root size="sm" variant="line">
-              <Table.Header><Table.Row><Table.ColumnHeader/>{report.engines.map((engine) => <Table.ColumnHeader key={engine.runtime} textAlign="end">Motor {engine.name}</Table.ColumnHeader>)}</Table.Row></Table.Header>
-              <Table.Body>
-                {ENGINE_ROWS.map(([label, value]) => <Table.Row key={label}><Table.Cell color="fg.muted">{label}</Table.Cell>{report.engines.map((engine) => <Table.Cell key={engine.runtime} textAlign="end">{value(engine)}</Table.Cell>)}</Table.Row>)}
-                {report.sameAnswer !== null && <Table.Row><Table.Cell color="fg.muted">Mateixa resposta (prompt curt, greedy)</Table.Cell><Table.Cell colSpan={report.engines.length} textAlign="end" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓' : '✗'}</Table.Cell></Table.Row>}
-              </Table.Body>
-            </Table.Root>
-            <HStack gap="3" mt="3">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">Motor {engine.name}</Text></HStack>)}</HStack>
+          {/* One item per run, the newest open: its charts inside; the delete button beside its header. */}
+          {engineReports.length > 0 && <Accordion.Root multiple collapsible defaultValue={[engineReports[0].id]} size="sm" variant="outline">{engineReports.map((report) => <Accordion.Item key={report.id} value={report.id}>
+            <HStack gap="1">
+              <Accordion.ItemTrigger flex="1"><Text flex="1" fontSize="xs" fontWeight="medium" textAlign="left">{report.label} · {new Date(report.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}</Text><Text fontSize="2xs" color="fg.muted">{report.engines.map((engine) => `${engine.name} ${engineNumber(engine.generationTps, 'tok/s')}`).join(' · ')}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+              <IconButton icon={Trash} label="Esborra aquesta passada" onClick={() => void window.agentic.deleteEngineBenchmark(report.id).then(() => setEngineReports((current) => current.filter((item) => item.id !== report.id))).catch((error) => setEvaluationError(errorText(error)))}/>
+            </HStack>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0">
+            {report.sameAnswer !== null && <Text fontSize="xs" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓ Els dos motors donen la mateixa resposta (prompt curt, greedy)' : '✗ Els motors no donen la mateixa resposta (prompt curt, greedy)'}</Text>}
+            <HStack gap="3" mt="2">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">Motor {engine.name}</Text></HStack>)}</HStack>
             <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better]) => {
               const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
               return <Box key={label}>
@@ -2333,7 +2320,8 @@ export function App(): React.JSX.Element {
                 </HStack>)}
               </Box>;
             })}</Stack>
-          </Box>)}</Stack>
+            </Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>)}</Accordion.Root>}
         </Accordion.ItemBody></Accordion.ItemContent>
       </Accordion.Item>
       </Accordion.Root>

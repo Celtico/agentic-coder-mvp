@@ -100,6 +100,7 @@ contextBridge.exposeInMainWorld('agentic', {
   benchmarkTasks: () => ipcRenderer.invoke('benchmark:tasks'),
   startEngineBenchmark: () => ipcRenderer.invoke('engines:start'),
   listEngineBenchmarks: () => ipcRenderer.invoke('engines:list'),
+  deleteEngineBenchmark: (id) => ipcRenderer.invoke('engines:delete', id),
   onBenchmarkProgress: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('benchmark:progress', listener);
