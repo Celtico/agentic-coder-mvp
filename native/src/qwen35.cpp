@@ -18,9 +18,48 @@ namespace {
 // Scalar with the same dtype as x, so bf16 activations are not promoted.
 array scalar(float v, const array& like) { return array(v, like.dtype()); }
 
-array silu(const array& x) { return mx::multiply(x, mx::sigmoid(x)); }
+// The element-wise functions mlx_lm compiles (shapeless), so they run as one
+// fused kernel each, as there: nn.silu, activations.swiglu and precise_swiglu.
+// Their inputs all have the same shape, which shapeless compiling needs.
+array silu(const array& x) {
+  static auto f = mx::compile(
+      [](const std::vector<array>& in) {
+        return std::vector<array>{mx::multiply(in[0], mx::sigmoid(in[0]))};
+      },
+      true);
+  return f({x})[0];
+}
 
-array softplus(const array& x) { return mx::logaddexp(x, scalar(0.0f, x)); }
+array swiglu(const array& gate, const array& x) {
+  static auto f = mx::compile(
+      [](const std::vector<array>& in) {
+        return std::vector<array>{mx::multiply(mx::multiply(in[0], mx::sigmoid(in[0])), in[1])};
+      },
+      true);
+  return f({gate, x})[0];
+}
+
+// silu(gate) * x in float32, back in h's dtype (RMSNormGated).
+array precise_swiglu(const array& h, const array& gate, const array& x) {
+  static auto f = mx::compile(
+      [](const std::vector<array>& in) {
+        auto g = mx::astype(in[1], mx::float32);
+        auto y = mx::multiply(mx::multiply(g, mx::sigmoid(g)), mx::astype(in[2], mx::float32));
+        return std::vector<array>{mx::astype(y, in[0].dtype())};
+      },
+      true);
+  return f({h, gate, x})[0];
+}
+
+// g = exp(-exp(A_log) * softplus(a + dt_bias)), in float32. Not compiled:
+// mlx_lm compiles it shapeless, but here A_log and dt_bias [Hv] broadcast
+// against a [B, S, Hv], and a shapeless compile traced at one S gave wrong
+// values at another (the prompt cache test caught it). It is tiny anyway.
+array compute_g(const array& A_log, const array& a, const array& dt_bias) {
+  auto x = mx::add(a, dt_bias);
+  auto softplus = mx::logaddexp(x, scalar(0.0f, x));
+  return mx::exp(mx::negative(mx::multiply(mx::exp(mx::astype(A_log, mx::float32)), softplus)));
+}
 
 array take_weight(std::unordered_map<std::string, array>& w,
                   const std::string& name) {
@@ -225,9 +264,7 @@ std::pair<array, array> gated_delta_update(
     const array& b, const array& A_log, const array& dt_bias,
     const std::optional<array>& state_in, bool allow_kernel) {
   auto beta = mx::sigmoid(b);
-  // g = exp(-exp(A_log) * softplus(a + dt_bias)), in float32.
-  auto g = mx::exp(mx::negative(mx::multiply(
-      mx::exp(mx::astype(A_log, mx::float32)), softplus(mx::add(a, dt_bias)))));
+  auto g = compute_g(A_log, a, dt_bias);
   int B = q.shape(0), Dk = q.shape(3), Hv = v.shape(2), Dv = v.shape(3);
   array state = state_in ? *state_in : mx::zeros({B, Hv, Dv, Dk}, mx::float32);
   if (allow_kernel && use_metal_kernel() && Dk == 128 && Dv % 8 == 0) {
@@ -400,7 +437,7 @@ array Qwen35::embed(const array& tokens) const {
 }
 
 array Qwen35::mlp(const Layer& l, const array& x) const {
-  return l.down_proj(mx::multiply(silu(l.gate_proj(x)), l.up_proj(x)));
+  return l.down_proj(swiglu(l.gate_proj(x), l.up_proj(x)));
 }
 
 array Qwen35::attention(Layer& l, KVCache* c, const array& x) {
@@ -463,9 +500,7 @@ array Qwen35::gated_delta_net(Layer& l, LinearState* c, const array& x, bool ker
 
   // RMSNormGated: rms_norm(out) * silu(z), computed in float32.
   auto normed = mx::fast::rms_norm(out, l.gnorm, cfg_.rms_norm_eps);
-  auto gated = mx::astype(
-      mx::multiply(silu(mx::astype(z, mx::float32)), mx::astype(normed, mx::float32)),
-      out.dtype());
+  auto gated = precise_swiglu(out, z, normed);
   return l.out_proj(mx::reshape(gated, {B, S, value_dim}));
 }
 
