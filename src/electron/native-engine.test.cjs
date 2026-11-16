@@ -87,3 +87,9 @@ test('the Python worker uses the same rule (mlx_text.repeating_tail)', { skip: s
   assert.strictEqual(result.status, 0, result.stderr);
   assert.deepStrictEqual(JSON.parse(result.stdout), repetitionCases.map(([, , stuck]) => stuck));
 });
+
+test('Preferències › Agent: «Motor» Automàtic (native where it can) or Python, kept as pythonEngine', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, />Motor<\/Text>[\s\S]*?value=\{agentPreferences\.values\.pythonEngine \? 'python' : 'auto'\}[\s\S]*?changeAgentPreferences\(\{ pythonEngine: value === 'python' \}\)[\s\S]*?\{ value: 'auto', label: 'Automàtic' \}, \{ value: 'python', label: 'Python' \}/);
+  assert.doesNotMatch(app, /'Motor Python'/);
+});

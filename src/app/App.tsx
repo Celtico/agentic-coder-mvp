@@ -2795,7 +2795,14 @@ export function App(): React.JSX.Element {
                     <Text mt="1" fontSize="xs" color="fg.muted">El mateix que el botó del xat: «Demana» pregunta abans d’instal·lar paquets (un cop per projecte).</Text>
                   </Box>
                   {agentPreferences && <>
-                    {([['review', 'Revisor automàtic', 'Després d’escriure fitxers, una segona lectura comprova el que ha fet el programador.'], ['webSearch', 'Cerca web', 'L’agent pot cercar a Internet a més de llegir les adreces que li donis.'], ['pythonEngine', 'Motor Python', 'Fa servir Python (mlx-lm) també per als models que el motor natiu de Node pot fer anar (MiMo). Els altres models sempre van amb Python.']] as const).map(([key, label, help]) => <Box key={key}>
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" mb="1.5">Motor</Text>
+                      <SegmentGroup.Root size="sm" value={agentPreferences.values.pythonEngine ? 'python' : 'auto'} onValueChange={({ value }) => { if (value === 'auto' || value === 'python') void changeAgentPreferences({ pythonEngine: value === 'python' }); }}>
+                        <SegmentGroup.Indicator/><SegmentGroup.Items items={[{ value: 'auto', label: 'Automàtic' }, { value: 'python', label: 'Python' }]}/>
+                      </SegmentGroup.Root>
+                      <Text mt="1" fontSize="xs" color="fg.muted">«Automàtic» fa servir el motor natiu de Node per als models que pot fer anar (MiMo) i Python per als altres. «Python» ho fa anar tot amb Python (mlx-lm).</Text>
+                    </Box>
+                    {([['review', 'Revisor automàtic', 'Després d’escriure fitxers, una segona lectura comprova el que ha fet el programador.'], ['webSearch', 'Cerca web', 'L’agent pot cercar a Internet a més de llegir les adreces que li donis.']] as const).map(([key, label, help]) => <Box key={key}>
                       <Switch.Root colorPalette="agentic" checked={agentPreferences.values[key]} onCheckedChange={({ checked }) => void changeAgentPreferences({ [key]: checked })}>
                         <Switch.HiddenInput/><Switch.Control/><Switch.Label fontSize="sm" fontWeight="medium">{label}</Switch.Label>
                       </Switch.Root>
