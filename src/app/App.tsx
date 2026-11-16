@@ -2323,12 +2323,6 @@ export function App(): React.JSX.Element {
                 </HStack>)}
               </Box>;
             })}</Stack>
-            {/* Each figure's result in one line (the trophy only in the run's header). */}
-            {report.engines.length > 1 && <Stack gap="0.5" mt="3" pt="2" borderTopWidth="1px" borderColor="border">
-              {engineWinners(report).figures.map((figure) => { const FigureIcon = FIGURE_ICONS[figure.label] || ChartBar; return <HStack key={figure.label} gap="1" fontSize="2xs" color="fg.muted" flexWrap="wrap">
-              <Box flex="none"><FigureIcon size={11}/></Box><Text>{figure.label}:</Text>
-              {figure.tie ? <><Handshake size={11}/><Text>{figure.note}</Text></> : <>{figure.entries.map((entry, index) => { const Icon = engineIcon(entry.runtime); return <HStack key={entry.name} gap="0.5">{index > 0 && <Text>·</Text>}<Box color={engineColor(entry.runtime)}><Icon size={11}/></Box><Text color={figure.winner === entry.name ? 'agentic.fg' : undefined}>{entry.name} {entry.text}</Text></HStack>; })}<Text>{figure.note}</Text></>}
-            </HStack>; })}</Stack>}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
         </Accordion.ItemBody></Accordion.ItemContent>
