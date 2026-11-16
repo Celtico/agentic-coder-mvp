@@ -297,7 +297,7 @@ test('the accordions of Avaluació and Aprenentatge local go edge to edge: the t
   assert.match(recipes, /pane: \{\n\s*item: \{ borderBottomWidth: "1px", borderColor: "border" \},\n\s*itemTrigger: \{ px: "var\(--accordion-padding-x\)", borderRadius: "0" \},\n\s*itemContent: \{ px: "var\(--accordion-padding-x\)" \},/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /accordion: accordionRecipe/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 3, 'Avaluació, Aprenentatge local and Preferències › Aparença');
+  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 4, 'Avaluació (its two benchmarks, and the model’s sections), Aprenentatge local and Preferències › Aparença');
   // No space kept for the scroll bar: edge to edge on both sides; the thin bar appears only when it scrolls.
   assert.match(app, /<Box flex="1" minH="0" \{\.\.\.scrollArea\}>\{evaluationPane\}<\/Box>/);
   assert.match(app, /<Box h="full" minH="0" \{\.\.\.scrollArea\}><Stack gap="3">/);

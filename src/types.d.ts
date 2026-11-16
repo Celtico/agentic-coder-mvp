@@ -21,6 +21,10 @@ export type BenchmarkModelSummary = { model: string; label: string; at: string; 
 type BenchmarkCount = { runs: number; passed: number };
 /** Comparativa: per model, each completed run (newest first), all of them added up, and the runs cut before their end. */
 export type BenchmarkComparison = { model: string; label: string; latest: string | null; runs: { id: string; at: string; open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount; passed: number; total: number }[]; all: { open: BenchmarkCount; apps: BenchmarkCount; reference: BenchmarkCount } | null; incomplete: { id: string; at: string; done?: number; total?: number | null; passed?: number }[] };
+/** Benchmark de motors (scripts/evaluate-engines.cjs): medians per engine. */
+export type EngineBenchmarkCall = { firstTokenSeconds: number | null; promptTps?: number | null; generationTps?: number | null; promptTokens?: number | null; cachedTokens?: number | null };
+export type EngineBenchmarkEngine = { runtime: string; name: string; loadSeconds: number; short: EngineBenchmarkCall; long: EngineBenchmarkCall; second: EngineBenchmarkCall; generationTps: number | null; peakMemoryGb: number | null };
+export type EngineBenchmark = { id: string; at: string; model: string; label: string; rounds: number; maxTokens: number; sameAnswer: boolean | null; engines: EngineBenchmarkEngine[] };
 export type BenchmarkList = { comparison: BenchmarkComparison[]; runs: { id: string; at: string; model: string; adapter: string | null; runtime: string | null; summary: { runs: number; passed: number } }[]; models: BenchmarkModelSummary[]; chart: string };
 export type BenchmarkTurn = { input: { role: string; content: string } | null; output: string; seconds: number };
 export type BenchmarkReport = { id: string; at: string; model: string; summary: { runs: number; passed: number }; results: { task: string; run: number; pass: boolean; detail: string; seconds: number; toolCalls: number; toolsByName: Record<string, number>; filesChanged: string[]; answer: string; transcript: BenchmarkTurn[]; error?: string; hasProject?: boolean }[] };
@@ -142,6 +146,8 @@ export interface AgenticBridge {
   cancelBenchmark(): Promise<{ cancelled: boolean }>;
   benchmarkStatus(): Promise<{ running: boolean; model?: string; current?: BenchmarkCurrent | null }>;
   listBenchmarks(): Promise<BenchmarkList>;
+  startEngineBenchmark(): Promise<{ started: boolean; id: string }>;
+  listEngineBenchmarks(): Promise<EngineBenchmark[]>;
   benchmarkReport(id: string): Promise<BenchmarkReport>;
   openBenchmarkProject(id: string, index: number): Promise<ProjectInfo>;
   listBenchmarkProjects(): Promise<BenchmarkProject[]>;

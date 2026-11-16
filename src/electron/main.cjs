@@ -1508,6 +1508,52 @@ ipcMain.handle('benchmark:start', async (_e, request) => {
   return { started: true, id };
 });
 
+// Benchmark de motors (scripts/evaluate-engines.cjs): the selected model on each engine that can run it, one
+// after the other. Its reports are kept apart, in benchmarks/engines/.
+const engineReportsDirectory = () => path.join(benchmarksDirectory(), 'engines');
+ipcMain.handle('engines:start', async () => {
+  if (benchmarkRun) throw new Error('Ja hi ha una avaluació en marxa.');
+  if (trainingRun) throw new Error('Hi ha un entrenament en marxa; avalua quan acabi.');
+  if (activeModelRequestId !== null) throw new Error('Espera que acabi la resposta abans d’avaluar.');
+  const model = await currentModel();
+  if (!model || !await mlxModels.modelDirectory(model, projectModelsDirectory())) throw new Error('El model triat no és disponible en aquest Mac.');
+  const script = path.join(__dirname, '..', '..', 'scripts', 'evaluate-engines.cjs');
+  if (!fsSync.existsSync(script)) throw new Error('El benchmark de motors no és en aquesta instal·lació.');
+  await fs.mkdir(engineReportsDirectory(), { recursive: true });
+  const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${model.id}`;
+  const out = path.join(engineReportsDirectory(), `${id}.json`);
+  // The chat's model and the resident Whisper would take the memory the measured model needs.
+  if (modelWorker) { const child = modelWorker; modelWorker = null; child.kill('SIGTERM'); }
+  residentWhisper.release();
+  const controller = new AbortController();
+  benchmarkRun = { controller, label: model.label, modelId: model.id, id };
+  (async () => {
+    let result = null;
+    try {
+      const nodeExecutable = findNodeExecutable();
+      result = await runStreaming(nodeExecutable, [script, '--model', model.id, '--out', out], {
+        signal: controller.signal,
+        env: { AGENT_MLX_LOCK_LABEL: 'el benchmark de motors', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+        onLine: (line) => { if (/^MOTOR /.test(line)) sendBenchmark({ step: 'progress', message: line.replace(/^MOTOR /, 'Motor ').slice(0, 300) }); },
+      });
+    } finally {
+      benchmarkRun = null;
+      const done = fsSync.existsSync(out);
+      sendBenchmark(done
+        ? { step: 'finished', engines: true, message: `Benchmark de motors acabat: ${model.label}.` }
+        : { step: 'failed', engines: true, message: controller.signal.aborted ? 'Benchmark de motors cancel·lat.' : `El benchmark de motors no ha donat resultat (codi ${result?.code ?? '?'}): ${String(result?.output || '').trim().split('\n').pop() || ''}` });
+    }
+  })();
+  return { started: true, id };
+});
+ipcMain.handle('engines:list', async () => {
+  const reports = [];
+  for (const name of (await fs.readdir(engineReportsDirectory()).catch(() => [])).filter((item) => item.endsWith('.json')).sort().reverse()) {
+    try { reports.push({ id: name.replace(/\.json$/, ''), ...JSON.parse(await fs.readFile(path.join(engineReportsDirectory(), name), 'utf8')) }); } catch { /* skipped */ }
+  }
+  return reports;
+});
+
 async function readBenchmarkReports() {
   const reports = [];
   // A run's finished report; not the partial one an unfinished run keeps (<id>.partial.json).

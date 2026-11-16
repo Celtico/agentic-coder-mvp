@@ -4,10 +4,10 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { EngineBenchmark, EngineBenchmarkEngine, AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
-  Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
+  Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image, Table
 } from '@chakra-ui/react';
 import {
   LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
@@ -172,6 +172,19 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 /** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
 const STOP_CONFIRM_MS = 3000;
 /** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
+// Benchmark de motors: the rows of its table (one column per engine).
+const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
+const ENGINE_ROWS: [string, (engine: EngineBenchmarkEngine) => string][] = [
+  ['Càrrega del model', (engine) => engineNumber(engine.loadSeconds, 's')],
+  ['Primer token, prompt curt', (engine) => engineNumber(engine.short.firstTokenSeconds, 's')],
+  ['Lectura, prompt curt', (engine) => engineNumber(engine.short.promptTps, 'tok/s')],
+  ['Lectura, prompt llarg', (engine) => `${engineNumber(engine.long.promptTps, 'tok/s')}${engine.long.promptTokens ? ` (${engine.long.promptTokens} tokens)` : ''}`],
+  ['Primer token, prompt llarg', (engine) => engineNumber(engine.long.firstTokenSeconds, 's')],
+  ['Generació', (engine) => engineNumber(engine.generationTps, 'tok/s')],
+  ['2n missatge amb memòria cau: primer token', (engine) => engineNumber(engine.second.firstTokenSeconds, 's')],
+  ['2n missatge: tokens de la memòria cau', (engine) => (engine.second.cachedTokens != null ? `${engine.second.cachedTokens} de ${engine.second.promptTokens ?? '–'}` : '–')],
+  ['Memòria màxima (MLX)', (engine) => engineNumber(engine.peakMemoryGb, 'GB')],
+];
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
 /** Dades preparades › Mostra: the splits and why a case was left out. */
 const DATASET_SPLITS = [['train', 'Entrenament'], ['validation', 'Validació'], ['test', 'Prova']] as const;
@@ -292,6 +305,8 @@ export function App(): React.JSX.Element {
   // The evaluation panel runs the agent benchmark with the selected model and shows what it did.
   const [evaluationOpen, setEvaluationOpen] = useState(initialView.panels.evaluation);
   const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
+  // Benchmark de motors (scripts/evaluate-engines.cjs): its runs, newest first.
+  const [engineReports, setEngineReports] = useState<EngineBenchmark[]>([]);
   const [evaluationRunning, setEvaluationRunning] = useState(false);
   const [evaluationLog, setEvaluationLog] = useState<{ step: string; message: string }[]>([]);
   const [evaluationRepeat, setEvaluationRepeat] = useState<1 | 2>(1);
@@ -1194,7 +1209,7 @@ export function App(): React.JSX.Element {
   }
 
   async function refreshEvaluations() {
-    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationProjects(await window.agentic.listBenchmarkProjects()); setEvaluationError(''); }
+    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationProjects(await window.agentic.listBenchmarkProjects()); setEngineReports(await window.agentic.listEngineBenchmarks().catch(() => [])); setEvaluationError(''); }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   async function openEvaluationPanel() {
@@ -1228,6 +1243,15 @@ export function App(): React.JSX.Element {
       await window.agentic.startBenchmark({ repeat: evaluationRepeat, ...(tasks.length < evaluationTasks.length ? { tasks } : {}) });
       setEvaluationRunning(true); setEvaluationCurrent(null);
       setStatus(`Avaluant ${modelOptions.find((item) => item.id === selectedModel)?.label || 'el model'}…`);
+    }
+    catch (error) { setEvaluationError(errorText(error)); }
+  }
+  async function startEngineBenchmark() {
+    setEvaluationLog([]); setEvaluationError('');
+    try {
+      await window.agentic.startEngineBenchmark();
+      setEvaluationRunning(true); setEvaluationCurrent(null);
+      setStatus(`Comparant els motors amb ${modelOptions.find((item) => item.id === selectedModel)?.label || 'el model'}…`);
     }
     catch (error) { setEvaluationError(errorText(error)); }
   }
@@ -2145,10 +2169,17 @@ export function App(): React.JSX.Element {
         <HStack gap="2" mb="1.5"><Spinner size="xs"/><Text fontSize="sm" flex="1">{evaluationCurrent ? <>Tasca {evaluationCurrent.index} de {evaluationCurrent.total}: <b>{evaluationCurrent.task}</b> #{evaluationCurrent.run}</> : 'Carregant el model…'}</Text>{evaluationCurrent && <Text fontSize="xs" color="fg.muted">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</Text>}</HStack>
         {evaluationCurrent && <Box h="5px" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" bg="agentic.solid" width={`${Math.round(((evaluationCurrent.index - 1) / evaluationCurrent.total) * 100)}%`}/></Box>}
         {evaluationCurrent && <Text mt="1" fontSize="2xs" color="fg.muted">{evaluationTasks.find((task) => task.id === evaluationCurrent.task)?.description}</Text>}
+        {!evaluationCurrent && evaluationLog.filter((event) => /^Motor /.test(event.message)).slice(-1).map((event, index) => <Text key={index} mt="1" fontSize="2xs" color="fg.muted">{event.message}</Text>)}
         {evaluationLog.filter((event) => /^(PASSA|FALLA)/.test(event.message)).slice(-4).map((event, index) => <Text key={index} mt="1" fontFamily="mono" fontSize="2xs" color={event.message.startsWith('FALLA') ? 'fg.error' : 'agentic.fg'} overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">{event.message}</Text>)}
       </Box>}
       {!evaluationRunning && evaluationLog.length > 0 && (() => { const last = evaluationLog[evaluationLog.length - 1]; return last.step === 'finished' || last.step === 'failed' ? <Notice tone={last.step === 'finished' ? 'success' : 'warning'}>{last.message}</Notice> : null; })()}
       </Stack>
+      {/* Two benchmarks: the model's (the agent's tasks) and the engines' (the same model on each engine). */}
+      <Accordion.Root multiple collapsible defaultValue={['model', 'engines']} size="sm" variant={PANE_ACCORDION}>
+      <Accordion.Item value="model">
+      <Accordion.ItemTrigger>{rowHeader('Benchmark del model', undefined, ChartBar)}</Accordion.ItemTrigger>
+      {/* Its own sections go edge to edge, as before: no second indent. */}
+      <Accordion.ItemContent px="0"><Accordion.ItemBody p="0">
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
       <Accordion.Root multiple collapsible defaultValue={initialView.evaluationSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.evaluationSections = value; })} size="sm" variant={PANE_ACCORDION}>
         <Accordion.Item value="tasks">
@@ -2259,6 +2290,29 @@ export function App(): React.JSX.Element {
                 </Button>)}</Stack>}
           </Accordion.ItemBody></Accordion.ItemContent>
         </Accordion.Item>
+      </Accordion.Root>
+      </Accordion.ItemBody></Accordion.ItemContent>
+      </Accordion.Item>
+      <Accordion.Item value="engines">
+        <Accordion.ItemTrigger>{rowHeader('Benchmark de motors', engineReports.length, Cpu)}</Accordion.ItemTrigger>
+        <Accordion.ItemContent><Accordion.ItemBody pt="0">
+          {rowNote('El model triat amb cada motor que el pot fer anar (natiu i Python), un darrere l’altre: càrrega, lectura del prompt, generació, memòria cau i memòria. Mediana de 3 rondes; uns 5 minuts.')}
+          <HStack gap="2" mb="2">
+            <Button size="xs" flex="none" variant="ghost" colorPalette="agentic" disabled={loading || evaluationRunning} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>
+          </HStack>
+          {engineReports.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
+          <Stack gap="3">{engineReports.map((report) => <Box key={report.id}>
+            <Text fontSize="xs" fontWeight="medium" mb="1">{report.label} · {new Date(report.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}</Text>
+            <Table.Root size="sm" variant="line">
+              <Table.Header><Table.Row><Table.ColumnHeader/>{report.engines.map((engine) => <Table.ColumnHeader key={engine.runtime} textAlign="end">Motor {engine.name}</Table.ColumnHeader>)}</Table.Row></Table.Header>
+              <Table.Body>
+                {ENGINE_ROWS.map(([label, value]) => <Table.Row key={label}><Table.Cell color="fg.muted">{label}</Table.Cell>{report.engines.map((engine) => <Table.Cell key={engine.runtime} textAlign="end">{value(engine)}</Table.Cell>)}</Table.Row>)}
+                {report.sameAnswer !== null && <Table.Row><Table.Cell color="fg.muted">Mateixa resposta (prompt curt, greedy)</Table.Cell><Table.Cell colSpan={report.engines.length} textAlign="end" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓' : '✗'}</Table.Cell></Table.Row>}
+              </Table.Body>
+            </Table.Root>
+          </Box>)}</Stack>
+        </Accordion.ItemBody></Accordion.ItemContent>
+      </Accordion.Item>
       </Accordion.Root>
     </Stack>
   );
