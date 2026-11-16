@@ -47,5 +47,6 @@ test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors�
   // The trophy goes next to the winner of each chart and of the run (no separate podium).
   assert.match(app, /const winner = report\.engines\.length > 1 \? engineWinners\(report\)\.figures\[figureIndex\]\?\.winner : null;[\s\S]*?winner === engine\.name && <Box color="agentic\.fg"/);
   assert.doesNotMatch(app, />Podi</);
+  assert.match(app, /figure\.winner === entry\.name && <Box color="agentic\.fg"/);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });
