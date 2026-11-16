@@ -2319,7 +2319,7 @@ export function App(): React.JSX.Element {
                 {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
                   {(() => { const Icon = engineIcon(engine.runtime); return <HStack width="16" flex="none" gap="1" fontSize="2xs"><Box color={engineColor(engine.runtime)}><Icon size={11}/></Box><Text>{engine.name}</Text></HStack>; })()}
                   <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
-                  <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs"><Text color={result?.winner === engine.name ? 'agentic.fg' : undefined} fontWeight={result?.winner === engine.name ? 'semibold' : undefined}>{engineNumber(value(engine), unit)}</Text></HStack>
+                  <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs">{result?.winner === engine.name && <Box color="agentic.fg" title={`Guanya ${engine.name}`}><Check size={12}/></Box>}<Text color={result?.winner === engine.name ? 'agentic.fg' : undefined} fontWeight={result?.winner === engine.name ? 'semibold' : undefined}>{engineNumber(value(engine), unit)}</Text></HStack>
                 </HStack>)}
               </Box>;
             })}</Stack>

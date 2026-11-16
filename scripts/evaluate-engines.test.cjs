@@ -49,6 +49,7 @@ test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors�
   assert.match(app, /color=\{result\?\.winner === engine\.name \? 'agentic\.fg' : undefined\}/);
   assert.match(app, /result\?\.tie && <HStack/);
   assert.equal((app.match(/<Trophy size=/g) || []).length, 0);
+  assert.match(app, /result\?\.winner === engine\.name && <Box color="agentic\.fg" title=\{`Guanya \$\{engine\.name\}`\}><Check size=\{12\}\/>/);
   assert.doesNotMatch(app, />Podi</);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });
