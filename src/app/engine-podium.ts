@@ -22,14 +22,19 @@ export const TIE_SECONDS = 0.1;
 export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
   const figures = ENGINE_CHARTS.map(([label, value, unit, better]) => {
     const values = report.engines.map((engine) => ({ engine, value: value(engine) })).filter((item): item is { engine: EngineBenchmarkEngine; value: number } => typeof item.value === 'number');
-    if (values.length < 2) return { label, winner: null as string | null, detail: '' };
+    if (values.length < 2) return { label, winner: null as string | null, tie: false, entries: [] as { name: string; runtime: string; text: string }[], note: '', detail: '' };
     const lower = better === 'menys és millor';
-    const [best, next] = [...values].sort((a, b) => (lower ? a.value - b.value : b.value - a.value));
+    const sorted = [...values].sort((a, b) => (lower ? a.value - b.value : b.value - a.value));
+    const [best, next] = sorted;
     const gap = Math.abs(best.value - next.value) / Math.max(Math.abs(next.value), 1e-9);
-    if (gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS)) return { label, winner: null, detail: `empat (${engineNumber(best.value, unit)})` };
-    return { label, winner: best.engine.name, detail: `${best.engine.name} ${engineNumber(best.value, unit)} · ${next.engine.name} ${engineNumber(next.value, unit)} (${Math.round(gap * 100)}% ${lower ? 'menys' : 'més'})` };
+    const entries = sorted.map((item) => ({ name: item.engine.name, runtime: item.engine.runtime, text: engineNumber(item.value, unit) }));
+    if (gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS)) {
+      return { label, winner: null, tie: true, entries, note: `empat (${engineNumber(best.value, unit)})`, detail: `empat (${engineNumber(best.value, unit)})` };
+    }
+    const note = `(${Math.round(gap * 100)}% ${lower ? 'menys' : 'més'})`;
+    return { label, winner: best.engine.name, tie: false, entries, note, detail: `${entries.map((entry) => `${entry.name} ${entry.text}`).join(' · ')} ${note}` };
   });
-  const wins = report.engines.map((engine) => ({ name: engine.name, wins: figures.filter((figure) => figure.winner === engine.name).length })).sort((a, b) => b.wins - a.wins);
-  const ties = figures.filter((figure) => figure.winner === null && figure.detail).length;
+  const wins = report.engines.map((engine) => ({ name: engine.name, runtime: engine.runtime, wins: figures.filter((figure) => figure.winner === engine.name).length })).sort((a, b) => b.wins - a.wins);
+  const ties = figures.filter((figure) => figure.tie).length;
   return { figures, wins, ties, overall: wins.length > 1 && wins[0].wins > wins[1].wins ? wins[0].name : null };
 }

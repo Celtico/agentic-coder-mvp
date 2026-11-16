@@ -22,7 +22,9 @@ test('less is better for times and memory, more for speeds; under 2% or under 0,
   // Load 2,6 vs 6,5 s and reading 203 vs 164 tok/s are wins; 0,25 vs 0,26 and 0,25 vs 0,28 s are ties (under 0,1 s).
   assert.deepEqual(podium.figures.map((figure) => figure.winner), ['natiu', 'natiu', null, null, null, null]);
   assert.match(podium.figures[1].detail, /24% més/);
-  assert.deepEqual(podium.wins, [{ name: 'natiu', wins: 2 }, { name: 'Python', wins: 0 }]);
+  assert.deepEqual(podium.figures[1].entries.map((entry) => entry.runtime), ['natiu', 'Python']);
+  assert.equal(podium.figures[2].tie, true);
+  assert.deepEqual(podium.wins.map(({ name, wins }) => ({ name, wins })), [{ name: 'natiu', wins: 2 }, { name: 'Python', wins: 0 }]);
   assert.equal(podium.ties, 4);
   assert.equal(podium.overall, 'natiu');
 });

@@ -10,12 +10,13 @@ import {
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuTrophy as Trophy, LuEqual as Equal, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuTrophy as Trophy, LuHandshake as Handshake, LuEye as Eye2, LuPencilLine as PencilLine, LuType as TypeIcon, LuMemoryStick as MemoryStick, LuHardDriveDownload as HardDriveDownload, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
+import { SiNodedotjs, SiPython } from 'react-icons/si';
 import { RestoreWindowStage, WindowTitleBar, type WindowStage } from './window-controls';
 import { LlmLogPane } from './llm-log';
 import { ipcErrorText, missingInMain, RESTART_NOTICE } from './ipc-errors';
@@ -174,6 +175,9 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 const STOP_CONFIRM_MS = 3000;
 /** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
 // Benchmark de motors: its charts, one bar per engine for each figure (the longest bar is the largest value).
+// The podium's icons: each engine's (Node for the native one, Python's) and each figure's.
+const engineIcon = (runtime: string): IconType => (runtime === 'native' ? SiNodedotjs : SiPython);
+const FIGURE_ICONS: Record<string, IconType> = { 'Càrrega del model': HardDriveDownload, 'Lectura, prompt llarg': Eye2, 'Generació': PencilLine, 'Primer token, prompt curt': TypeIcon, '2n missatge amb memòria cau: primer token': TypeIcon, 'Memòria màxima (MLX)': MemoryStick };
 // One fixed colour per engine, the same in every chart and in the legend.
 const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
@@ -2313,8 +2317,12 @@ export function App(): React.JSX.Element {
               </Box>;
             })}</Stack>
             {report.engines.length > 1 && (() => { const podium = engineWinners(report); return <Box mt="3" pt="2" borderTopWidth="1px" borderColor="border">
-              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall && <Trophy size={12}/>}{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><HStack gap="2" fontSize="2xs" color="fg.muted">{podium.wins.map((item) => <HStack key={item.name} gap="0.5"><Box color="agentic.fg"><Trophy size={11}/></Box><Text>{item.name} {item.wins}</Text></HStack>)}<HStack gap="0.5"><Equal size={11}/><Text>Empat {podium.ties}</Text></HStack></HStack></HStack>
-              {podium.figures.map((figure) => <HStack key={figure.label} gap="1"><Box flex="none" w="3" color={figure.winner ? 'agentic.fg' : 'fg.muted'} title={figure.winner ? `Guanya el motor ${figure.winner}` : 'Empat'}>{figure.winner ? <Trophy size={11}/> : <Equal size={11}/>}</Box><Text fontSize="2xs" color="fg.muted">{figure.label}: {figure.detail}</Text></HStack>)}
+              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall && <Trophy size={12}/>}{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><HStack gap="2" fontSize="2xs" color="fg.muted">{podium.wins.map((item) => { const Icon = engineIcon(item.runtime); return <HStack key={item.name} gap="0.5"><Box color={engineColor(item.runtime)}><Icon size={11}/></Box><Text>{item.name} {item.wins}</Text></HStack>; })}<HStack gap="0.5"><Handshake size={11}/><Text>Empat {podium.ties}</Text></HStack></HStack></HStack>
+              {podium.figures.map((figure) => { const FigureIcon = FIGURE_ICONS[figure.label] || Trophy; return <HStack key={figure.label} gap="1" fontSize="2xs" color="fg.muted" flexWrap="wrap">
+                <Box flex="none" color={figure.winner ? 'agentic.fg' : 'fg.muted'} title={figure.winner ? `Guanya el motor ${figure.winner}` : 'Empat'}><FigureIcon size={11}/></Box>
+                <Text>{figure.label}:</Text>
+                {figure.tie ? <Text>{figure.note}</Text> : <>{figure.entries.map((entry, index) => { const Icon = engineIcon(entry.runtime); return <HStack key={entry.name} gap="0.5">{index > 0 && <Text>·</Text>}<Box color={engineColor(entry.runtime)}><Icon size={11}/></Box><Text>{entry.name} {entry.text}</Text></HStack>; })}<Text>{figure.note}</Text></>}
+              </HStack>; })}
             </Box>; })()}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
