@@ -14,10 +14,11 @@ export const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number |
   ['Memòria màxima (MLX)', (engine) => engine.peakMemoryGb, 'GB', 'menys és millor'],
 ];
 
-/** Differences under this share of the other value are a tie. */
+/** Differences under this share of the other value are a tie; for times, also those under TIE_SECONDS. */
 export const TIE_SHARE = 0.02;
+export const TIE_SECONDS = 0.1;
 
-/** Who wins each figure (a tie under 2%), how many each engine wins, the ties, and the overall winner (null on a tie). */
+/** Who wins each figure (a tie under 2%, or under 0,1 s for a time), how many each engine wins, the ties, and the overall winner (null on a tie). */
 export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
   const figures = ENGINE_CHARTS.map(([label, value, unit, better]) => {
     const values = report.engines.map((engine) => ({ engine, value: value(engine) })).filter((item): item is { engine: EngineBenchmarkEngine; value: number } => typeof item.value === 'number');
@@ -25,7 +26,7 @@ export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
     const lower = better === 'menys és millor';
     const [best, next] = [...values].sort((a, b) => (lower ? a.value - b.value : b.value - a.value));
     const gap = Math.abs(best.value - next.value) / Math.max(Math.abs(next.value), 1e-9);
-    if (gap < TIE_SHARE) return { label, winner: null, detail: `empat (${engineNumber(best.value, unit)})` };
+    if (gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS)) return { label, winner: null, detail: `empat (${engineNumber(best.value, unit)})` };
     return { label, winner: best.engine.name, detail: `${best.engine.name} ${engineNumber(best.value, unit)} · ${next.engine.name} ${engineNumber(next.value, unit)} (${Math.round(gap * 100)}% ${lower ? 'menys' : 'més'})` };
   });
   const wins = report.engines.map((engine) => ({ name: engine.name, wins: figures.filter((figure) => figure.winner === engine.name).length })).sort((a, b) => b.wins - a.wins);

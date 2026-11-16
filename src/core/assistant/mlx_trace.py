@@ -102,7 +102,8 @@ def metrics(result, started):
         "promptTps": value("prompt_tps"),
         "generationTokens": value("generation_tokens"),
         "generationTps": value("generation_tps"),
-        "peakMemoryGb": value("peak_memory"),
+        # 3 decimals, as the native worker reports it, so the engine benchmark compares them (9,889 vs 9,890 GB).
+        "peakMemoryGb": round(result.peak_memory, 3) if isinstance(getattr(result, "peak_memory", None), float) else value("peak_memory"),
         # "length": the token limit; "stop": the model's end; None: stopped before.
         "finishReason": getattr(result, "finish_reason", None),
         "seconds": round(time.perf_counter() - started, 3),

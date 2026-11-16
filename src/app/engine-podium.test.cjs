@@ -13,16 +13,17 @@ const { engineWinners } = require(out);
 
 const engine = (name, values) => ({ runtime: name, name, loadSeconds: values.load, short: { firstTokenSeconds: values.short }, long: { promptTps: values.read }, second: { firstTokenSeconds: values.second }, generationTps: values.gen, peakMemoryGb: values.memory });
 
-test('less is better for times and memory, more for speeds; under 2% is a tie', () => {
+test('less is better for times and memory, more for speeds; under 2% or under 0,1 s is a tie', () => {
   // cel's run of 16-11-2026, 11:23.
   const podium = engineWinners({ engines: [
     engine('natiu', { load: 2.6, read: 203.34, gen: 26.14, short: 0.25, second: 0.25, memory: 9.89 }),
     engine('Python', { load: 6.5, read: 163.91, gen: 25.68, short: 0.26, second: 0.28, memory: 9.89 }),
   ] });
-  assert.deepEqual(podium.figures.map((figure) => figure.winner), ['natiu', 'natiu', null, 'natiu', 'natiu', null]);
+  // Load 2,6 vs 6,5 s and reading 203 vs 164 tok/s are wins; 0,25 vs 0,26 and 0,25 vs 0,28 s are ties (under 0,1 s).
+  assert.deepEqual(podium.figures.map((figure) => figure.winner), ['natiu', 'natiu', null, null, null, null]);
   assert.match(podium.figures[1].detail, /24% més/);
-  assert.deepEqual(podium.wins, [{ name: 'natiu', wins: 4 }, { name: 'Python', wins: 0 }]);
-  assert.equal(podium.ties, 2);
+  assert.deepEqual(podium.wins, [{ name: 'natiu', wins: 2 }, { name: 'Python', wins: 0 }]);
+  assert.equal(podium.ties, 4);
   assert.equal(podium.overall, 'natiu');
 });
 
