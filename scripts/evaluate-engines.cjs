@@ -15,7 +15,7 @@ const path = require('node:path');
 const repoRoot = path.join(__dirname, '..');
 const ROUNDS = 3;
 const MAX_TOKENS = 128;
-const ENGINE_NAMES = { native: 'natiu', mlx: 'Python', cuda: 'CUDA' };
+const ENGINE_NAMES = { native: 'Node', mlx: 'Python', cuda: 'CUDA' };
 
 const median = (values) => {
   const list = values.filter((value) => typeof value === 'number' && Number.isFinite(value)).sort((a, b) => a - b);

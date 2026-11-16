@@ -2,6 +2,9 @@
 // podium under the charts). Without any UI, so it can be tested.
 import type { EngineBenchmark, EngineBenchmarkEngine } from '../types';
 
+/** An engine's name as shown: Node for the native one (runs saved earlier say «natiu»). */
+export const engineName = (runtime: string) => (runtime === 'native' ? 'Node' : runtime === 'cuda' ? 'CUDA' : 'Python');
+
 export const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 1000) / 1000).toLocaleString('ca', { maximumFractionDigits: 3 })} ${unit}` : '–');
 
 /** The figures of a run: label, value, unit, and whether less or more is better. */
@@ -28,7 +31,9 @@ export function engineWinners(report: Pick<EngineBenchmark, 'engines'>) {
     const [best, next] = sorted;
     const gap = Math.abs(best.value - next.value) / Math.max(Math.abs(next.value), 1e-9);
     const entries = sorted.map((item) => ({ name: item.engine.name, runtime: item.engine.runtime, text: engineNumber(item.value, unit) }));
-    if (gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS)) {
+    // Memory: only the same value (to the 3 decimals shown) is a tie; times and speeds: under 2%, and times under 0,1 s.
+    const tie = unit === 'GB' ? Math.round(best.value * 1000) === Math.round(next.value * 1000) : gap < TIE_SHARE || (unit === 's' && Math.abs(best.value - next.value) < TIE_SECONDS);
+    if (tie) {
       return { label, winner: null, tie: true, entries, note: `empat (${engineNumber(best.value, unit)})`, detail: `empat (${engineNumber(best.value, unit)})` };
     }
     const note = `(${Math.round(gap * 100)}% ${lower ? 'menys' : 'més'})`;

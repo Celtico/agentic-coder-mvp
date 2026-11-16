@@ -23,7 +23,7 @@ import { ipcErrorText, missingInMain, RESTART_NOTICE } from './ipc-errors';
 import { splitToolCallMarkup } from './tool-call-markup';
 import { progressFromStatus, turnProgressText } from './turn-progress';
 import { Mark } from './mark';
-import { ENGINE_CHARTS, engineNumber, engineWinners } from './engine-podium';
+import { ENGINE_CHARTS, engineName, engineNumber, engineWinners } from './engine-podium';
 import { withPaneWidths } from './row-sizes';
 import { scrollArea } from '../theme/scroll-area';
 import { PaneRow } from './pane-row';
@@ -1206,7 +1206,7 @@ export function App(): React.JSX.Element {
   }
 
   async function refreshEvaluations() {
-    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationProjects(await window.agentic.listBenchmarkProjects()); setEngineReports(await window.agentic.listEngineBenchmarks().catch(() => [])); setEvaluationError(''); }
+    try { setEvaluationList(await window.agentic.listBenchmarks()); setEvaluationProjects(await window.agentic.listBenchmarkProjects()); setEngineReports((await window.agentic.listEngineBenchmarks().catch(() => [])).map((report) => ({ ...report, engines: report.engines.map((engine) => ({ ...engine, name: engineName(engine.runtime) })) }))); setEvaluationError(''); }
     catch (error) { setEvaluationError(errorText(error)); }
   }
   async function openEvaluationPanel() {
@@ -2304,31 +2304,24 @@ export function App(): React.JSX.Element {
           {/* One item per run, the newest open: its charts inside; the delete button beside its header. */}
           {engineReports.length > 0 && <Accordion.Root multiple collapsible defaultValue={[engineReports[0].id]} size="sm" variant="outline">{engineReports.map((report) => <Accordion.Item key={report.id} value={report.id}>
             <HStack gap="1">
-              <Accordion.ItemTrigger flex="1"><Text flex="1" fontSize="xs" fontWeight="medium" textAlign="left">{report.label} · {new Date(report.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}</Text><Text fontSize="2xs" color="fg.muted">{report.engines.map((engine) => `${engine.name} ${engineNumber(engine.generationTps, 'tok/s')}`).join(' · ')}</Text><Accordion.ItemIndicator/></Accordion.ItemTrigger>
+              <Accordion.ItemTrigger flex="1"><Text flex="1" fontSize="xs" fontWeight="medium" textAlign="left">{report.label} · {new Date(report.at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}</Text>{(() => { const winner = report.engines.length > 1 ? engineWinners(report).overall : null; return <HStack gap="1" fontSize="2xs" color={winner ? 'agentic.fg' : 'fg.muted'}>{winner && <Trophy size={11}/>}<Text>{winner ? `Guanya ${winner}` : report.engines.length > 1 ? 'Empat' : ''}</Text></HStack>; })()}<Accordion.ItemIndicator/></Accordion.ItemTrigger>
               <IconButton icon={Trash} label="Esborra aquesta passada" onClick={() => void window.agentic.deleteEngineBenchmark(report.id).then(() => setEngineReports((current) => current.filter((item) => item.id !== report.id))).catch((error) => setEvaluationError(errorText(error)))}/>
             </HStack>
             <Accordion.ItemContent><Accordion.ItemBody pt="0">
             {report.sameAnswer !== null && <Text fontSize="xs" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓ Els dos motors donen la mateixa resposta (prompt curt, greedy)' : '✗ Els motors no donen la mateixa resposta (prompt curt, greedy)'}</Text>}
             <HStack gap="3" mt="2">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">Motor {engine.name}</Text></HStack>)}</HStack>
-            <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better]) => {
+            <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better], figureIndex) => {
               const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
+              const winner = report.engines.length > 1 ? engineWinners(report).figures[figureIndex]?.winner : null;
               return <Box key={label}>
-                <Text fontSize="2xs" color="fg.muted" mb="0.5">{label} ({unit}) · {better}</Text>
+                {(() => { const FigureIcon = FIGURE_ICONS[label] || ChartBar; return <HStack gap="1" mb="0.5" fontSize="2xs" color="fg.muted"><FigureIcon size={11}/><Text>{label} ({unit}) · {better}</Text></HStack>; })()}
                 {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
-                  <Text fontSize="2xs" width="12" flex="none">{engine.name}</Text>
+                  {(() => { const Icon = engineIcon(engine.runtime); return <HStack width="16" flex="none" gap="1" fontSize="2xs"><Box color={engineColor(engine.runtime)}><Icon size={11}/></Box><Text>{engine.name}</Text></HStack>; })()}
                   <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
-                  <Text fontSize="2xs" width="20" flex="none" textAlign="end">{engineNumber(value(engine), unit)}</Text>
+                  <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs">{winner === engine.name && <Box color="agentic.fg" title={`Guanya ${engine.name}`}><Trophy size={11}/></Box>}<Text>{engineNumber(value(engine), unit)}</Text></HStack>
                 </HStack>)}
               </Box>;
             })}</Stack>
-            {report.engines.length > 1 && (() => { const podium = engineWinners(report); return <Box mt="3" pt="2" borderTopWidth="1px" borderColor="border">
-              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall && <Trophy size={12}/>}{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><HStack gap="2" fontSize="2xs" color="fg.muted">{podium.wins.map((item) => { const Icon = engineIcon(item.runtime); return <HStack key={item.name} gap="0.5"><Box color={engineColor(item.runtime)}><Icon size={11}/></Box><Text>{item.name} {item.wins}</Text></HStack>; })}<HStack gap="0.5"><Handshake size={11}/><Text>Empat {podium.ties}</Text></HStack></HStack></HStack>
-              {podium.figures.map((figure) => { const FigureIcon = FIGURE_ICONS[figure.label] || Trophy; return <HStack key={figure.label} gap="1" fontSize="2xs" color="fg.muted" flexWrap="wrap">
-                <Box flex="none" color={figure.winner ? 'agentic.fg' : 'fg.muted'} title={figure.winner ? `Guanya el motor ${figure.winner}` : 'Empat'}><FigureIcon size={11}/></Box>
-                <Text>{figure.label}:</Text>
-                {figure.tie ? <Text>{figure.note}</Text> : <>{figure.entries.map((entry, index) => { const Icon = engineIcon(entry.runtime); return <HStack key={entry.name} gap="0.5">{index > 0 && <Text>·</Text>}<Box color={engineColor(entry.runtime)}><Icon size={11}/></Box><Text>{entry.name} {entry.text}</Text></HStack>; })}<Text>{figure.note}</Text></>}
-              </HStack>; })}
-            </Box>; })()}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
         </Accordion.ItemBody></Accordion.ItemContent>

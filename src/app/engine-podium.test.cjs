@@ -21,6 +21,9 @@ test('less is better for times and memory, more for speeds; under 2% or under 0,
   ] });
   // Load 2,6 vs 6,5 s and reading 203 vs 164 tok/s are wins; 0,25 vs 0,26 and 0,25 vs 0,28 s are ties (under 0,1 s).
   assert.deepEqual(podium.figures.map((figure) => figure.winner), ['natiu', 'natiu', null, null, null, null]);
+  // Memory is a tie only with the same value to 3 decimals: 9,889 against 9,89 is a win.
+  const memory = engineWinners({ engines: [engine('Node', { load: 1, read: 1, gen: 1, short: 1, second: 1, memory: 9.889 }), engine('Python', { load: 1, read: 1, gen: 1, short: 1, second: 1, memory: 9.89 })] });
+  assert.equal(memory.figures[5].winner, 'Node');
   assert.match(podium.figures[1].detail, /24% més/);
   assert.deepEqual(podium.figures[1].entries.map((entry) => entry.runtime), ['natiu', 'Python']);
   assert.equal(podium.figures[2].tie, true);

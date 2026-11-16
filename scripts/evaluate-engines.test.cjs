@@ -19,7 +19,7 @@ test('one engine: the medians of each kind of request, its peak memory and its s
     call('long', 1, { firstTokenSeconds: 20, promptTps: 200, generationTps: 23, promptTokens: 4000, peakMemoryGb: 7.9 }),
     call('second', 1, { firstTokenSeconds: 0.6, cachedTokens: 4100, promptTokens: 4150 }),
   ]);
-  assert.equal(summary.name, 'natiu');
+  assert.equal(summary.name, 'Node');
   assert.equal(summary.short.firstTokenSeconds, 0.6);
   assert.equal(summary.long.promptTps, 200);
   assert.equal(summary.second.cachedTokens, 4100);
@@ -40,10 +40,12 @@ test('the long prompt is fixed text from this repository (about 4.000 tokens)', 
   assert.equal(text, longText());
 });
 
-test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button, charts and podium', () => {
+test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button and charts, a trophy beside each winner', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?defaultValue=\{initialView\.evaluationSections\}/);
   assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?startEngineBenchmark\(\)[\s\S]*?Passa el benchmark de motors[\s\S]*?ENGINE_CHARTS\.map/);
-  assert.match(app, /const podium = engineWinners\(report\)[\s\S]*?Guanya el motor/);
+  // The trophy goes next to the winner of each chart and of the run (no separate podium).
+  assert.match(app, /const winner = report\.engines\.length > 1 \? engineWinners\(report\)\.figures\[figureIndex\]\?\.winner : null;[\s\S]*?winner === engine\.name && <Box color="agentic\.fg"/);
+  assert.doesNotMatch(app, />Podi</);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });
