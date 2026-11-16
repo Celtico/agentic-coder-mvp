@@ -45,7 +45,7 @@ test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors�
   assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?defaultValue=\{initialView\.evaluationSections\}/);
   assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?startEngineBenchmark\(\)[\s\S]*?Passa el benchmark de motors[\s\S]*?ENGINE_CHARTS\.map/);
   // The trophy goes next to the winner of each chart and of the run (no separate podium).
-  assert.match(app, /const winner = report\.engines\.length > 1 \? engineWinners\(report\)\.figures\[figureIndex\]\?\.winner : null;[\s\S]*?winner === engine\.name && <Box color="agentic\.fg"/);
+  assert.match(app, /const result = report\.engines\.length > 1 \? engineWinners\(report\)\.figures\[figureIndex\] : null;[\s\S]*?winner === engine\.name && <Box color="agentic\.fg"/);
   assert.doesNotMatch(app, />Podi</);
   assert.match(app, /figure\.winner === entry\.name && <Box color="agentic\.fg"/);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);

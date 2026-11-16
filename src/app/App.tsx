@@ -2313,9 +2313,10 @@ export function App(): React.JSX.Element {
             <HStack gap="3" mt="2">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">{engine.name}</Text></HStack>)}</HStack>
             <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better], figureIndex) => {
               const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
-              const winner = report.engines.length > 1 ? engineWinners(report).figures[figureIndex]?.winner : null;
+              const result = report.engines.length > 1 ? engineWinners(report).figures[figureIndex] : null;
+              const winner = result?.winner ?? null;
               return <Box key={label}>
-                {(() => { const FigureIcon = FIGURE_ICONS[label] || ChartBar; return <HStack gap="1" mb="0.5" fontSize="2xs" color="fg.muted"><FigureIcon size={11}/><Text>{label} ({unit}) · {better}</Text></HStack>; })()}
+                {(() => { const FigureIcon = FIGURE_ICONS[label] || ChartBar; return <HStack gap="1" mb="0.5" fontSize="2xs" color="fg.muted"><FigureIcon size={11}/><Text>{label} ({unit}) · {better}</Text>{result?.tie && <HStack gap="1" ml="1" title="Empat: la diferència és massa petita per comptar"><Handshake size={11}/><Text>empat</Text></HStack>}</HStack>; })()}
                 {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
                   {(() => { const Icon = engineIcon(engine.runtime); return <HStack width="16" flex="none" gap="1" fontSize="2xs"><Box color={engineColor(engine.runtime)}><Icon size={11}/></Box><Text>{engine.name}</Text></HStack>; })()}
                   <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
