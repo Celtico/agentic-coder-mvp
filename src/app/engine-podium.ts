@@ -5,7 +5,8 @@ import type { EngineBenchmark, EngineBenchmarkEngine } from '../types';
 /** An engine's name as shown: Node for the native one (runs saved earlier say «natiu»). */
 export const engineName = (runtime: string) => (runtime === 'native' ? 'Node' : runtime === 'cuda' ? 'CUDA' : 'Python');
 
-export const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 1000) / 1000).toLocaleString('ca', { maximumFractionDigits: 3 })} ${unit}` : '–');
+// Memory always with 3 decimals (9,890, not 9,89, beside 9,889); the rest with up to 3.
+export const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 1000) / 1000).toLocaleString('ca', { maximumFractionDigits: 3, ...(unit === 'GB' ? { minimumFractionDigits: 3 } : {}) })} ${unit}` : '–');
 
 /** The figures of a run: label, value, unit, and whether less or more is better. */
 export const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null | undefined, string, string][] = [

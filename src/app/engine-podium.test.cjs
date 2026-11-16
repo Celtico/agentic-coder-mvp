@@ -25,6 +25,7 @@ test('less is better for times and memory, more for speeds; under 2% or under 0,
   const memory = engineWinners({ engines: [engine('Node', { load: 1, read: 1, gen: 1, short: 1, second: 1, memory: 9.889 }), engine('Python', { load: 1, read: 1, gen: 1, short: 1, second: 1, memory: 9.89 })] });
   assert.equal(memory.figures[5].winner, 'Node');
   assert.match(memory.figures[5].note, /\(1 MB menys\)/);
+  assert.deepEqual(memory.figures[5].entries.map((entry) => entry.text), ['9,889 GB', '9,890 GB']);
   assert.match(podium.figures[1].detail, /24% més/);
   assert.deepEqual(podium.figures[1].entries.map((entry) => entry.runtime), ['natiu', 'Python']);
   assert.equal(podium.figures[2].tie, true);
