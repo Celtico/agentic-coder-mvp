@@ -1,7 +1,7 @@
 // N-API binding: exposes the native MLX engine to Node.
 //
 //   const engine = new Engine(modelDir, config)   // config from index.js
-//   engine.start(Int32Array prompt, { temperature, topP, topK, seed, prefillStep,
+//   engine.start(Int32Array prompt, { temperature, topP, topK, seed, prefillStep, ban,
 //                cache, checkpoints, checkpointMin, cacheEntries, cacheBytes })
 //                            -> { reused, total } prompt tokens
 //   engine.next()            -> next token id (number)
@@ -24,9 +24,15 @@
 // like the Python worker, so the app UI never waits on the GPU.
 #include <napi.h>
 
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #include "lora.h"
 #include "prompt_cache.h"
@@ -94,12 +100,14 @@ struct Sampling {
   float temperature = 0.0f;
   float top_p = 1.0f;
   int top_k = 0;
+  std::optional<array> bias;  // -inf on banned tokens (like a logits processor in mlx_lm)
 };
 
 // Same order as mlx_lm make_sampler: top-p, top-k, then temperature.
 // Works on log-probabilities in the model dtype, exactly like mlx_lm, so the
 // same prompt gives the same tokens as the Python engine.
 array sample(array logits, const Sampling& s) {
+  if (s.bias) logits = mx::add(logits, mx::astype(*s.bias, logits.dtype()));
   logits = mx::subtract(logits, mx::logsumexp(logits, -1, true));
   if (s.temperature <= 0.0f) return mx::argmax(logits, -1);
   auto neg_inf = array(-std::numeric_limits<float>::infinity(), logits.dtype());
@@ -192,6 +200,16 @@ class Engine : public Napi::ObjectWrap<Engine> {
         checkpoint_min = get_int(o, "checkpointMin", checkpoint_min);
         prompts_.max_entries = get_int(o, "cacheEntries", static_cast<int>(prompts_.max_entries));
         if (o.Get("cacheBytes").IsNumber()) prompts_.max_bytes = static_cast<size_t>(o.Get("cacheBytes").As<Napi::Number>().DoubleValue());
+        auto ban = o.Get("ban");
+        if (ban.IsArray() && ban.As<Napi::Array>().Length() > 0) {
+          std::vector<float> bias(model().config().vocab_size, 0.0f);
+          auto arr = ban.As<Napi::Array>();
+          for (uint32_t i = 0; i < arr.Length(); ++i) {
+            int id = arr.Get(i).As<Napi::Number>().Int32Value();
+            if (id >= 0 && id < static_cast<int>(bias.size())) bias[id] = -std::numeric_limits<float>::infinity();
+          }
+          sampling_.bias = array(bias.begin(), {static_cast<int>(bias.size())}, mx::float32);
+        }
         auto c = o.Get("checkpoints");
         if (c.IsArray()) {
           auto arr = c.As<Napi::Array>();
@@ -464,7 +482,40 @@ class Engine : public Napi::ObjectWrap<Engine> {
   int steps_ = 0;
 };
 
+// One model on the GPU at a time on the whole machine, the same lock file and
+// flock as the Python workers (src/core/assistant/mlx_lock.py): held until the
+// process ends. lock(path, label, timeoutSeconds) throws, naming the holder.
+Napi::Value Lock(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  auto file = info[0].As<Napi::String>().Utf8Value();
+  auto label = info[1].As<Napi::String>().Utf8Value();
+  double timeout = info[2].As<Napi::Number>().DoubleValue();
+  int fd = open(file.c_str(), O_RDWR | O_CREAT, 0644);
+  if (fd < 0) {
+    Napi::Error::New(env, "No s’ha pogut obrir el fitxer de bloqueig " + file).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
+  while (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    if (std::chrono::steady_clock::now() >= deadline) {
+      char buf[256] = {0};
+      ssize_t n = pread(fd, buf, sizeof(buf) - 1, 0);
+      std::string holder = n > 0 ? std::string(buf, n) : "un altre procés";
+      close(fd);
+      Napi::Error::New(env, "Ja hi ha un altre model carregat en aquest Mac (" + holder +
+                                "). Tanca’l o espera que acabi: dos models alhora no hi caben a la memòria de la GPU.")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+  auto text = "pid " + std::to_string(getpid()) + ": " + label;
+  if (ftruncate(fd, 0) != 0 || pwrite(fd, text.data(), text.size(), 0) < 0) {}
+  return env.Undefined();  // fd stays open: the lock lasts as long as the process
+}
+
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
+  exports.Set("lock", Napi::Function::New(env, Lock));
   return Engine::Init(env, exports);
 }
 

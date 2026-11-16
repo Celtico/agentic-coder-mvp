@@ -47,9 +47,11 @@ class NativeModel {
     const ids = Array.from(promptIds);
     const checkpoints = options.cache === false ? [] : this.checkpoints(ids);
     this.lastPrompt = this.engine.start(Int32Array.from(ids), { checkpoints, ...options });
+    this.lastGenerated = 0;
     for (let i = 0; i < maxTokens; i++) {
       const id = this.engine.next();
       if (this.eos.has(id)) return;
+      this.lastGenerated += 1;
       yield id;
     }
   }

@@ -37,7 +37,11 @@ class ChatModel {
   // (maxTokens, temperature, topP, topK, seed).
   *stream(messages, options = {}) {
     const { tools, templateVars, ...sampling } = options;
-    const ids = this.encode(this.prompt(messages, { tools, ...templateVars }));
+    yield* this.streamIds(this.encode(this.prompt(messages, { tools, ...templateVars })), sampling);
+  }
+
+  // The same from prompt token ids.
+  *streamIds(ids, sampling = {}) {
     let pending = [];
     let shown = '';
     for (const id of this.model.generate(ids, sampling)) {
