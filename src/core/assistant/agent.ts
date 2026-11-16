@@ -908,6 +908,8 @@ export class LocalCodingAgent {
     let completionNudges = 0;
     const maxCompletionNudges = 4;
     const completedToolCalls = new Map<string, string>();
+    // The failed check the agent has just told the model not to repeat; asking for it again right away means it is stuck.
+    let nudgedCheck: string | null = null;
     const incompleteAnswer = () => {
       if (requestedCodeChange && !changeApplied) {
         if (writeFileAttempted && writeFileError) return `No he pogut completar la tasca: l’eina d’escriptura ha retornat aquest error real: ${writeFileError}`;
@@ -1135,10 +1137,18 @@ export class LocalCodingAgent {
         continue;
       }
       const toolKey = JSON.stringify(tool);
+      const repeatsNudgedCheck = nudgedCheck === toolKey;
+      nudgedCheck = null;
       const previousResult = completedToolCalls.get(toolKey);
       const isCheck = tool.name === 'run_tests' || tool.name === 'run_project_script';
       if (previousResult !== undefined && !(isCheck && projectChangedSinceCheck)) {
         if (isCheck && !checkPassed && !projectChangedSinceCheck) {
+          // Told once already and asked again: nudging again only makes a loop, so the turn ends here.
+          if (repeatsNudgedCheck) {
+            answer = `M’he aturat: el model ha tornat a demanar ${tool.name} sense canviar res, després d’haver-li dit que ja havia fallat, i entrava en bucle. Resultat de l’última comprovació: ${previousResult.slice(0, 800)}`;
+            break;
+          }
+          nudgedCheck = toolKey;
           messages.push({ role: 'user', content: promptText('nudge-check-failed-repeat') });
           continue;
         }

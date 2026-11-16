@@ -1699,3 +1699,35 @@ test('a JSON action closed with the tags of the Qwen 3.5 XML format is still car
   ]);
   assert.deepEqual(calls, [{ name: 'read_file', arguments: { path: 'src/App.vue' } }]);
 });
+
+test('ends the turn when the model asks again for a failed check right after being told not to', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-stuck-check-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  // The model keeps asking for the same failing check without changing anything (10:36, 16-11-2026).
+  const responses = [
+    '{"type":"plan","content":"Executar les proves i corregir el que falli."}',
+    ...Array.from({ length: 30 }, () => 'Ara executo la comprovació.\n\n{"type":"tool_call","name":"run_tests","arguments":{}}'),
+  ];
+  let generations = 0;
+  const engine = {
+    loadModel: async () => {},
+    generateResponse: async () => { generations += 1; return responses.shift() ?? '{"type":"final","content":"fet"}'; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  const answer = await agent.ask('Executa les proves.', projectRoot, async (tool) => {
+    calls.push(tool.name);
+    return tool.name === 'run_tests' ? { code: 1, output: 'npm error Missing script: "test"' } : {};
+  });
+
+  assert.deepEqual(calls, ['run_tests']);
+  assert.ok(generations <= 5, `${generations} generations`);
+  assert.match(answer, /entrava en bucle/);
+  assert.match(answer, /Missing script/);
+});
