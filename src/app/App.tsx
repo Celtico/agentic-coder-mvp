@@ -2510,13 +2510,13 @@ export function App(): React.JSX.Element {
   );
   // The top row: Converses | Fitxers (while their icons are on top) | the panes of the top group, the chat
   // among them (last by default). Each pane has its own width and the divider on its right changes only
-  // that one; the chat takes what is left, or the last pane when the chat is not in this row
+  // that one; the last pane takes what is left, whichever it is (the chat, by default), as in the bottom row
   // (src/app/pane-row.tsx). With every pane hidden, a short note says how to open one.
   const topItems = [
     ...sideColumns.map((column) => ({ id: `nav-${column}`, node: column === 'conversations' ? conversationsColumn : filesColumn })),
     ...sideItems,
   ];
-  const topFlex = topItems.some((item) => item.id === 'side-chat') ? 'side-chat' : topItems[topItems.length - 1]?.id;
+  const topFlex = topItems[topItems.length - 1]?.id;
   const topRow = topItems.length === 0
     ? <Center h="full" px="6" data-no-panes><Stack gap="1" align="center" textAlign="center"><Text fontSize="sm" fontWeight="medium">No hi ha cap finestra oberta</Text><Text fontSize="xs" color="fg.muted">Obre’n una des de la barra de l’esquerra, com el xat.</Text></Stack></Center>
     : topItems.length === 1 ? topItems[0].node : <PaneRow items={topItems} flexId={topFlex} widths={paneWidths} onWidth={dragPaneWidth} onCommit={keepPaneWidth} label="Fila superior de panells"/>;

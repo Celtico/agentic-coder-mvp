@@ -72,9 +72,9 @@ test('the row: each pane but the flexible one has its width and a separator on i
 
 test('the window: both rows are PaneRows (no proportional splitter); the chat is flexible on top, the last pane below', () => {
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  // The chat is a pane of the rail (side-chat when on top); it takes what is left, or the last pane does.
+  // The chat is a pane of the rail like the others: the last pane of the row takes what is left.
   assert.match(app, /<PaneRow items=\{topItems\} flexId=\{topFlex\} widths=\{paneWidths\} onWidth=\{dragPaneWidth\} onCommit=\{keepPaneWidth\}/);
-  assert.match(app, /const topFlex = topItems\.some\(\(item\) => item\.id === 'side-chat'\) \? 'side-chat' : topItems\[topItems\.length - 1\]\?\.id;/);
+  assert.match(app, /const topFlex = topItems\[topItems\.length - 1\]\?\.id;/);
   assert.match(app, /<PaneRow items=\{dockItems\} flexId=\{dockItems\[dockItems\.length - 1\]\.id\} widths=\{paneWidths\}/);
   assert.doesNotMatch(app, /<Splitter\./);
   // The divider between the rows changes only the dock's height.
