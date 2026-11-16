@@ -179,8 +179,7 @@ const STOP_CONFIRM_MS = 3000;
 const engineIcon = (runtime: string): IconType => (runtime === 'native' ? SiNodedotjs : SiPython);
 const FIGURE_ICONS: Record<string, IconType> = { 'Càrrega del model': HardDriveDownload, 'Lectura, prompt llarg': Eye2, 'Generació': PencilLine, 'Primer token, prompt curt': Timer, '2n missatge amb memòria cau: primer token': Timer, 'Memòria màxima (MLX)': MemoryStick };
 // One fixed colour per engine, the same in every chart and in the legend.
-// The engines' logos in the text colour: green means «wins» (the winning bar and value), whichever engine it is.
-const engineColor = (_runtime: string) => 'fg';
+const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
 /** Dades preparades › Mostra: the splits and why a case was left out. */
 const DATASET_SPLITS = [['train', 'Entrenament'], ['validation', 'Validació'], ['test', 'Prova']] as const;
@@ -2319,7 +2318,7 @@ export function App(): React.JSX.Element {
                 {(() => { const FigureIcon = FIGURE_ICONS[label] || ChartBar; return <HStack gap="1" mb="0.5" fontSize="2xs" color="fg.muted"><FigureIcon size={11}/><Text>{label} ({unit}) · {better}</Text>{result?.tie && <HStack gap="1" ml="1" title="Empat: el mateix valor"><Handshake size={11}/><Text>empat</Text></HStack>}</HStack>; })()}
                 {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
                   {(() => { const Icon = engineIcon(engine.runtime); return <HStack width="16" flex="none" gap="1" fontSize="2xs"><Box color={engineColor(engine.runtime)}><Icon size={11}/></Box><Text>{engine.name}</Text></HStack>; })()}
-                  <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={result?.winner === engine.name ? 'agentic.solid' : 'fg.muted'} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
+                  <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
                   <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs"><Text color={result?.winner === engine.name ? 'agentic.fg' : undefined} fontWeight={result?.winner === engine.name ? 'semibold' : undefined}>{engineNumber(value(engine), unit)}</Text></HStack>
                 </HStack>)}
               </Box>;
