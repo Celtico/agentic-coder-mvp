@@ -10,7 +10,7 @@ import {
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuMessageSquare as ChatIcon, LuTrophy as Trophy, LuHandshake as Handshake, LuEye as Eye2, LuPencilLine as PencilLine, LuType as TypeIcon, LuMemoryStick as MemoryStick, LuHardDriveDownload as HardDriveDownload, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuMessageSquare as ChatIcon, LuTrophy as Trophy, LuHandshake as Handshake, LuEye as Eye2, LuPencilLine as PencilLine, LuTimer as Timer, LuMemoryStick as MemoryStick, LuHardDriveDownload as HardDriveDownload, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -177,7 +177,7 @@ const STOP_CONFIRM_MS = 3000;
 // Benchmark de motors: its charts, one bar per engine for each figure (the longest bar is the largest value).
 // The podium's icons: each engine's (Node for the native one, Python's) and each figure's.
 const engineIcon = (runtime: string): IconType => (runtime === 'native' ? SiNodedotjs : SiPython);
-const FIGURE_ICONS: Record<string, IconType> = { 'Càrrega del model': HardDriveDownload, 'Lectura, prompt llarg': Eye2, 'Generació': PencilLine, 'Primer token, prompt curt': TypeIcon, '2n missatge amb memòria cau: primer token': TypeIcon, 'Memòria màxima (MLX)': MemoryStick };
+const FIGURE_ICONS: Record<string, IconType> = { 'Càrrega del model': HardDriveDownload, 'Lectura, prompt llarg': Eye2, 'Generació': PencilLine, 'Primer token, prompt curt': Timer, '2n missatge amb memòria cau: primer token': Timer, 'Memòria màxima (MLX)': MemoryStick };
 // One fixed colour per engine, the same in every chart and in the legend.
 const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
 const PANE_ACCORDION = 'pane' as unknown as 'plain';
