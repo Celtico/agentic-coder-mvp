@@ -6,6 +6,7 @@
 //   engine.logits(Int32Array) -> Float32Array of the last position (tests)
 //   engine.reset()
 //   engine.memory()          -> { active, peak, cache } bytes
+//   engine.close()           // frees the model; the engine can't be used after
 //
 // LoRA (same files and maths as mlx_lm):
 //   engine.loraInit({ numLayers, rank, scale, keys, seed })
@@ -130,7 +131,8 @@ class Engine : public Napi::ObjectWrap<Engine> {
                             InstanceMethod("loraRemove", &Engine::LoraRemove),
                             InstanceMethod("trainStep", &Engine::TrainStep),
                             InstanceMethod("loraLoss", &Engine::LoraLoss),
-                            InstanceMethod("loraGradients", &Engine::LoraGradients)});
+                            InstanceMethod("loraGradients", &Engine::LoraGradients),
+                            InstanceMethod("close", &Engine::Close)});
     exports.Set("Engine", cls);
     exports.Set("metal", Napi::Boolean::New(env, mx::metal::is_available()));
     return exports;
@@ -173,17 +175,17 @@ class Engine : public Napi::ObjectWrap<Engine> {
         if (o.Get("seed").IsNumber()) mx::random::seed(get_int(o, "seed", 0));
         chunk = std::max(1, get_int(o, "prefillStep", chunk));
       }
-      model_->reset();
+      model().reset();
       int n = tokens.shape(1);
       int pos = 0;
       while (n - pos > 1) {
         int end = std::min(pos + chunk, n - 1);
-        model_->forward(mx::slice(tokens, {0, pos}, {1, end}));
-        mx::eval(model_->cache_arrays());
+        model().forward(mx::slice(tokens, {0, pos}, {1, end}));
+        mx::eval(model().cache_arrays());
         mx::clear_cache();
         pos = end;
       }
-      auto logits = model_->forward(mx::slice(tokens, {0, pos}, {1, n}));
+      auto logits = model().forward(mx::slice(tokens, {0, pos}, {1, n}));
       pending_ = sample(last(logits), sampling_);
       mx::async_eval({*pending_});
       return env.Undefined();
@@ -203,7 +205,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
     }
     try {
       array current = *pending_;
-      auto logits = model_->forward(mx::reshape(current, {1, 1}));
+      auto logits = model().forward(mx::reshape(current, {1, 1}));
       pending_ = sample(last(logits), sampling_);
       mx::async_eval({*pending_});
       mx::eval({current});
@@ -219,7 +221,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
   Napi::Value Logits(const Napi::CallbackInfo& info) {
     auto env = info.Env();
     try {
-      auto out = mx::astype(last(model_->forward(to_tokens(info[0]))), mx::float32);
+      auto out = mx::astype(last(model().forward(to_tokens(info[0]))), mx::float32);
       mx::eval({out});
       auto result = Napi::Float32Array::New(env, out.size());
       std::copy(out.data<float>(), out.data<float>() + out.size(), result.Data());
@@ -231,8 +233,20 @@ class Engine : public Napi::ObjectWrap<Engine> {
   }
 
   Napi::Value Reset(const Napi::CallbackInfo& info) {
-    model_->reset();
+    return guard(info, [&]() -> Napi::Value {
+      model().reset();
+      pending_.reset();
+      mx::clear_cache();
+      return info.Env().Undefined();
+    });
+  }
+
+  // Frees the weights, the cache and the adapters. The engine can't be used
+  // afterwards; another process can then load a model safely.
+  Napi::Value Close(const Napi::CallbackInfo& info) {
     pending_.reset();
+    lora_.reset();
+    model_.reset();
     mx::clear_cache();
     return info.Env().Undefined();
   }
@@ -273,16 +287,16 @@ class Engine : public Napi::ObjectWrap<Engine> {
             o.keys.push_back(arr.Get(i).As<Napi::String>().Utf8Value());
         }
       }
-      model_->reset();
-      lora_->init(o);
+      model().reset();
+      lora().init(o);
       return info.Env().Undefined();
     });
   }
 
   Napi::Value LoraLoad(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      model_->reset();
-      lora_->load(info[0].As<Napi::String>().Utf8Value(),
+      model().reset();
+      lora().load(info[0].As<Napi::String>().Utf8Value(),
                   info[1].As<Napi::Number>().FloatValue());
       return info.Env().Undefined();
     });
@@ -290,15 +304,15 @@ class Engine : public Napi::ObjectWrap<Engine> {
 
   Napi::Value LoraSave(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      lora_->save(info[0].As<Napi::String>().Utf8Value());
+      lora().save(info[0].As<Napi::String>().Utf8Value());
       return info.Env().Undefined();
     });
   }
 
   Napi::Value LoraRemove(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      model_->reset();
-      lora_->remove();
+      model().reset();
+      lora().remove();
       return info.Env().Undefined();
     });
   }
@@ -320,8 +334,8 @@ class Engine : public Napi::ObjectWrap<Engine> {
         ckpt = o.Get("gradCheckpoint").ToBoolean();
       }
       pending_.reset();
-      model_->reset();
-      auto r = lora_->step(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
+      model().reset();
+      auto r = lora().step(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
                            info[2].As<Napi::Number>().Int32Value(), lr, ckpt);
       mx::clear_cache();
       return loss_result(info.Env(), r);
@@ -330,7 +344,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
 
   Napi::Value LoraLoss(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      auto r = lora_->loss(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
+      auto r = lora().loss(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
                            info[2].As<Napi::Number>().Int32Value());
       return loss_result(info.Env(), r);
     });
@@ -339,8 +353,8 @@ class Engine : public Napi::ObjectWrap<Engine> {
   // Saves the gradients to a safetensors file (tests).
   Napi::Value LoraGradients(const Napi::CallbackInfo& info) {
     return guard(info, [&]() -> Napi::Value {
-      model_->reset();
-      auto g = lora_->gradients(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
+      model().reset();
+      auto g = lora().gradients(to_tokens(info[0]), info[1].As<Napi::Number>().Int32Value(),
                                 info[2].As<Napi::Number>().Int32Value(), info[4].ToBoolean());
       mx::save_safetensors(info[3].As<Napi::String>().Utf8Value(), g);
       return info.Env().Undefined();
@@ -350,6 +364,15 @@ class Engine : public Napi::ObjectWrap<Engine> {
   static array last(const array& logits) {
     int S = logits.shape(1), V = logits.shape(2);
     return mx::reshape(mx::slice(logits, {0, S - 1, 0}, {1, S, V}), {V});
+  }
+
+  Qwen35& model() {
+    if (!model_) throw std::runtime_error("engine closed");
+    return *model_;
+  }
+  Lora& lora() {
+    if (!lora_) throw std::runtime_error("engine closed");
+    return *lora_;
   }
 
   std::unique_ptr<Qwen35> model_;

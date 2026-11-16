@@ -65,6 +65,11 @@ class NativeModel {
   memory() {
     return this.engine.memory();
   }
+
+  // Frees the weights so another process (e.g. Python) can load a model.
+  close() {
+    this.engine.close();
+  }
 }
 
 module.exports = { NativeModel, readConfig, metal: addon.metal, addon };

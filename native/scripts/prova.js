@@ -55,6 +55,8 @@ console.log(`Prompt: ${ids.length} tokens en ${((first - t0) / 1000).toFixed(2)}
 console.log(`Generació: ${out.length} tokens, ${((out.length - 1) / ((end - first) / 1000)).toFixed(1)} tok/s`);
 console.log(`Memòria: activa ${(mem.active / 2 ** 30).toFixed(2)} GB, pic ${(mem.peak / 2 ** 30).toFixed(2)} GB`);
 
+// Free the model now (the process exiting would too) before mlx-lm loads its own.
+if (process.env.PROVA_DUMP) chat.model.close();
 if (process.env.PROVA_DUMP) fs.writeFileSync(process.env.PROVA_DUMP, JSON.stringify({ messages, ids, out }));
 
 function compare(messages, ids, out) {

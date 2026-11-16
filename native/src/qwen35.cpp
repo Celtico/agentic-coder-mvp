@@ -175,10 +175,30 @@ std::pair<array, array> gated_delta_kernel(const array& q, const array& k,
   return {out[0], out[1]};
 }
 
+// One recurrent step, compiled like mlx_lm's @mx.compile
+// _gated_delta_step_ops so the fused Metal kernels (and the results) are the
+// same. Inputs: q, k [B, H, Dk], v [B, H, Dv], g, beta [B, H],
+// state [B, H, Dv, Dk]. Outputs: y [B, H, Dv], new state.
+std::vector<array> gated_delta_step(const std::vector<array>& in) {
+  const auto& q = in[0];
+  const auto& k = in[1];
+  const auto& v = in[2];
+  const auto& g = in[3];
+  const auto& beta = in[4];
+  auto state = mx::multiply(in[5], mx::expand_dims(g, {-1, -2}));
+  auto k_row = mx::expand_dims(k, -2);  // [B, H, 1, Dk]
+  auto kv_mem = mx::sum(mx::multiply(state, k_row), -1);  // [B, H, Dv]
+  auto delta = mx::multiply(mx::subtract(v, kv_mem), mx::expand_dims(beta, -1));
+  state = mx::add(state, mx::multiply(k_row, mx::expand_dims(delta, -1)));
+  auto y = mx::sum(mx::multiply(state, mx::expand_dims(q, -2)), -1);
+  return {mx::astype(y, q.dtype()), state};
+}
+
 // Ops reference (mlx_lm gated_delta_ops): sequential loop over time.
 std::pair<array, array> gated_delta_ops(array q, array k, const array& v,
                                         const array& g, const array& beta,
                                         array state) {
+  static auto step = mx::compile(gated_delta_step);
   int T = q.shape(1), Hk = q.shape(2), Hv = v.shape(2);
   if (Hv / Hk > 1) {
     q = mx::repeat(q, Hv / Hk, -2);
@@ -191,13 +211,9 @@ std::pair<array, array> gated_delta_ops(array q, array k, const array& v,
     auto vt = mx::squeeze(mx::slice(v, {0, t, 0, 0}, {v.shape(0), t + 1, v.shape(2), v.shape(3)}), 1);
     auto gt = mx::squeeze(mx::slice(g, {0, t, 0}, {g.shape(0), t + 1, g.shape(2)}), 1);
     auto bt = mx::squeeze(mx::slice(beta, {0, t, 0}, {beta.shape(0), t + 1, beta.shape(2)}), 1);
-    state = mx::multiply(state, mx::expand_dims(gt, {-1, -2}));
-    auto k_row = mx::expand_dims(kt, -2);  // [B, H, 1, Dk]
-    auto kv_mem = mx::sum(mx::multiply(state, k_row), -1);  // [B, H, Dv]
-    auto delta = mx::multiply(mx::subtract(vt, kv_mem), mx::expand_dims(bt, -1));
-    state = mx::add(state, mx::multiply(k_row, mx::expand_dims(delta, -1)));
-    auto y = mx::sum(mx::multiply(state, mx::expand_dims(qt, -2)), -1);
-    ys.push_back(mx::astype(y, q.dtype()));
+    auto out = step({qt, kt, vt, gt, bt, state});
+    ys.push_back(out[0]);
+    state = out[1];
   }
   return {mx::stack(ys, 1), state};
 }
