@@ -219,7 +219,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
       // What the last generation left in the cache (its prompt and every token next() gave).
       if (live_ok_ && use_cache) {
         mx::eval(model().cache_arrays());
-        prompts_.insert(live_, model().save_cache());
+        prompts_.insert(live_, model().save_cache(), PromptCache::assistant);
       }
       live_ok_ = false;
       pending_.reset();
@@ -248,7 +248,7 @@ class Engine : public Napi::ObjectWrap<Engine> {
         for (int b : checkpoints) {
           if (b >= n || b - pos < checkpoint_min || prompts_.has(ids, b)) continue;
           read(b);
-          prompts_.insert(std::vector<int32_t>(ids.begin(), ids.begin() + b), model().save_cache());
+          prompts_.insert(std::vector<int32_t>(ids.begin(), ids.begin() + b), model().save_cache(), PromptCache::system);
         }
       }
       read(n - 1);

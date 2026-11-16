@@ -74,3 +74,28 @@ test('changing the adapters drops the saved states', { skip: (!dir || !fs.exists
   assert.strictEqual(model.memory().promptEntries, 1);  // only the checkpoint just made
   assert.deepStrictEqual(got, fresh(model, [...prompt, ...ids(10, 8)]));
 });
+
+test('the checkpoint of the shared start outlives the answers, as in mlx_lm', { skip }, () => {
+  const model = new NativeModel(dir);
+  model.eos = new Set();
+  const start = ids(300, 9);
+  run(model, [...start, ...ids(100, 10)], { maxTokens: 3 });
+  // A prompt that changes after the shared start keeps a checkpoint there («system»).
+  let prompt = [...start, ...ids(100, 11)];
+  let answer = run(model, prompt, { maxTokens: 3 });
+  // Many turns of a conversation: each leaves one more state after its answer («assistant»).
+  for (let turn = 0; turn < 10; turn++) {
+    prompt = [...prompt, ...answer, ...ids(20, 20 + turn)];
+    answer = run(model, prompt, { maxTokens: 3 });
+    assert.ok(model.lastPrompt.reused > 300);
+  }
+  assert.ok(model.memory().promptEntries <= 8);
+  // A new message whose instructions change after the shared start reuses that checkpoint.
+  const next = [...start, ...ids(100, 40)];
+  const got = run(model, next);
+  assert.strictEqual(model.lastPrompt.reused, 300);
+  // The same tokens as reading it without the cache in the same pieces (300, then the rest): the saved
+  // state is intact after all those turns. (Other pieces can round differently on this random model.)
+  model.clearCache();
+  assert.deepStrictEqual(got, run(model, next, { cache: false, prefillStep: 300 }));
+});
