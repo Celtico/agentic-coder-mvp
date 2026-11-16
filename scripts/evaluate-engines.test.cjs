@@ -40,13 +40,14 @@ test('the long prompt is fixed text from this repository (about 4.000 tokens)', 
   assert.equal(text, longText());
 });
 
-test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button and charts, a trophy beside each winner', () => {
+test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button and charts, the trophy in each run’s header', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?defaultValue=\{initialView\.evaluationSections\}/);
   assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?startEngineBenchmark\(\)[\s\S]*?Passa el benchmark de motors[\s\S]*?ENGINE_CHARTS\.map/);
-  // The trophy goes next to the winner of each chart and of the run (no separate podium).
-  assert.match(app, /const result = report\.engines\.length > 1 \? engineWinners\(report\)\.figures\[figureIndex\] : null;[\s\S]*?winner === engine\.name && <Box color="agentic\.fg"/);
+  // The trophy only in each run's header, before the winner; the charts mark ties.
+  assert.match(app, /podium\.overall === item\.name && <Box color="agentic\.fg"/);
+  assert.match(app, /result\?\.tie && <HStack/);
+  assert.equal((app.match(/<Trophy size=/g) || []).length, 1);
   assert.doesNotMatch(app, />Podi</);
-  assert.match(app, /figure\.winner === entry\.name && <Box color="agentic\.fg"/);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });

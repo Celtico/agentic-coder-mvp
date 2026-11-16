@@ -2314,21 +2314,20 @@ export function App(): React.JSX.Element {
             <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better], figureIndex) => {
               const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
               const result = report.engines.length > 1 ? engineWinners(report).figures[figureIndex] : null;
-              const winner = result?.winner ?? null;
               return <Box key={label}>
                 {(() => { const FigureIcon = FIGURE_ICONS[label] || ChartBar; return <HStack gap="1" mb="0.5" fontSize="2xs" color="fg.muted"><FigureIcon size={11}/><Text>{label} ({unit}) · {better}</Text>{result?.tie && <HStack gap="1" ml="1" title="Empat: el mateix valor"><Handshake size={11}/><Text>empat</Text></HStack>}</HStack>; })()}
                 {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
                   {(() => { const Icon = engineIcon(engine.runtime); return <HStack width="16" flex="none" gap="1" fontSize="2xs"><Box color={engineColor(engine.runtime)}><Icon size={11}/></Box><Text>{engine.name}</Text></HStack>; })()}
                   <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
-                  <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs">{winner === engine.name && <Box color="agentic.fg" title={`Guanya ${engine.name}`}><Trophy size={11}/></Box>}<Text>{engineNumber(value(engine), unit)}</Text></HStack>
+                  <HStack width="24" flex="none" gap="1" justify="end" fontSize="2xs"><Text>{engineNumber(value(engine), unit)}</Text></HStack>
                 </HStack>)}
               </Box>;
             })}</Stack>
-            {/* Each figure's result in one line, the trophy beside the engine that wins it. */}
+            {/* Each figure's result in one line (the trophy only in the run's header). */}
             {report.engines.length > 1 && <Stack gap="0.5" mt="3" pt="2" borderTopWidth="1px" borderColor="border">
               {engineWinners(report).figures.map((figure) => { const FigureIcon = FIGURE_ICONS[figure.label] || ChartBar; return <HStack key={figure.label} gap="1" fontSize="2xs" color="fg.muted" flexWrap="wrap">
               <Box flex="none"><FigureIcon size={11}/></Box><Text>{figure.label}:</Text>
-              {figure.tie ? <><Handshake size={11}/><Text>{figure.note}</Text></> : <>{figure.entries.map((entry, index) => { const Icon = engineIcon(entry.runtime); return <HStack key={entry.name} gap="0.5">{index > 0 && <Text>·</Text>}{figure.winner === entry.name && <Box color="agentic.fg" title={`Guanya ${entry.name}`}><Trophy size={11}/></Box>}<Box color={engineColor(entry.runtime)}><Icon size={11}/></Box><Text>{entry.name} {entry.text}</Text></HStack>; })}<Text>{figure.note}</Text></>}
+              {figure.tie ? <><Handshake size={11}/><Text>{figure.note}</Text></> : <>{figure.entries.map((entry, index) => { const Icon = engineIcon(entry.runtime); return <HStack key={entry.name} gap="0.5">{index > 0 && <Text>·</Text>}<Box color={engineColor(entry.runtime)}><Icon size={11}/></Box><Text>{entry.name} {entry.text}</Text></HStack>; })}<Text>{figure.note}</Text></>}
             </HStack>; })}</Stack>}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
