@@ -84,7 +84,8 @@ test('with the panel closed the request to the model and its generation are the 
   const worker = fs.readFileSync(path.join(__dirname, 'mlx-worker.py'), 'utf8');
   // Without "trace", the worker goes on to the same generate() call as before.
   // Without "trace", the same generation as with it (stream_generate through the prompt cache, joined).
-  assert.match(worker, /if request\.get\("trace"\):[\s\S]*?continue\n[^\n]*\n        answer = ""\.join\(response\.text for response in stream\(\n            model,\n            tokenizer,\n            prompt,\n            max_tokens=int\(request\.get\("max_tokens", 700\)\),\n            sampler=make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\),\n            logits_processors=LOGITS_PROCESSORS or None,\n        \)\)/);
+  // The same stream with the same arguments; its text joined, and how it ended (cut at max_tokens or not).
+  assert.match(worker, /if request\.get\("trace"\):[\s\S]*?continue\n[\s\S]*?for response in stream\(\n            model,\n            tokenizer,\n            prompt,\n            max_tokens=int\(request\.get\("max_tokens", 700\)\),\n            sampler=make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\),\n            logits_processors=LOGITS_PROCESSORS or None,\n        \):\n            answer \+= response\.text\n/);
   // Traced, the same sampler and logits processors, through stream_generate (which generate() is built on).
   assert.match(worker, /make_sampler\(temp=float\(request\.get\("temperature", 0\.0\)\)\), LOGITS_PROCESSORS or None, emit,/);
   // The agent only labels the call; the messages and options it passes are untouched.

@@ -28,6 +28,8 @@ export interface InferenceEngine {
   unloadModel(): Promise<void>;
   getModelStatus(): ModelStatus;
   getMemoryUsage(): MemoryUsage;
+  /** How the last answer ended: «length» when it was cut at max_new_tokens (MLX workers); null when unknown. */
+  lastFinishReason?: string | null;
 }
 
 declare const __dirname: string;
@@ -49,6 +51,7 @@ export class MlxInferenceEngine implements InferenceEngine {
   /** Who is asking (the chat, the reviewer, an evaluation…) and the parts of its system prompt; set by the agent. */
   traceContext: TraceContext = { source: process.env.AGENT_LLM_TRACE_SOURCE || 'xat' };
   private loadSeconds: number | null = null;
+  lastFinishReason: string | null = null;
   private traced: { id: string; at: string; started: number; messages: ChatTurn[]; options: GenerationOptions; context: TraceContext } | null = null;
 
   async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {
@@ -78,6 +81,7 @@ export class MlxInferenceEngine implements InferenceEngine {
         if (message.type === 'ready') { this.loadSeconds = typeof message.loadSeconds === 'number' ? message.loadSeconds : null; this.state = 'ready'; onStatus(`${this.modelId} carregat amb ${this.runtimeName}${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;
+          this.lastFinishReason = typeof message.finishReason === 'string' ? message.finishReason : null;
           this.finishTrace(message);
           if (typeof message.error === 'string') pending.reject(new Error(message.error));
           else pending.resolve(String(message.text || 'No s’ha generat cap resposta.'));

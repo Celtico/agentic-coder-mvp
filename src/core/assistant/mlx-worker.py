@@ -278,17 +278,21 @@ for line in sys.stdin:
             )
             trace.update(prompt=prompt, raw=answer, backend="mlx-lm", context=CONTEXT_LIMIT, counts=mlx_trace.part_counts(tokenizer.encode, messages, tools, request.get("trace_parts")),
                          promptTokens=stream.total, cachedTokens=stream.reused, promptTps=mlx_trace.read_rate(stream.total - stream.reused, trace.get("firstTokenSeconds")))
-            emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "trace": trace})
+            emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "finishReason": trace.get("finishReason"), "trace": trace})
             continue
         # generate() is stream_generate's text joined: the same, here through the prompt cache.
-        answer = "".join(response.text for response in stream(
+        # "finishReason": "length" when the answer was cut at max_tokens, so the agent does not act on half an answer.
+        answer, finish = "", None
+        for response in stream(
             model,
             tokenizer,
             prompt,
             max_tokens=int(request.get("max_tokens", 700)),
             sampler=make_sampler(temp=float(request.get("temperature", 0.0))),
             logits_processors=LOGITS_PROCESSORS or None,
-        ))
-        emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip()})
+        ):
+            answer += response.text
+            finish = response.finish_reason
+        emit({"type": "result", "text": normalize_tool_calls(strip_thinking(answer), tools).strip(), "finishReason": finish})
     except Exception as error:
         emit({"type": "result", "error": f"Error generant amb MLX: {error}"})

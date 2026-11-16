@@ -1187,6 +1187,9 @@ export class LocalCodingAgent {
             delegated.push({ agent: `Agent ${index + 1}`, task, result: delegatedResult.slice(0, 5000) });
           }
           result = { delegatedSequentially: true, agents: delegated };
+        } else if (tool.name === 'write_file' && this.engine.lastFinishReason === 'length') {
+          // The answer was cut at the token limit: its file content is incomplete, so nothing is written.
+          result = { applied: false, error: 'La resposta s’ha tallat al límit de tokens abans d’acabar i el fitxer no s’ha escrit.' };
         } else result = await executeTool(tool);
         toolsRun += 1;
       }

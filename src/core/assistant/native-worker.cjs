@@ -93,18 +93,20 @@ lines.on('line', (line) => {
     const trace = Boolean(request.trace);
     const run = generate(request, messages, tools, trace ? (piece) => emit({ type: 'token', text: piece }) : () => {});
     const result = text.normalizeToolCalls(text.stripThinking(run.answer, thinkStart, thinkEnd), tools, '<tool_call>', '</tool_call>', parser).trim();
-    if (!trace) { emit({ type: 'result', text: result }); return; }
+    // «length» when the answer was cut at max_tokens, as mlx-worker.py says, so the agent does not act on half an answer.
+    const finishReason = run.generated !== null && run.generated >= run.maxTokens ? 'length' : 'stop';
+    if (!trace) { emit({ type: 'result', text: result, finishReason }); return; }
     const firstSeconds = run.first === null ? null : (run.first - run.started) / 1000;
     const generationTokens = run.generated ?? null;
     const round = (value, digits = 2) => (value === null || !Number.isFinite(value) ? null : Math.round(value * 10 ** digits) / 10 ** digits);
     emit({
-      type: 'result', text: result,
+      type: 'result', text: result, finishReason,
       trace: {
         promptTokens: run.stats.total, cachedTokens: run.stats.reused,
         promptTps: firstSeconds ? round((run.stats.total - run.stats.reused) / firstSeconds) : null,
         generationTokens, generationTps: generationTokens && run.first !== null && run.end > run.first ? round((generationTokens - 1) / ((run.end - run.first) / 1000)) : null,
         peakMemoryGb: round(chat.model.memory().peak / 1e9, 3),
-        finishReason: generationTokens !== null && generationTokens >= run.maxTokens ? 'length' : 'stop',
+        finishReason,
         seconds: round((run.end - run.started) / 1000, 3), firstTokenSeconds: round(firstSeconds, 3),
         prompt: run.prompt, raw: run.answer, backend: 'native', context: CONTEXT_LIMIT,
         counts: partCounts(messages, tools, request.trace_parts),

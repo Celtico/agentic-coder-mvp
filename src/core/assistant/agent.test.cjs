@@ -1731,3 +1731,32 @@ test('ends the turn when the model asks again for a failed check right after bei
   assert.match(answer, /entrava en bucle/);
   assert.match(answer, /Missing script/);
 });
+
+test('does not write a file from an answer cut at the token limit', async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-coder-agent-cut-answer-test-'));
+  const projectRoot = path.join(tempRoot, 'project');
+  await fs.mkdir(projectRoot);
+  await fs.writeFile(path.join(projectRoot, 'package.json'), '{"name":"fixture"}');
+  t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+
+  // The answer stops in the middle of the file's content (max tokens): the lenient parse could still close it.
+  const answers = [
+    ['{"type":"plan","content":"Escriure src/a.test.js."}', 'stop'],
+    ['{"type":"tool_call","name":"write_file","arguments":{"path":"src/a.test.js","content":"import { test } from \'node:test\'\\nDades de prova\\nDades de prova', 'length'],
+    ['{"type":"final","content":"No l’he pogut escriure."}', 'stop'],
+  ];
+  const prompts = [];
+  const engine = {
+    lastFinishReason: null,
+    loadModel: async () => {},
+    generateResponse: async (messages) => { prompts.push(messages[messages.length - 1].content); const [text, finish] = answers.shift() ?? ['{"type":"final","content":"fet"}', 'stop']; engine.lastFinishReason = finish; return text; },
+    getModelStatus: () => ({ modelId: 'test-model' }),
+  };
+  const agent = new LocalCodingAgent({ engine });
+  agent.historyDir = path.join(tempRoot, 'history');
+  const calls = [];
+  await agent.ask('Escriu un test a src/a.test.js.', projectRoot, async (tool) => { calls.push(tool.name); return { applied: true }; });
+
+  assert.ok(!calls.includes('write_file'), calls.join(', '));
+  assert.ok(prompts.some((text) => /s’ha tallat al límit de tokens/.test(text)));
+});
