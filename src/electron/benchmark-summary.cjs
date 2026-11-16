@@ -104,13 +104,24 @@ function renderBenchmarkTable(models) {
  * no longer weighs on the score unless «Totes» is chosen. A run cut before its end has no report and is
  * listed apart (`incomplete`), never counted.
  */
+// The engine a run used (the report's «runtime»): the native one, CUDA on Linux, or else Python (also the runs
+// made before the native engine, which have «mlx» or nothing).
+const engineName = (runtime) => (runtime === 'native' ? 'natiu' : runtime === 'cuda' ? 'CUDA' : 'Python');
+
+/** One row per model and engine (so the native and the Python engine of a model are compared side by side). */
 function comparisonByModel(reports, { labels = {}, incomplete = [] } = {}) {
   const byModel = new Map();
+  const keyOf = (run) => `${run.model} · ${engineName(run.runtime)}`;
+  const labelOf = new Map();
   for (const report of reports) {
     if (!report || !Array.isArray(report.results)) continue;
-    byModel.set(report.model, [...(byModel.get(report.model) || []), report]);
+    byModel.set(keyOf(report), [...(byModel.get(keyOf(report)) || []), report]);
+    labelOf.set(keyOf(report), `${labels[report.model] || report.model} · ${engineName(report.runtime)}`);
   }
-  for (const run of incomplete) if (!byModel.has(run.model)) byModel.set(run.model, []);
+  for (const run of incomplete) {
+    if (!byModel.has(keyOf(run))) byModel.set(keyOf(run), []);
+    if (!labelOf.has(keyOf(run))) labelOf.set(keyOf(run), `${labels[run.model] || run.model} · ${engineName(run.runtime)}`);
+  }
   return [...byModel.entries()].map(([model, list]) => {
     const runs = [...list].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((report) => {
       const [summary] = summarizeReports([report], { labels });
@@ -118,9 +129,9 @@ function comparisonByModel(reports, { labels = {}, incomplete = [] } = {}) {
     });
     const [all] = summarizeReports(list, { labels });
     return {
-      model, label: labels[model] || model, latest: runs[0]?.id || null, runs,
+      model, label: labelOf.get(model) || model, latest: runs[0]?.id || null, runs,
       all: all ? { open: all.open, apps: all.apps, reference: all.reference } : null,
-      incomplete: incomplete.filter((run) => run.model === model).map(({ id, at, done, total, passed }) => ({ id, at, ...(done !== undefined ? { done, total, passed } : {}) })),
+      incomplete: incomplete.filter((run) => keyOf(run) === model).map(({ id, at, done, total, passed }) => ({ id, at, ...(done !== undefined ? { done, total, passed } : {}) })),
     };
   }).filter((entry) => entry.runs.length || entry.incomplete.length);
 }

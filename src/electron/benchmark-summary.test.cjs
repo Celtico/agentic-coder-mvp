@@ -43,7 +43,8 @@ test('Comparativa: each complete run apart, newest first; the newest is shown by
   ];
   const incomplete = [{ id: 'cut', at: '2026-11-15T11:39:45.115Z', model: 'vl' }, { id: 'cut-only', at: '2026-11-14T10:00:00.000Z', model: 'other' }];
   const [vl, text, other] = comparisonByModel(reports, { labels: { vl: 'MiMo amb visió' }, incomplete });
-  assert.equal(vl.label, 'MiMo amb visió');
+  // Runs without an engine (before the native one) are Python's.
+  assert.equal(vl.label, 'MiMo amb visió · Python');
   assert.equal(vl.latest, 'new');
   assert.deepEqual(vl.runs.map((run) => [run.id, run.passed, run.total]), [['new', 3, 3], ['old', 1, 3]]);
   assert.deepEqual(vl.runs[0].open, { runs: 2, passed: 2 });
@@ -54,7 +55,7 @@ test('Comparativa: each complete run apart, newest first; the newest is shown by
   assert.deepEqual(vl.incomplete, [{ id: 'cut', at: '2026-11-15T11:39:45.115Z' }]);
   assert.equal(text.latest, 'text');
   // A model with only a cut run is listed, with nothing to show.
-  assert.deepEqual([other.model, other.latest, other.runs.length, other.all], ['other', null, 0, null]);
+  assert.deepEqual([other.model, other.latest, other.runs.length, other.all], ['other · Python', null, 0, null]);
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /const chosen = comparisonChoice\[model\.model\] \?\? model\.latest \?\? 'all';/);
   assert.match(app, /<option key=\{item\.id\} value=\{item\.id\} disabled>[^\n]*incompleta\{item\.done \? ` \$\{item\.done\}\/\$\{item\.total \?\? '\?'\} \(\$\{item\.passed\} superades\)` : ''\}<\/option>/);
@@ -75,4 +76,12 @@ test('a stopped run keeps what it finished: shown as «incompleta N/total», nev
   assert.match(script, /fs\.renameSync\(`\$\{out\}\.tmp`, out\);\n\s*fs\.rmSync\(partial, \{ force: true \}\);/, 'the finished report replaces it');
   const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
   assert.match(main, /item\.endsWith\('\.json'\) && !item\.endsWith\('\.partial\.json'\)/, 'a partial is never read as a report');
+});
+
+
+test('Comparativa: the native and the Python engine of a model are separate rows', () => {
+  const { comparisonByModel } = require('./benchmark-summary.cjs');
+  const run = (id, runtime, pass) => ({ id, at: `2026-11-16T1${id.length}:00:00.000Z`, model: 'mimo', runtime, results: [{ task: 'add-function', pass, seconds: 1 }] });
+  const rows = comparisonByModel([run('a', 'native', true), run('bb', 'mlx', false), run('ccc', undefined, true)], { labels: { mimo: 'MiMo V2.6 9B' } });
+  assert.deepEqual(rows.map((row) => [row.label, row.runs.length]), [['MiMo V2.6 9B · natiu', 1], ['MiMo V2.6 9B · Python', 2]]);
 });

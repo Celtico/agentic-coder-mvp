@@ -1532,7 +1532,7 @@ ipcMain.handle('benchmark:list', async () => {
     // The tasks it finished, if it saved them (scripts/evaluate-agent.cjs, <id>.partial.json).
     let partial = null;
     try { partial = JSON.parse(await fs.readFile(path.join(benchmarksDirectory(), `${id}.partial.json`), 'utf8')); } catch {}
-    if (known) incomplete.push({ id, at: `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`, model: known.modelId, ...(partial && Array.isArray(partial.results) ? { done: partial.results.length, total: partial.total || null, passed: partial.results.filter((result) => result.pass).length } : {}) });
+    if (known) incomplete.push({ id, at: `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`, model: known.modelId, runtime: partial?.runtime || null, ...(partial && Array.isArray(partial.results) ? { done: partial.results.length, total: partial.total || null, passed: partial.results.filter((result) => result.pass).length } : {}) });
   }
   return {
     comparison: comparisonByModel(reports, { labels, incomplete }),
