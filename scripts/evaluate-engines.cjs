@@ -70,7 +70,10 @@ async function main() {
     process.env.AGENT_MODEL_RUNTIME = runtime;
     const engine = createEngine(runtime);
     let last = null;
-    engine.tracer.record = (record) => { if (record.type === 'call') last = record; };
+    // Each measured call also goes to the Model log (AGENT_LLM_CALLS_LOG, set by the app), as «benchmark de motors».
+    engine.traceContext = { source: 'benchmark de motors' };
+    const write = engine.tracer.record.bind(engine.tracer);
+    engine.tracer.record = (record) => { if (record.type === 'call') last = record; write(record); };
     const started = Date.now();
     await engine.loadModel(() => {});
     const loadSeconds = Math.round((Date.now() - started) / 100) / 10;

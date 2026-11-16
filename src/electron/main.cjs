@@ -1533,7 +1533,7 @@ ipcMain.handle('engines:start', async () => {
       const nodeExecutable = findNodeExecutable();
       result = await runStreaming(nodeExecutable, [script, '--model', model.id, '--out', out], {
         signal: controller.signal,
-        env: { AGENT_MLX_LOCK_LABEL: 'el benchmark de motors', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
+        env: { AGENT_MLX_LOCK_LABEL: 'el benchmark de motors', AGENT_MODELS_DIR: projectModelsDirectory(), AGENT_MLX_PYTHON: mlxPythonPath(), AGENT_LLM_CALLS_LOG: llmCallsLog(), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
         onLine: (line) => { if (/^MOTOR /.test(line)) sendBenchmark({ step: 'progress', message: line.replace(/^MOTOR /, 'Motor ').slice(0, 300) }); },
       });
     } finally {

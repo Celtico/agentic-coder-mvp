@@ -172,6 +172,17 @@ const PREPARING_MODEL = 'Preparant el model local; si s’ha de carregar, pot tr
 /** The stop button asks for a second click within this time, so a stray click does not throw the work away. */
 const STOP_CONFIRM_MS = 3000;
 /** The accordion variant «pane» of the theme (src/theme/pane-recipes.ts); Chakra's types only list its own variants. */
+// Benchmark de motors: its charts, one bar per engine for each figure (the longest bar is the largest value).
+// One fixed colour per engine, the same in every chart and in the legend.
+const engineColor = (runtime: string) => (runtime === 'native' ? 'agentic.solid' : 'fg.muted');
+const ENGINE_CHARTS: [string, (engine: EngineBenchmarkEngine) => number | null | undefined, string, string][] = [
+  ['Càrrega del model', (engine) => engine.loadSeconds, 's', 'menys és millor'],
+  ['Lectura, prompt llarg', (engine) => engine.long.promptTps, 'tok/s', 'més és millor'],
+  ['Generació', (engine) => engine.generationTps, 'tok/s', 'més és millor'],
+  ['Primer token, prompt curt', (engine) => engine.short.firstTokenSeconds, 's', 'menys és millor'],
+  ['2n missatge amb memòria cau: primer token', (engine) => engine.second.firstTokenSeconds, 's', 'menys és millor'],
+  ['Memòria màxima (MLX)', (engine) => engine.peakMemoryGb, 'GB', 'menys és millor'],
+];
 // Benchmark de motors: the rows of its table (one column per engine).
 const engineNumber = (value: number | null | undefined, unit: string) => (typeof value === 'number' ? `${(Math.round(value * 100) / 100).toLocaleString('ca')} ${unit}` : '–');
 const ENGINE_ROWS: [string, (engine: EngineBenchmarkEngine) => string][] = [
@@ -2310,6 +2321,18 @@ export function App(): React.JSX.Element {
                 {report.sameAnswer !== null && <Table.Row><Table.Cell color="fg.muted">Mateixa resposta (prompt curt, greedy)</Table.Cell><Table.Cell colSpan={report.engines.length} textAlign="end" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓' : '✗'}</Table.Cell></Table.Row>}
               </Table.Body>
             </Table.Root>
+            <HStack gap="3" mt="3">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">Motor {engine.name}</Text></HStack>)}</HStack>
+            <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better]) => {
+              const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
+              return <Box key={label}>
+                <Text fontSize="2xs" color="fg.muted" mb="0.5">{label} ({unit}) · {better}</Text>
+                {report.engines.map((engine) => <HStack key={engine.runtime} gap="2">
+                  <Text fontSize="2xs" width="12" flex="none">{engine.name}</Text>
+                  <Box flex="1" h="2" bg="bg.subtle" borderRadius="full" overflow="hidden"><Box h="full" borderRadius="full" bg={engineColor(engine.runtime)} width={`${largest ? Math.round(((value(engine) ?? 0) / largest) * 100) : 0}%`}/></Box>
+                  <Text fontSize="2xs" width="20" flex="none" textAlign="end">{engineNumber(value(engine), unit)}</Text>
+                </HStack>)}
+              </Box>;
+            })}</Stack>
           </Box>)}</Stack>
         </Accordion.ItemBody></Accordion.ItemContent>
       </Accordion.Item>
