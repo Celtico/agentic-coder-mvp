@@ -2309,7 +2309,7 @@ export function App(): React.JSX.Element {
             </HStack>
             <Accordion.ItemContent><Accordion.ItemBody pt="0">
             {report.sameAnswer !== null && <Text fontSize="xs" color={report.sameAnswer ? 'fg.success' : 'fg.error'}>{report.sameAnswer ? '✓ Els dos motors donen la mateixa resposta (prompt curt, greedy)' : '✗ Els motors no donen la mateixa resposta (prompt curt, greedy)'}</Text>}
-            <HStack gap="3" mt="2">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">Motor {engine.name}</Text></HStack>)}</HStack>
+            <HStack gap="3" mt="2">{report.engines.map((engine) => <HStack key={engine.runtime} gap="1"><Box w="2.5" h="2.5" borderRadius="full" bg={engineColor(engine.runtime)}/><Text fontSize="2xs">{engine.name}</Text></HStack>)}</HStack>
             <Stack gap="2" mt="2">{ENGINE_CHARTS.map(([label, value, unit, better], figureIndex) => {
               const largest = Math.max(0, ...report.engines.map((engine) => value(engine) ?? 0));
               const winner = report.engines.length > 1 ? engineWinners(report).figures[figureIndex]?.winner : null;
