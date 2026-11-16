@@ -10,7 +10,7 @@ import {
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
 } from '@chakra-ui/react';
 import {
-  LuArrowLeft as ArrowLeft, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
+  LuArrowLeft as ArrowLeft, LuTrophy as Trophy, LuMessagesSquare as Conversations, LuFileText as FileText, LuSettings as Settings, LuMinus as Minus, LuMic as Mic, LuArrowUpToLine as ArrowUpToLine, LuArrowDownToLine as ArrowDownToLine, LuBug as Bug, LuInfo as Info, LuTriangleAlert as AlertTriangle, LuCircleCheck as CircleCheck, LuArrowRight as ArrowRight, LuCheck as Check,
   LuEye as Eye, LuFile as FileIcon, LuFolder as FolderClosed, LuFolderOpen as FolderOpen, LuGlobe as Globe2,
     LuGitBranch as GitBranch, LuPlay as Play, LuRefreshCw as RefreshCw, LuFileCode as FileCode,
   LuBrain as Brain, LuBoxes as Boxes, LuDatabase as Database, LuFlaskConical as FlaskConical, LuBadgeCheck as BadgeCheck, LuScrollText as ScrollText, LuSunMoon as SunMoon, LuALargeSmall as TextSize, LuPanelTop as PanelTop, LuLayoutGrid as LayoutGrid, LuPaintBucket as PaintBucket, LuAppWindow as AppWindow, LuDownload as Download, LuCpu as Cpu, LuBot as Bot, LuPalette as Palette, LuChartBar as ChartBar, LuListChecks as ListChecks, LuEllipsisVertical as MoreVertical, LuFilePlus2 as FilePlus, LuFolderPlus as FolderPlus, LuHistory as History, LuPaperclip as Paperclip, LuPencil as Pencil, LuPlus as Plus, LuSend as Send, LuSquare as Stop, LuTerminal as TerminalIcon, LuTrash2 as Trash, LuX as X
@@ -2313,8 +2313,8 @@ export function App(): React.JSX.Element {
               </Box>;
             })}</Stack>
             {report.engines.length > 1 && (() => { const podium = engineWinners(report); return <Box mt="3" pt="2" borderTopWidth="1px" borderColor="border">
-              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><Text fontSize="2xs" color="fg.muted">{[...podium.wins.map((item) => `${item.name} ${item.wins}`), `empat ${podium.ties}`].join(' · ')}</Text></HStack>
-              {podium.figures.map((figure) => <Text key={figure.label} fontSize="2xs" color="fg.muted">{figure.winner ? '● ' : '○ '}{figure.label}: {figure.detail}</Text>)}
+              <HStack gap="2" mb="1"><Text fontSize="xs" fontWeight="semibold">Podi</Text><Badge size="sm" colorPalette={podium.overall ? 'agentic' : 'gray'}>{podium.overall && <Trophy size={12}/>}{podium.overall ? `Guanya el motor ${podium.overall}` : 'Empat'}</Badge><Text fontSize="2xs" color="fg.muted">{podium.wins.map((item) => `${item.name} ${item.wins}`).join(' · ')}{podium.ties ? ` (i ${podium.ties} ${podium.ties === 1 ? 'xifra empatada' : 'xifres empatades'})` : ''}</Text></HStack>
+              {podium.figures.map((figure) => <HStack key={figure.label} gap="1"><Box flex="none" w="3" color="agentic.fg">{figure.winner && <Trophy size={11}/>}</Box><Text fontSize="2xs" color="fg.muted">{figure.label}: {figure.detail}</Text></HStack>)}
             </Box>; })()}
             </Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>)}</Accordion.Root>}
