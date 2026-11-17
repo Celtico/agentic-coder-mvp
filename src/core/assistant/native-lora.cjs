@@ -76,6 +76,7 @@ async function main() {
     // pass, which does not fit long examples on a 16 GB Mac; in chunks of 64 positions (the chunkwise
     // form) it keeps one per chunk. AGENT_DELTA_CHUNK=0 goes back to the step-by-step loop.
     deltaChunk: Number(process.env.AGENT_DELTA_CHUNK ?? 64),
+    onSkipped: (count) => { if (count) console.log(`${count} examples left out: cut at --max-seq-length before their answer starts.`); },
     onRetry: ({ iteration, attempt }) => console.log(`Iter ${iteration}: macOS va aturar la GPU un moment (la pantalla la necessitava); es torna a fer el pas (intent ${attempt + 1}).`),
     onReport: (report) => {
       const seconds = (Date.now() - lastReport) / 1000;

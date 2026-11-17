@@ -68,8 +68,14 @@ function learningButtons({ cases = 0, running = false, otherWork = false, candid
   };
 }
 
-/** About how many tokens a text takes (code and Catalan run near 3.5 characters a token). */
-const estimateTokens = (text) => Math.ceil(String(text || '').length / 3.5);
+/**
+ * About how many tokens a text takes, on the safe side: an example estimated to fit must fit, or training
+ * cuts it before its answer. Measured with MiMo's tokenizer (17-11-2026): the agent's turns (code, JSON,
+ * Catalan) 3.2 characters a token on average but many examples well under, Chakra UI's documentation 3.6.
+ * With 2.6, 2 of the 94 examples of cel's cases still go over 1,536 tokens (at 3.5, 63 did).
+ */
+const CHARS_PER_TOKEN = Number(process.env.AGENT_CHARS_PER_TOKEN) || 2.6;
+const estimateTokens = (text) => Math.ceil(String(text || '').length / CHARS_PER_TOKEN);
 const tokensOf = (messages) => messages.reduce((sum, message) => sum + estimateTokens(message.content) + 4, 0);
 
 /**
@@ -89,7 +95,7 @@ function fitExample({ messages, system = '' }, maxTokens) {
     const share = results.length ? Math.floor((maxTokens - fixed) / results.length) - 4 : 0;
     if (share < 16 && results.length) return { messages: null, truncated: true };
     for (const { message } of results) {
-      if (estimateTokens(message.content) > share) { message.content = `${message.content.slice(0, Math.max(0, Math.floor(share * 3.5) - 20))}\n[retallat]`; truncated = true; }
+      if (estimateTokens(message.content) > share) { message.content = `${message.content.slice(0, Math.max(0, Math.floor(share * CHARS_PER_TOKEN) - 20))}\n[retallat]`; truncated = true; }
     }
     size = tokensOf(chat);
     if (size > maxTokens) return { messages: null, truncated: true };
@@ -98,7 +104,7 @@ function fitExample({ messages, system = '' }, maxTokens) {
   let systemText = system;
   if (systemText && estimateTokens(systemText) > room) {
     truncated = true;
-    systemText = room >= 200 ? `${systemText.slice(0, Math.floor(room * 3.5) - 20)}\n[retallat]` : '';
+    systemText = room >= 200 ? `${systemText.slice(0, Math.floor(room * CHARS_PER_TOKEN) - 20)}\n[retallat]` : '';
   }
   return { messages: systemText ? [{ role: 'system', content: systemText }, ...chat] : chat, truncated };
 }
@@ -335,6 +341,6 @@ async function promoteStable({ candidate, name, base, modelsRoot, python, launch
 module.exports = {
   defaultMaxTokens,
   BETA_MIN_CASES, STABLE_MIN_CASES, FEW_CASES, TRAINING_LIMITS, defaultTrainingPreferences, normalizeTrainingPreferences, itersFor,
-  learningButtons, estimateTokens, fitExample, toTrainingExamples, buildTrainingExamples, writeTrainingData, parseTrainingLine,
+  learningButtons, estimateTokens, CHARS_PER_TOKEN, fitExample, toTrainingExamples, buildTrainingExamples, writeTrainingData, parseTrainingLine,
   listBetas, latestCandidate, betaModels, deleteBeta, trainAdapter, recordComparison, promoteStable,
 };
