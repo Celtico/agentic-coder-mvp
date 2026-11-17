@@ -219,3 +219,29 @@ test('arguments written as text are read in the type their tool declares, from t
   });
   assert.deepEqual([calls[0]?.name, calls[0]?.arguments], ['install_package', { packageName: 'react', dev: false }]);
 });
+
+test('«fes una npm run dev» asks to run a command, not to change the code: no reminder to write files (cel, 17-11-2026)', async (t) => {
+  const { inputs } = await run(t, {
+    request: 'fes una npm run dev',
+    responses: ['Vaig a iniciar el servidor de desenvolupament amb `npm run dev`.', '{"type":"tool_call","name":"start_project"}', '{"type":"final","content":"El servidor és en marxa a http://localhost:5173/."}'],
+    tool: async () => ({ ok: true, url: 'http://localhost:5173/' }),
+  });
+  assert.ok(!inputs.some((input) => /Encara no has aplicat cap canvi al codi/.test(input)), 'it was told to write files');
+});
+
+test('«arregla-ho» after a proposal asks for the change: an answer that asks again is sent back (cel, 17-11-2026)', async (t) => {
+  const { inputs } = await run(t, {
+    request: 'arregla-ho',
+    responses: [
+      'Proposta: el script build passa a ser només vite build. Vols que ho faci així?',
+      '{"type":"tool_call","name":"write_file","arguments":{"path":"package.json","content":"{}"}}',
+      '{"type":"final","content":"He canviat el build."}',
+    ],
+    tool: async (call, root) => {
+      if (call.name !== 'write_file') return {};
+      await fs.writeFile(path.join(root, call.arguments.path), call.arguments.content);
+      return { applied: true, path: call.arguments.path };
+    },
+  });
+  assert.ok(inputs.some((input) => /No demanis confirmació|Encara no has aplicat cap canvi al codi|Això és només el pla/.test(input)), 'the question was taken as the answer');
+});

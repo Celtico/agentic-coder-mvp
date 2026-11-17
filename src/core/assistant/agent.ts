@@ -114,6 +114,9 @@ async function logTurn(entry: Record<string, unknown>): Promise<void> {
 }
 
 /** The user's own words in a request: without URLs, code blocks, inline code or pasted command lines. */
+/** A package-manager command written inside a sentence: «fes una npm run dev», «executa pnpm test». */
+const COMMAND_IN_TEXT = /\b(?:npx|npm|pnpm|yarn|bunx?)\s+(?:run\s+|exec\s+)?[\w@./:-]+/gi;
+
 export function requestWords(text: string): string {
   return text
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')
@@ -121,7 +124,8 @@ export function requestWords(text: string): string {
     .replace(/\b(?:https?|file):\/\/\S+|\bwww\.\S+/gi, ' ')
     .split(/\r?\n/)
     .filter((line) => !/^\s*(?:[$>#]\s*)?(?:npx|npm|pnpm|yarn|bun|bunx|node|git|cd|curl|brew|pip|python3?)\s/i.test(line) && !/^\s*#/.test(line))
-    .join('\n');
+    .join('\n')
+    .replace(COMMAND_IN_TEXT, ' ');
 }
 
 /** Pieces of an instruction joined by blank lines: a piece left empty leaves no gap. */
@@ -866,7 +870,7 @@ export class LocalCodingAgent {
     // The small model gets a short leash; the larger one has room for real files and longer jobs.
     const answerTokens = compact ? 700 : this.answerTokens;
     const maxIterations = compact ? 16 : this.maxIterations;
-    const followUpRefersToUnfinishedTask = /\b(?:el que t['’]he demanat|el que he demanat|la tasca|aquesta tasca|continua|segueix|fes-ho|fesho|acaba-ho|acabal|mira el que diu|ell mateix t['’]explica|que quadri|quadra|no ho ha fet|no ho has fet|do what i asked|continue|finish it|make it work)\b/i.test(prompt);
+    const followUpRefersToUnfinishedTask = /\b(?:el que t['’]he demanat|el que he demanat|la tasca|aquesta tasca|continua|segueix|fes-ho|fesho|arregla-ho|arreglau|acaba-ho|acabal|mira el que diu|ell mateix t['’]explica|que quadri|quadra|no ho ha fet|no ho has fet|do what i asked|continue|finish it|make it work)\b/i.test(prompt);
     const unfinishedPriorCodingRequest = followUpRefersToUnfinishedTask
       ? [...conversationHistory].reverse().find((turn) => turn?.role === 'user' && typeof turn.content === 'string' && /\b(?:app|application|aplicaci[oó]|projecte|project|proyecto)\b/i.test(turn.content) && /\b(?:fes|crea|crear|fer|faci|build|create|implement|fix|modifica|canvia|programa)\b/i.test(turn.content))?.content
       : undefined;
@@ -878,17 +882,20 @@ export class LocalCodingAgent {
     const intentPrompt = requestWords(prompt);
     const intentEffectivePrompt = requestWords(effectivePrompt);
     const explicitNoChange = /\b(?:do not (?:change|modify|edit)|don't (?:change|modify|edit)|no (?:modifiquis|canviïs|edites)|sense (?:canviar|modificar)|sin (?:cambiar|modificar)|no modifiques)\b/i.test(intentPrompt);
-    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test|posa|posar|embolica|envolta|arrenca|engega|obre|treu|mou|escriu|reanomena|substitueix|usa|pon|poner|envuelve|arranca|abre|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra|ejecuta|lanza|inicia)\b/i.test(intentEffectivePrompt);
+    const requestedAction = /\b(?:fes|crea|executa|prova|corregeix|arregla|arreglar|arreglau|canvia|modifica|actualitza|inicia|atura|instal·la|instaŀla|instal\.la|instala|installa|implementa|afegeix|elimina|esborra|prepara|revisa|compila|commit|run|start|stop|fix|change|modify|implement|create|install|build|test|posa|posar|embolica|envolta|arrenca|engega|obre|treu|mou|escriu|reanomena|substitueix|usa|pon|poner|envuelve|arranca|abre|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra|ejecuta|lanza|inicia)\b/i.test(intentEffectivePrompt);
     const unnecessaryQuestion = /\b(?:vols que|vols que ho|hauria de|necessito saber|em pots dir|pots indicar|would you like me to|do you want me to|should i|can you provide|could you clarify|please tell me which)\b/i;
     // «Posa'l en marxa» (start it) is not a change to the code; «posa un botó» is.
-    const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error|(?:posa|posar|pon|poner)(?!(?:['’][a-z]+)?\s+en\s+(?:marxa|funcionament|marcha|funcionamiento)\b)|embolica|envolta|treu|mou|escriu|reanomena|substitueix|envuelve|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra)\b/i;
+    const implementationVerb = /\b(?:fix|correct|change|modify|implement|update|create|creates|creating|build|make|write|generate|scaffold|crea|crear|creare|crearàs|construeix|construir|haz|hacer|fes|facis|faci|fer|feu|fem|munta|muntar|genera|generar|desenvolupa|desarrolla|programa|corregeix|corregir|arregla|arreglar|arreglau|arreglo|arreglem|arregleu|canvia|cambia|modifica|actualitza|actualiza|refactor|bug|error|(?:posa|posar|pon|poner)(?!(?:['’][a-z]+)?\s+en\s+(?:marxa|funcionament|marcha|funcionamiento)\b)|embolica|envolta|treu|mou|escriu|reanomena|substitueix|envuelve|quita|mueve|escribe|renombra|sustituye|añade|agrega|borra)\b/i;
     const appTargetMentioned = /\b(?:app|application)\b|aplicaci[oó](?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
     const projectTargetMentioned = appTargetMentioned || /\b(?:project|projecte|proyecto)\b/i.test(intentEffectivePrompt);
     const creationModeMentioned = /\b(?:from scratch|de zero|desde cero|de cero|new|nou|nuevo|create|creating|crea|crear|build|construeix|haz)\b|nova(?=$|[^\p{L}\p{N}_])/iu.test(intentEffectivePrompt);
     const directAppImperative = appTargetMentioned && /\b(?:fes|facis|faci|fer|feu|fem)\b/i.test(intentEffectivePrompt);
     const requestedProjectCreation = !explicitNoChange && projectTargetMentioned && implementationVerb.test(intentPrompt) && (creationModeMentioned || directAppImperative);
     const requestedCommitOnly = /^\s*(?:fes|crea|crear|create|make|do)\s+(?:un\s+)?commit\b/i.test(intentPrompt);
-    const requestedCodeChange = !explicitNoChange && (requestedProjectCreation || (!requestedCommitOnly && implementationVerb.test(intentPrompt)));
+    // Only a command to run («fes una npm run dev», «executa npm test»): once it has run, no file has to change.
+    const requestedCommandOnly = new RegExp(COMMAND_IN_TEXT.source, 'i').test(prompt)
+      && !/[\p{L}\p{N}]/u.test(intentPrompt.replace(/\b(?:fes|fer|feu|fem|executa|executar|corre|llança|inicia|arrenca|engega|run|execute|start|launch|haz|ejecuta|lanza|arranca|una?|el|la|the|an?|ara|now|si us plau|please|por favor)\b/giu, ' '));
+    const requestedCodeChange = !explicitNoChange && !requestedCommandOnly && (requestedProjectCreation || (!requestedCommitOnly && implementationVerb.test(intentPrompt)));
     const requestedValidation = /\b(?:test|tests|proves|prova|pruebas|prueba|lint|typecheck|build|compila|compilar|validate|validar|verify|verifica|comprova|comprueba)\b/i.test(intentEffectivePrompt);
     let toolOutputSize = 0;
     let answer = '';
