@@ -61,7 +61,8 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   const manual = app.slice(app.indexOf('<Accordion.Item value="manual">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="manual">')));
   assert.match(manual, /rowHeader\('Dades manuals', learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.length \?\? 0, Pencil\)/);
-  assert.match(manual, /<Plus size=\{14\}\/>Crea un cas/);
+  // «Crea un cas» is in the pane's second row, with the dataset's buttons (cel, 17-11-2026).
+  assert.match(app, /case 'learning': return frame\(Brain, 'Aprenentatge local', learningPane, \{ toolbar: <PaneToolbar>[\s\S]*?<Plus size=\{14\}\/>Crea un cas[\s\S]*?Mostra les dades<\/Button>[\s\S]*?Descarrega \(\.jsonl\)<\/Button>/);
   assert.match(manual, /learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.map\(caseRow\)/);
   // The order: Casos desats, Dades manuals, Entrenament; Dades preparades is now the «Dades» block of Entrenament.
   const order = ['cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));
@@ -70,8 +71,6 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   assert.equal(app.indexOf('<Accordion.Item value="data">'), -1);
   const training = app.slice(app.indexOf('<Accordion.Item value="training">'));
   assert.ok(training.indexOf("rowHeader('Dataset'") > -1 && training.indexOf("rowHeader('Dataset'") < training.indexOf("rowHeader('Beta'"), 'Dataset just above Beta');
-  assert.match(training, /Mostra les dades<\/ChakraButton>/);
-  assert.match(training, /Descarrega \(\.jsonl\)<\/ChakraButton>/);
   // The open sections are remembered, «manual» too.
   assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "training", "models"\]/);
 });

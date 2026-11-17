@@ -1997,7 +1997,6 @@ export function App(): React.JSX.Element {
           <Accordion.Item value="manual">
             <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
-              <HStack justify="flex-end"><ChakraButton size="xs" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
               {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
               {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
@@ -2015,8 +2014,6 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas' : 'casos'} · {datasetPreview.examples ?? datasetPreview.counts.included} exemples ({datasetPreview.counts.input - datasetPreview.counts.included + (datasetPreview.droppedExamples ?? 0)} descartats)</Text>
-                  <ChakraButton size="xs" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
-                  <ChakraButton size="xs" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
                   {datasetExport && <ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.revealLearningExport()}><FolderOpen size={14}/>Mostra al Finder</ChakraButton>}
                 </HStack>
                 <Text mt="1" fontSize="xs" color="fg.muted">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Text>
@@ -2150,9 +2147,9 @@ export function App(): React.JSX.Element {
   );
 
   // Panes have no × of their own: each has an icon in the left bar, its tab, that opens and closes it.
-  type PaneHeaderExtras = { subtitle?: React.ReactNode; subtitleTitle?: string; badge?: React.ReactNode; actions?: React.ReactNode };
-  const dockPane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
-    <PaneCard header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
+  type PaneHeaderExtras = { subtitle?: React.ReactNode; subtitleTitle?: string; badge?: React.ReactNode; actions?: React.ReactNode; toolbar?: React.ReactNode };
+  const dockPane = (icon: IconType, title: string, content: React.ReactNode, { toolbar, ...extras }: PaneHeaderExtras = {}) => (
+    <PaneCard toolbar={toolbar} header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
   );
   const rowNote = (text: string) => <Text fontSize="xs" color="fg.muted" mb="2">{text}</Text>;
   const kindNote: Record<BenchmarkTask['kind'], string> = { open: 'Arreglar codi, fer pàgines i respondre sense tocar res.', app: 'Des d’una carpeta buida, amb la petició tal com la diries.', reference: 'La mateixa correcció dient exactament què canviar.' };
@@ -2161,13 +2158,15 @@ export function App(): React.JSX.Element {
   const elapsed = evaluationCurrent ? Math.max(0, Math.round((evaluationNow - evaluationCurrent.since) / 1000)) : 0;
   // The evaluation's second row: how many rounds, and the button that runs or stops the benchmark.
   // The rounds and the button that runs the benchmark, inside Tasques (with the tasks they run).
+  // The pane's second row: the rounds, the two benchmarks' buttons (or Cancel·la while one runs).
   const evaluationToolbar = (
-    <HStack gap="2" mb="2" flexWrap="wrap" data-evaluation-run>
+    <PaneToolbar>
         <NativeSelect.Root size="xs" variant="plain" width="auto" flex="none" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
           ? <Button size="xs" flex="none" variant="ghost" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
           : <Button size="xs" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
-    </HStack>
+        {!evaluationRunning && <Button size="xs" flex="none" colorPalette="agentic" disabled={loading} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>}
+    </PaneToolbar>
   );
   const evaluationPane = (
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
@@ -2196,7 +2195,6 @@ export function App(): React.JSX.Element {
           <Accordion.ItemTrigger>{rowHeader('Tasques', `${chosenCount}/${evaluationTasks.length}`, ListChecks)}</Accordion.ItemTrigger>
           <Accordion.ItemContent><Accordion.ItemBody pt="0">
             {rowNote('Marca les tasques que vols passar; totes es fan en una carpeta nova.')}
-            {evaluationToolbar}
             <HStack gap="2" mb="2"><Button size="2xs" colorPalette="agentic" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" colorPalette="agentic" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
             <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="outline">{(['open', 'app', 'reference'] as const).map((kind) => {
               const group = evaluationTasks.filter((task) => task.kind === kind);
@@ -2307,9 +2305,6 @@ export function App(): React.JSX.Element {
         <Accordion.ItemTrigger>{rowHeader('Benchmark de motors', engineReports.length, Cpu)}</Accordion.ItemTrigger>
         <Accordion.ItemContent><Accordion.ItemBody pt="0">
           {rowNote('El model triat amb cada motor que el pot fer anar (natiu i Python), un darrere l’altre: càrrega, lectura del prompt, generació, memòria cau i memòria. Mediana de 3 rondes; uns 5 minuts.')}
-          <HStack gap="2" mb="2">
-            <Button size="xs" flex="none" colorPalette="agentic" disabled={loading || evaluationRunning} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>
-          </HStack>
           {engineReports.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
           {/* One item per run, the newest open: its charts inside; the delete button beside its header. */}
           {engineReports.length > 0 && <Accordion.Root multiple collapsible defaultValue={[engineReports[0].id]} size="sm" variant="outline">{engineReports.map((report) => <Accordion.Item key={report.id} value={report.id}>
@@ -2340,8 +2335,8 @@ export function App(): React.JSX.Element {
       </Accordion.Root>
     </Stack>
   );
-  const sidePane = (icon: IconType, title: string, content: React.ReactNode, extras: PaneHeaderExtras = {}) => (
-    <PaneCard header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
+  const sidePane = (icon: IconType, title: string, content: React.ReactNode, { toolbar, ...extras }: PaneHeaderExtras = {}) => (
+    <PaneCard toolbar={toolbar} header={<PaneHeader icon={icon} title={title} {...extras}/>}>{content}</PaneCard>
   );
   // Every pane, framed for the row its icon puts it in (src/app/rail-layout.ts): beside the chat for the
   // top group, in the bottom dock for the bottom one. Ids keep the row so each arrangement keeps its sizes.
@@ -2425,11 +2420,16 @@ export function App(): React.JSX.Element {
       case 'browser': return frame(Globe2, 'Navegador web', browserPane);
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
-      case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>}>
+      case 'evaluation': return <PaneCard toolbar={evaluationToolbar} header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>}>
         <Box flex="1" minH="0" {...scrollArea}>{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
-      case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
+      // The pane's second row: write a case by hand, and look at or save the prepared data.
+      case 'learning': return frame(Brain, 'Aprenentatge local', learningPane, { toolbar: <PaneToolbar>
+        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</Button>
+        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || !datasetPreview || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</Button>
+        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={!datasetPreview || datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</Button>
+      </PaneToolbar> });
       case 'llmlog': return <LlmLogPane/>;
       case 'chat': return chatPane;
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
