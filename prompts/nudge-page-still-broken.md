@@ -1,0 +1,1 @@
+Encara no està arreglat: l’última comprovació de la pàgina diu «{{pageVerdict}}», i des de llavors no ha canviat cap fitxer del projecte (escriure un fitxer amb el mateix contingut no és un canvi). No diguis que funciona ni que ho has corregit. Busca la causa real de l’error, canvia el que calgui amb una crida d’eina i després torna a cridar start_project per comprovar-ho.

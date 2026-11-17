@@ -913,6 +913,17 @@ export class LocalCodingAgent {
     let planPublished = false;
     const appliedProjectFiles = new Set<string>();
     let lastPageVerdict = '';
+    // The page the app checked has a problem and nothing in the project has changed since: an answer that
+    // says it is done is sent back (twice at most), and is never passed on as fixed without saying so.
+    // MiMo «fixed» a blank page by writing App.jsx again unchanged and answered «l'he corregit» (cel, 17-11-2026).
+    let openPageProblem = '';
+    let pageProblemNudges = 0;
+    const stillBroken = (text: string): string | null => {
+      if (!openPageProblem) return null;
+      if (pageProblemNudges < 2) { pageProblemNudges += 1; return promptText('nudge-page-still-broken', { pageVerdict: openPageProblem.slice(0, 600) }); }
+      answer = `${text}\n\nAtenció: l’última comprovació de la pàgina encara deia: ${openPageProblem.slice(0, 600)}`;
+      return '';
+    };
     let reviewed = false;
     let toolsRun = 0;
     let reviewNote = '';
@@ -1060,6 +1071,11 @@ export class LocalCodingAgent {
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: nothingDone });
           continue;
         }
+        {
+          const broken = stillBroken(raw);
+          if (broken) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: broken }); continue; }
+          if (broken === '') break;
+        }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {
           completionNudges += 1;
@@ -1104,6 +1120,11 @@ export class LocalCodingAgent {
           nothingDoneNudged = true;
           messages.push({ role: 'assistant', content: raw }, { role: 'user', content: nothingDone });
           continue;
+        }
+        {
+          const broken = stillBroken(action.content);
+          if (broken) { messages.push({ role: 'assistant', content: raw }, { role: 'user', content: broken }); continue; }
+          if (broken === '') break;
         }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {
@@ -1251,6 +1272,7 @@ export class LocalCodingAgent {
       // Installing (a package, the dependencies, a package's own tool) changes the project like writing a file does.
       if ((tool.name === 'run_npx' || tool.name === 'install_dependencies' || tool.name === 'install_package') && result && typeof result === 'object' && (result as Record<string, unknown>).code === 0) changeApplied = true;
       if (tool.name === 'write_file' && result && typeof result === 'object' && (result as Record<string, unknown>).applied === true) {
+        openPageProblem = '';
         projectChangedSinceCheck = true;
         changeApplied = true;
         appliedProjectFiles.add(String((result as Record<string, unknown>).path || (tool as Extract<AgentToolCall, { name: 'write_file' }>).arguments.path).replaceAll('\\', '/'));
@@ -1311,6 +1333,7 @@ export class LocalCodingAgent {
       const pageVerdict = tool.name === 'start_project' && result && typeof result === 'object' ? String((result as Record<string, unknown>).pageVerdict || '') : '';
       const pageProblem = pageVerdict.startsWith('PROBLEMA');
       if (pageVerdict) lastPageVerdict = pageVerdict;
+      if (pageVerdict) openPageProblem = pageProblem ? pageVerdict : '';
       // A page that loads, shows content and has a clean console is a passed check.
       if (pageVerdict && !pageProblem) checkPassed = true;
       if (pageProblem) this.onStatus({ type: 'status', message: 'La pàgina ha arrencat però no es veu bé; revisant…' });

@@ -286,3 +286,21 @@ test('a repeated call is told once to go on with the next step; the work continu
   assert.ok(inputs.some((input) => /ja s’ha fet amb aquests mateixos arguments/.test(input)));
   assert.deepEqual(written, ['vite.config.js', 'index.html']);
 });
+
+test('a page that still fails is not passed on as fixed when nothing changed (cel, 17-11-2026)', async (t) => {
+  const broken = { started: true, url: 'http://localhost:5173/', pageVerdict: 'PROBLEMA: la pàgina és en blanc. Errors de consola: Uncaught ReferenceError: React is not defined' };
+  const sameApp = '{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default () => <p>Hola</p>"}}';
+  const { inputs, answer } = await run(t, {
+    request: 'fes una npm run dev',
+    responses: [
+      '{"type":"tool_call","name":"start_project","arguments":{"script":"dev"}}',
+      sameApp,
+      '{"type":"final","content":"L’he corregit i ja funciona."}',
+      '{"type":"final","content":"Ja està corregit."}',
+      '{"type":"final","content":"Funciona."}',
+    ],
+    tool: async (call) => call.name === 'start_project' ? broken : { applied: false, unchanged: true, path: 'src/App.jsx' },
+  });
+  assert.ok(inputs.some((input) => /Encara no està arreglat: l’última comprovació de la pàgina/.test(input)), 'the claim was not sent back');
+  assert.match(answer, /Atenció: l’última comprovació de la pàgina encara deia/);
+});
