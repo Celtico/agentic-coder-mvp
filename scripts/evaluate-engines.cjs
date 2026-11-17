@@ -70,8 +70,9 @@ async function main() {
     process.env.AGENT_MODEL_RUNTIME = runtime;
     const engine = createEngine(runtime);
     let last = null;
-    // Each measured call also goes to the Model log (AGENT_LLM_CALLS_LOG, set by the app), as «benchmark de motors».
-    engine.traceContext = { source: 'benchmark de motors' };
+    // Each measured call also goes to the Model log (AGENT_LLM_CALLS_LOG, set by the app), labelled with the
+    // engine that made it: «benchmark Node», «benchmark Python» (cel, 17-11-2026).
+    engine.traceContext = { source: `benchmark ${ENGINE_NAMES[runtime] || runtime}` };
     const write = engine.tracer.record.bind(engine.tracer);
     engine.tracer.record = (record) => { if (record.type === 'call') last = record; write(record); };
     // Live, as the chat's calls: each event of the Model log (the tokens as they come, the finished call) on its

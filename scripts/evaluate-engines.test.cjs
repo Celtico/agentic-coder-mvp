@@ -56,3 +56,10 @@ test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors�
   assert.doesNotMatch(app, />Podi</);
   assert.match(app, /label="Esborra aquesta passada" onClick=\{\(\) => void window\.agentic\.deleteEngineBenchmark\(report\.id\)/);
 });
+
+test('the Model log names the engine of each benchmark call, and the running benchmark can be stopped (cel, 17-11-2026)', () => {
+  const script = fs.readFileSync(path.join(__dirname, 'evaluate-engines.cjs'), 'utf8');
+  assert.match(script, /engine\.traceContext = \{ source: `benchmark \$\{ENGINE_NAMES\[runtime\] \|\| runtime\}` \};/);
+  const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'App.tsx'), 'utf8');
+  assert.match(app, /'Carregant el model…'\}<\/Text>[^\n]*cancelBenchmark\(\)\}><X size=\{15\}\/>Atura<\/Button><\/HStack>/);
+});
