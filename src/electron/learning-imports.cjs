@@ -8,10 +8,17 @@ const path = require('node:path');
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ROLES = new Set(['system', 'user', 'assistant', 'tool']);
 
-/** One line made safe: a conversation with text messages that ends with the assistant's answer, or null. */
+/**
+ * One line made safe: a conversation with text messages that ends with the assistant's answer, or null. A
+ * line can also be a case as «Crea un cas» writes it ({"task", "prompt", "answer", "evidence"}): its
+ * prompt is the user's message and its answer the assistant's.
+ */
 function readExample(line) {
   let value;
   try { value = JSON.parse(line); } catch { return null; }
+  if (value && !Array.isArray(value.messages) && typeof value.prompt === 'string' && typeof value.answer === 'string') {
+    value = { messages: [{ role: 'user', content: value.prompt }, { role: 'assistant', content: value.answer }] };
+  }
   const messages = Array.isArray(value?.messages) ? value.messages : null;
   if (!messages || messages.length < 2) return null;
   if (!messages.every((message) => message && ROLES.has(message.role) && typeof message.content === 'string' && message.content.trim())) return null;

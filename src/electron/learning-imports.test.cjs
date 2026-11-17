@@ -16,6 +16,9 @@ test('a line counts only as a whole conversation that ends with the assistant', 
   assert.equal(imports.readExample(line([{ role: 'user', content: 'hola' }])), null, 'no answer');
   assert.equal(imports.readExample(line([{ role: 'assistant', content: 'a' }, { role: 'user', content: 'b' }])), null, 'ends with the user');
   assert.equal(imports.readExample(line([{ role: 'user', content: 'a' }, { role: 'robot', content: 'b' }])), null, 'unknown role');
+  // A case as «Crea un cas» writes it: its prompt and its answer.
+  assert.deepEqual(imports.readExample(JSON.stringify({ task: 'Botó', prompt: 'Fes un botó', answer: '<Button/>', evidence: 'docs' })), { messages: [{ role: 'user', content: 'Fes un botó' }, { role: 'assistant', content: '<Button/>' }] });
+  assert.equal(imports.readExample(JSON.stringify({ task: 'Botó', prompt: 'Fes un botó', answer: '' })), null, 'an empty answer');
   assert.deepEqual(imports.readExamples(`${good}\n\nbrossa\n${good}\n`), { examples: [imports.readExample(good), imports.readExample(good)], skipped: 1 });
 });
 

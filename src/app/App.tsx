@@ -2023,7 +2023,7 @@ export function App(): React.JSX.Element {
             <Accordion.ItemTrigger>{rowHeader('Dades JSON', learningImports.reduce((sum, item) => sum + item.examples, 0), FileCode)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
               <HStack><Button size="xs" flex="none" colorPalette="agentic" onClick={() => void window.agentic.importLearningData().then(setLearningImports).catch((error) => setLearningStatus(errorText(error)))}><FileText size={14}/>Carrega un JSONL</Button></HStack>
-              <Text fontSize="xs" color="fg.muted">Un fitxer .jsonl amb una conversa per línia: {'{"messages": [{"role": "user", …}, {"role": "assistant", …}]}'}. Les seves converses entren a la beta i a l’estable amb els casos.</Text>
+              <Text fontSize="xs" color="fg.muted">Un fitxer .jsonl amb una conversa per línia: {'{"messages": [{"role": "user", …}, {"role": "assistant", …}]}'}, o un cas com els de «Crea un cas»: {'{"task", "prompt", "answer", "evidence"}'}. Les seves converses entren a la beta i a l’estable amb els casos.</Text>
               {learningImports.length === 0 && <Text fontSize="sm" color="fg.muted">Encara no n’has carregat cap.</Text>}
               {learningImports.map((item) => <HStack key={item.name} gap="2" borderWidth="1px" borderColor="border" borderRadius="md" px="3" py="1.5">
                 <FileText size={14}/><Text flex="1" minW="0" fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={item.name}>{item.name}</Text>
