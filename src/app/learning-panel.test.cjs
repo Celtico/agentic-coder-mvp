@@ -15,11 +15,13 @@ esbuild.buildSync({ entryPoints: [path.join(__dirname, 'view-state.ts')], bundle
 const view = require(out);
 const memoryStorage = (initial = {}) => { const data = { ...initial }; return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } }; };
 
-test('the panel is three accordion sections, and the open ones are remembered', () => {
+test('the panel is two groups (Casos, Models) of accordion sections, and the open ones are remembered', () => {
   for (const [value, title] of [['cases', 'Casos desats'], ['manual', 'Dades manuals'], ['training', 'Entrenament']]) {
     assert.match(app, new RegExp(`<Accordion\\.Item value="${value}">\\s*<Accordion\\.ItemTrigger>\\{rowHeader\\('${title}'`), title);
   }
-  assert.match(app, /defaultValue=\{initialView\.learningSections\} onValueChange=\{\(\{ value \}\) => updateViewState\(localStorage, \(state\) => \{ state\.learningSections = value; \}\)\}/);
+  // Each group's accordion remembers its own sections without dropping the other group's (cel, 17-11-2026).
+  assert.match(app, /rowHeader\('Casos', undefined, ListChecks\)[\s\S]*?keepLearningSections\(LEARNING_CASE_SECTIONS, value\)[\s\S]*?rowHeader\('Models', undefined, Brain\)[\s\S]*?keepLearningSections\(LEARNING_MODEL_SECTIONS, value\)/);
+  assert.match(app, /state\.learningSections = \[\.\.\.\(state\.learningSections \|\| \[\]\)\.filter\(\(item\) => !group\.includes\(item\)\), \.\.\.value\]/);
   assert.deepEqual(view.loadViewState(memoryStorage()).learningSections, ['cases', 'training']);
   const storage = memoryStorage();
   view.updateViewState(storage, (state) => { state.learningSections = ['manual', 'data', 'nope']; });
@@ -61,8 +63,8 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   const manual = app.slice(app.indexOf('<Accordion.Item value="manual">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="manual">')));
   assert.match(manual, /rowHeader\('Dades manuals', learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.length \?\? 0, Pencil\)/);
-  // «Crea un cas» is in the pane's second row, with the dataset's buttons (cel, 17-11-2026).
-  assert.match(app, /case 'learning': return frame\(Brain, 'Aprenentatge local', learningPane, \{ toolbar: <PaneToolbar>[\s\S]*?<Plus size=\{14\}\/>Crea un cas[\s\S]*?Mostra les dades<\/Button>[\s\S]*?Descarrega \(\.jsonl\)<\/Button>/);
+  // «Crea un cas» is at the top of the «Casos» group, with the dataset's buttons (cel, 17-11-2026).
+  assert.match(app, /rowHeader\('Casos', undefined, ListChecks\)[\s\S]*?data-learning-actions>[\s\S]*?<Plus size=\{14\}\/>Crea un cas[\s\S]*?Mostra les dades<\/Button>[\s\S]*?Descarrega \(\.jsonl\)<\/Button>/);
   assert.match(manual, /learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.map\(caseRow\)/);
   // The order: Casos desats, Dades manuals, Entrenament; Dades preparades is now the «Dades» block of Entrenament.
   const order = ['cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));

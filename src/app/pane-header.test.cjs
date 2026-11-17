@@ -132,8 +132,8 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida'/);
   assert.match(app, /setAppearance\(defaultAppearance\(\)\)\}><RefreshCw size=\{14\}\/>Restableix l’aparença/);
   // The panes with a second row use the shared one; Git's and the browser's refresh go to the header.
-  // Aprenentatge local has its actions in its second row too; Avaluació's are inside each benchmark (cel, 17-11-2026).
-  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 4);
+  // Avaluació's and Aprenentatge local's actions are inside their groups, not in a second row (cel, 17-11-2026).
+  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 3);
   // Reload is in the browser's toolbar, after back and forward; the header has no action.
   assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane\);/);
   assert.match(app, /label="Enrere"[^\n]*\n[^\n]*label="Endavant"[^\n]*\n[^\n]*\n\s*<IconButton icon=\{RefreshCw\} label="Recarrega" onClick=\{\(\) => webviewRef\.current\?\.reload\(\)\}\/>/);
@@ -228,7 +228,7 @@ test('the secondary bar: ghost actions, plain/subtle fields, the same small heig
   assert.match(recipe, /action: \{[^}]*gap: "2"/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const bars = [...app.matchAll(/<PaneToolbar[\s\S]*?(?:<\/PaneToolbar>|\/>)/g)].map((match) => match[0]);
-  assert.equal(bars.length, 4);
+  assert.equal(bars.length, 3);
   for (const bar of bars) {
     // Small actions: ghost, or solid in the accent for a pane's main actions (cel, 17-11-2026).
     for (const button of bar.match(/<Button\b[^>]*>/g) || []) { assert.match(button, /variant="ghost"|colorPalette="agentic"/, button); assert.match(button, /size="xs"/, button); }
@@ -300,7 +300,7 @@ test('the accordions of Avaluació and Aprenentatge local go edge to edge: the t
   assert.match(recipes, /pane: \{\n\s*item: \{ borderBottomWidth: "1px", borderColor: "border" \},\n\s*itemTrigger: \{ px: "var\(--accordion-padding-x\)", borderRadius: "0" \},\n\s*itemContent: \{ px: "var\(--accordion-padding-x\)" \},/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'theme', 'system.ts'), 'utf8'), /accordion: accordionRecipe/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
-  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 4, 'Avaluació (its two benchmarks, and the model’s sections), Aprenentatge local and Preferències › Aparença');
+  assert.equal((app.match(/size="sm" variant=\{PANE_ACCORDION\}>/g) || []).length, 6, 'Avaluació (its two benchmarks, and the model’s sections), Aprenentatge local (its two groups, and each group’s sections) and Preferències › Aparença');
   // No space kept for the scroll bar: edge to edge on both sides; the thin bar appears only when it scrolls.
   assert.match(app, /<Box flex="1" minH="0" \{\.\.\.scrollArea\}>\{evaluationPane\}<\/Box>/);
   assert.match(app, /<Box h="full" minH="0" \{\.\.\.scrollArea\}><Stack gap="3">/);

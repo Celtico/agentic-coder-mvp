@@ -1973,13 +1973,27 @@ export function App(): React.JSX.Element {
                   <IconButton icon={Trash} label="Esborra el cas" disabled={caseBusy !== null} onClick={() => { setCaseError(''); setCaseToDelete(item); }}/>
                 </HStack>
               </HStack>;
+  // The open sections of Aprenentatge local, remembered per group (each group's accordion saves only its own).
+  const LEARNING_CASE_SECTIONS = ['cases', 'manual'];
+  const LEARNING_MODEL_SECTIONS = ['training', 'models'];
+  const keepLearningSections = (group: string[], value: string[]) => updateViewState(localStorage, (state) => { state.learningSections = [...(state.learningSections || []).filter((item) => !group.includes(item)), ...value]; });
   const learningPane = (
     // The accordions go edge to edge (variant «pane», src/theme/pane-recipes.ts); the notices keep the inset.
     <Box h="full" minH="0" {...scrollArea}><Stack gap="3">
       {learningStatus && <Box px="3" pt="3"><Notice tone={learningStatus.startsWith('Versió candidata') ? 'success' : 'warning'}>{learningStatus}</Notice></Box>}
       {learningBusy && !datasetPreview ? <HStack color="fg.muted" p="3"><Spinner size="sm"/><Text fontSize="sm">Revisant els casos locals…</Text></HStack>
         : !datasetPreview ? <Box p="3"><Notice tone="warning">No s’ha pogut llegir la memòria local.</Notice></Box>
-        : <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.learningSections = value; })} size="sm" variant={PANE_ACCORDION}>
+        : /* Two groups: the cases (with their buttons) and the models (training and the models on this Mac). */
+        <Accordion.Root multiple collapsible defaultValue={['cases-group', 'models-group']} size="sm" variant={PANE_ACCORDION}>
+        <Accordion.Item value="cases-group">
+        <Accordion.ItemTrigger>{rowHeader('Casos', undefined, ListChecks)}</Accordion.ItemTrigger>
+        <Accordion.ItemContent px="0"><Accordion.ItemBody p="0">
+          <HStack gap="2" flexWrap="wrap" px="var(--accordion-padding-x)" pb="2" data-learning-actions>
+            <Button size="xs" flex="none" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</Button>
+            <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</Button>
+            <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</Button>
+          </HStack>
+        <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => keepLearningSections(LEARNING_CASE_SECTIONS, value)} size="sm" variant={PANE_ACCORDION}>
           <Accordion.Item value="cases">
             <Accordion.ItemTrigger>{rowHeader('Casos desats', learningCases?.cases.length ?? 0, ListChecks)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0">
@@ -2001,6 +2015,13 @@ export function App(): React.JSX.Element {
               {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
+        </Accordion.Root>
+        </Accordion.ItemBody></Accordion.ItemContent>
+        </Accordion.Item>
+        <Accordion.Item value="models-group">
+        <Accordion.ItemTrigger>{rowHeader('Models', undefined, Brain)}</Accordion.ItemTrigger>
+        <Accordion.ItemContent px="0"><Accordion.ItemBody p="0">
+        <Accordion.Root multiple collapsible defaultValue={initialView.learningSections} onValueChange={({ value }) => keepLearningSections(LEARNING_MODEL_SECTIONS, value)} size="sm" variant={PANE_ACCORDION}>
           <Accordion.Item value="training">
             <Accordion.ItemTrigger>{rowHeader('Entrenament', learningVersions?.betas.length ? `${learningVersions.betas.length} ${learningVersions.betas.length === 1 ? 'beta' : 'betes'}` : undefined, Brain)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="4">
@@ -2095,6 +2116,9 @@ export function App(): React.JSX.Element {
               <Text fontSize="xs" color="fg.muted">Treure un model el mou a la Paperera: es pot recuperar des del Finder. Afegir-ne o treure’n no carrega cap model.</Text>
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
+        </Accordion.Root>
+        </Accordion.ItemBody></Accordion.ItemContent>
+        </Accordion.Item>
         </Accordion.Root>}
     </Stack></Box>
   );
@@ -2425,12 +2449,7 @@ export function App(): React.JSX.Element {
         <Box flex="1" minH="0" {...scrollArea}>{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });
-      // The pane's second row: write a case by hand, and look at or save the prepared data.
-      case 'learning': return frame(Brain, 'Aprenentatge local', learningPane, { toolbar: <PaneToolbar>
-        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</Button>
-        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || !datasetPreview || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</Button>
-        <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={!datasetPreview || datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</Button>
-      </PaneToolbar> });
+      case 'learning': return frame(Brain, 'Aprenentatge local', learningPane);
       case 'llmlog': return <LlmLogPane/>;
       case 'chat': return chatPane;
       case 'console': return frame(Bug, 'Consola', consolePane, { badge: consoleErrorCount > 0 ? <Badge size="xs" colorPalette="red">{consoleErrorCount} {consoleErrorCount === 1 ? 'error' : 'errors'}</Badge> : undefined });
