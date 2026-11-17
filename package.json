@@ -75,6 +75,7 @@
       "native/lora.js",
       "native/build/Release/agentic_mlx.node",
       "native/build/Release/libmlx.dylib",
+      "native/build/Release/libjaccl.dylib",
       "native/build/Release/mlx.metallib",
       "scripts/evaluate-engines.cjs",
       "scripts/evaluate-agent.cjs",

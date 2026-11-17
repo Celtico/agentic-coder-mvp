@@ -40,7 +40,7 @@ test('the Mac dmg carries the native engine (Node without Python), built before 
   // Its tokenizer and chat template come from the app's own dependencies, at the versions the engine was tested with.
   assert.equal(pkg.dependencies['@huggingface/jinja'], JSON.parse(read('native/package.json')).dependencies['@huggingface/jinja']);
   assert.equal(pkg.dependencies['@huggingface/tokenizers'], JSON.parse(read('native/package.json')).dependencies['@huggingface/tokenizers']);
-  for (const file of ['src/core/assistant/native-worker.cjs', 'src/core/assistant/native-text.cjs', 'native/index.js', 'native/chat.js', 'native/lora.js', 'native/build/Release/agentic_mlx.node', 'native/build/Release/libmlx.dylib', 'native/build/Release/mlx.metallib', 'scripts/evaluate-engines.cjs']) {
+  for (const file of ['src/core/assistant/native-worker.cjs', 'src/core/assistant/native-text.cjs', 'native/index.js', 'native/chat.js', 'native/lora.js', 'native/build/Release/agentic_mlx.node', 'native/build/Release/libmlx.dylib', 'native/build/Release/libjaccl.dylib', 'native/build/Release/mlx.metallib', 'scripts/evaluate-engines.cjs']) {
     assert.ok(pkg.build.files.includes(file), file);
   }
 });
