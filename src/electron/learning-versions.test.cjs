@@ -77,9 +77,25 @@ test('a long example is cut: the system text first, then tool results; never the
   assert.equal(example[0].content, 'Petició 1');
   assert.match(example[2].content, /\[retallat\]$/);
   assert.match(JSON.parse(example.at(-1).content).content, /^Fet 1\.$/);
-  // An answer that alone does not fit: the case is left out and counted.
+  // An answer that alone does not fit: the turn goes step by step, and the answer's step is left out and counted.
   const dropped = versions.buildTrainingExamples(prepare(1, { answer: 'a'.repeat(20000) }), 1024);
-  assert.deepEqual([dropped.examples.length, dropped.dropped], [0, 1]);
+  assert.equal(dropped.stepsDropped, 1);
+  assert.ok(dropped.examples.every((example) => !/a{1000}/.test(example.messages.at(-1).content)));
+});
+
+test('a turn too long whole goes as one example per step of the agent, each with the request and the steps before it that fit', () => {
+  const built = versions.buildTrainingExamples(prepare(1, { system: '', result: 'r'.repeat(6000) }), 1024);
+  // With the result cut to its share it still fits whole: one example.
+  assert.equal(built.split, 0);
+  const steps = versions.buildTrainingExamples(prepare(1, { system: '', answer: 'a'.repeat(3460) }), 1024);
+  assert.equal(steps.split, 1);
+  assert.ok(steps.examples.length >= 2, 'the tool call and the answer');
+  for (const example of steps.examples) {
+    assert.equal(example.messages[0].content, 'Petició 1', 'always the request first');
+    assert.equal(example.messages.at(-1).role, 'assistant', 'and one of the agent\'s messages last');
+    assert.ok(versions.estimateTokens(example.messages.map((m) => m.content).join('')) <= 1024);
+  }
+  assert.match(steps.examples.at(-1).messages.at(-1).content, /a{3000}/, 'the answer is the last step');
 });
 
 test('lines of mlx_lm lora give the iteration, the loss and the speed', () => {

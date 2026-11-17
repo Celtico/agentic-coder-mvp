@@ -103,10 +103,37 @@ function fitExample({ messages, system = '' }, maxTokens) {
   return { messages: systemText ? [{ role: 'system', content: systemText }, ...chat] : chat, truncated };
 }
 
+/**
+ * A turn too long for `maxTokens`, as one example per step: each of the agent's messages (a tool call, or the
+ * answer) is the last message of an example with the request and as many of the steps just before it as fit.
+ * Training learns the last message of each example (--mask-prompt), so every step of the turn is learnt,
+ * not only its answer. A step that does not fit even alone with the request is left out.
+ */
+function stepExamples({ messages, system = '' }, maxTokens) {
+  const steps = [];
+  for (let last = 1; last < messages.length; last++) {
+    if (messages[last].role !== 'assistant') continue;
+    let fitted = null;
+    // From the oldest step to keep down to only this one; a window starts at one of the agent's messages.
+    for (let first = 1; first <= last && !fitted?.messages; first++) {
+      if (messages[first].role !== 'assistant') continue;
+      fitted = fitExample({ messages: [messages[0], ...messages.slice(first, last + 1)], system }, maxTokens);
+      if (fitted.messages && first > 1) fitted.truncated = true;
+    }
+    steps.push({ step: last, ...(fitted || { messages: null, truncated: true }) });
+  }
+  return steps;
+}
+
 /** The examples of one case, one per turn (src/electron/learning-trajectory.cjs), each fitted to `maxTokens`. */
 function toTrainingExamples(example, maxTokens) {
   const { examples, skipped } = toTurnExamples(example);
-  const built = examples.map((turn) => ({ turn: turn.turn, ...fitExample(turn, maxTokens), tokens: tokensOf(turn.messages) }));
+  const built = examples.map((turn) => {
+    const whole = fitExample(turn, maxTokens);
+    if (whole.messages) return { turn: turn.turn, ...whole, tokens: tokensOf(turn.messages) };
+    // Too long whole: one example per step of the agent.
+    return { turn: turn.turn, ...whole, tokens: tokensOf(turn.messages), steps: stepExamples(turn, maxTokens) };
+  });
   return { built, skipped };
 }
 
@@ -117,16 +144,29 @@ function buildTrainingExamples(prepared, maxTokens) {
   let truncated = 0;
   let dropped = 0;
   let skippedTurns = 0;
+  let split = 0;
+  let stepsDropped = 0;
   for (const item of all) {
     const { built, skipped } = toTrainingExamples(item, maxTokens);
     skippedTurns += skipped.length;
     for (const turn of built) {
+      if (!turn.messages && turn.steps) {
+        const kept = turn.steps.filter((step) => step.messages);
+        if (!kept.length) { dropped += 1; continue; }
+        split += 1;
+        stepsDropped += turn.steps.length - kept.length;
+        for (const step of kept) {
+          if (step.truncated) truncated += 1;
+          examples.push({ id: `${item.sourceId}:${turn.turn}:${step.step}`, caseId: item.sourceId, turn: turn.turn, step: step.step, messages: step.messages });
+        }
+        continue;
+      }
       if (!turn.messages) { dropped += 1; continue; }
       if (turn.truncated) truncated += 1;
       examples.push({ id: `${item.sourceId}:${turn.turn}`, caseId: item.sourceId, turn: turn.turn, messages: turn.messages });
     }
   }
-  return { examples, caseIds: [...new Set(examples.map((example) => example.caseId))], truncated, dropped, skippedTurns };
+  return { examples, caseIds: [...new Set(examples.map((example) => example.caseId))], truncated, dropped, skippedTurns, split, stepsDropped };
 }
 
 /** The data folder mlx_lm reads: train.jsonl with every example; valid.jsonl only to watch the loss. */
