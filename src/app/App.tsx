@@ -2158,15 +2158,14 @@ export function App(): React.JSX.Element {
   const elapsed = evaluationCurrent ? Math.max(0, Math.round((evaluationNow - evaluationCurrent.since) / 1000)) : 0;
   // The evaluation's second row: how many rounds, and the button that runs or stops the benchmark.
   // The rounds and the button that runs the benchmark, inside Tasques (with the tasks they run).
-  // The pane's second row: the rounds, the two benchmarks' buttons (or Cancel·la while one runs).
+  // «Benchmark del model»'s own row: the rounds and its button (or Cancel·la while it runs).
   const evaluationToolbar = (
-    <PaneToolbar>
+    <HStack gap="2" flexWrap="wrap" px="var(--accordion-padding-x)" pb="2" data-evaluation-run>
         <NativeSelect.Root size="xs" variant="plain" width="auto" flex="none" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
           ? <Button size="xs" flex="none" variant="ghost" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
           : <Button size="xs" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
-        {!evaluationRunning && <Button size="xs" flex="none" colorPalette="agentic" disabled={loading} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>}
-    </PaneToolbar>
+    </HStack>
   );
   const evaluationPane = (
     // One scroll area for the whole panel: the sections keep their natural height inside it (in a
@@ -2189,6 +2188,7 @@ export function App(): React.JSX.Element {
       <Accordion.ItemTrigger>{rowHeader('Benchmark del model', undefined, ChartBar)}</Accordion.ItemTrigger>
       {/* Its own sections go edge to edge, as before: no second indent. */}
       <Accordion.ItemContent px="0"><Accordion.ItemBody p="0">
+      {evaluationToolbar}
       {/* Chakra UI v3 Accordion (multiple + collapsible): several sections open at once, each closes on its own click; the nested accordions are independent. */}
       <Accordion.Root multiple collapsible defaultValue={initialView.evaluationSections} onValueChange={({ value }) => updateViewState(localStorage, (state) => { state.evaluationSections = value; })} size="sm" variant={PANE_ACCORDION}>
         <Accordion.Item value="tasks">
@@ -2304,6 +2304,7 @@ export function App(): React.JSX.Element {
       <Accordion.Item value="engines">
         <Accordion.ItemTrigger>{rowHeader('Benchmark de motors', engineReports.length, Cpu)}</Accordion.ItemTrigger>
         <Accordion.ItemContent><Accordion.ItemBody pt="0">
+          <HStack gap="2" mb="2">{!evaluationRunning && <Button size="xs" flex="none" colorPalette="agentic" disabled={loading} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>}</HStack>
           {rowNote('El model triat amb cada motor que el pot fer anar (natiu i Python), un darrere l’altre: càrrega, lectura del prompt, generació, memòria cau i memòria. Mediana de 3 rondes; uns 5 minuts.')}
           {engineReports.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
           {/* One item per run, the newest open: its charts inside; the delete button beside its header. */}
@@ -2420,7 +2421,7 @@ export function App(): React.JSX.Element {
       case 'browser': return frame(Globe2, 'Navegador web', browserPane);
       // One Chakra Card fills the column, like the chat: header with the title, body that scrolls.
       // One Chakra Card like every pane: header, the second row, and the body that scrolls.
-      case 'evaluation': return <PaneCard toolbar={evaluationToolbar} header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>}>
+      case 'evaluation': return <PaneCard header={<PaneHeader icon={ChartBar} title="Avaluació" subtitle={modelOptions.find((model) => model.id === selectedModel)?.label} badge={evaluationRunning ? <Badge size="xs" colorPalette="agentic">En marxa</Badge> : undefined}/>}>
         <Box flex="1" minH="0" {...scrollArea}>{evaluationPane}</Box>
       </PaneCard>;
       case 'git': return frame(GitBranch, 'Git', gitPane, { subtitle: `Només lectura${project ? ` · ${project.path}` : ''}`, subtitleTitle: project?.path, actions: <IconButton icon={RefreshCw} label="Actualitza l’historial de Git" onClick={() => void refreshGitSnapshot()}/> });

@@ -43,9 +43,10 @@ test('the long prompt is fixed text from this repository (about 4.000 tokens)', 
 test('Avaluació: «Benchmark del model» (as before) and «Benchmark de motors», with its own button and charts, the winner in colour', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'App.tsx'), 'utf8');
   assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?defaultValue=\{initialView\.evaluationSections\}/);
-  // Its button is in the pane's second row, beside the model benchmark's (cel, 17-11-2026).
-  assert.match(app, /const evaluationToolbar = \([\s\S]*?startEngineBenchmark\(\)\}><Play size=\{15\}\/>Passa el benchmark de motors[\s\S]*?<\/PaneToolbar>/);
-  assert.match(app, /rowHeader\('Benchmark de motors'[\s\S]*?ENGINE_CHARTS\.map/);
+  // Each benchmark's button is inside its own section, not in the pane's second row (cel, 17-11-2026).
+  assert.match(app, /rowHeader\('Benchmark del model'[\s\S]*?<Accordion\.ItemBody p="0">\n\s*\{evaluationToolbar\}/);
+  assert.match(app, /rowHeader\('Benchmark de motors'[^\n]*\n[^\n]*\n[^\n]*startEngineBenchmark\(\)\}><Play size=\{15\}\/>Passa el benchmark de motors[\s\S]*?ENGINE_CHARTS\.map/);
+  assert.doesNotMatch(app, /<PaneCard toolbar=\{evaluationToolbar\}/);
   // The winner in the accent colour (header, each figure's line, each chart's value); no trophies. Charts mark ties.
   assert.match(app, /color=\{podium\.overall === item\.name \? 'agentic\.fg' : 'fg\.muted'\}/);
   assert.match(app, /color=\{result\?\.winner === engine\.name \? 'agentic\.fg' : undefined\}/);

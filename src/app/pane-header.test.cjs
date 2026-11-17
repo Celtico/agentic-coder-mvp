@@ -132,8 +132,8 @@ test('Preferències › Aparença chooses the tone for the whole app, with a pre
   assert.match(app, /brand: 'Icona de marca', mono: 'Monocrom', tinted: 'Tenyida'/);
   assert.match(app, /setAppearance\(defaultAppearance\(\)\)\}><RefreshCw size=\{14\}\/>Restableix l’aparença/);
   // The panes with a second row use the shared one; Git's and the browser's refresh go to the header.
-  // Avaluació and Aprenentatge local have their actions in their second row too (cel, 17-11-2026).
-  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 5);
+  // Aprenentatge local has its actions in its second row too; Avaluació's are inside each benchmark (cel, 17-11-2026).
+  assert.equal((app.match(/<PaneToolbar[ >]/g) || []).length, 4);
   // Reload is in the browser's toolbar, after back and forward; the header has no action.
   assert.match(app, /case 'browser': return frame\(Globe2, 'Navegador web', browserPane\);/);
   assert.match(app, /label="Enrere"[^\n]*\n[^\n]*label="Endavant"[^\n]*\n[^\n]*\n\s*<IconButton icon=\{RefreshCw\} label="Recarrega" onClick=\{\(\) => webviewRef\.current\?\.reload\(\)\}\/>/);
@@ -228,7 +228,7 @@ test('the secondary bar: ghost actions, plain/subtle fields, the same small heig
   assert.match(recipe, /action: \{[^}]*gap: "2"/);
   const app = fs.readFileSync(path.join(__dirname, 'App.tsx'), 'utf8');
   const bars = [...app.matchAll(/<PaneToolbar[\s\S]*?(?:<\/PaneToolbar>|\/>)/g)].map((match) => match[0]);
-  assert.equal(bars.length, 5);
+  assert.equal(bars.length, 4);
   for (const bar of bars) {
     // Small actions: ghost, or solid in the accent for a pane's main actions (cel, 17-11-2026).
     for (const button of bar.match(/<Button\b[^>]*>/g) || []) { assert.match(button, /variant="ghost"|colorPalette="agentic"/, button); assert.match(button, /size="xs"/, button); }
