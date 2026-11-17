@@ -193,7 +193,8 @@ async function deleteBeta(modelsRoot, baseId, folder) {
  * Trains one adapter from the base with every valid case. `kind` is 'beta' or 'candidata' (for a stable
  * version). Writes manifest.json; on failure or when stopped, the half-made folder is removed.
  */
-async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, python, launcher = null, run, onProgress = () => {}, signal, now = () => new Date() }) {
+// `imported`: examples loaded from .jsonl files (Dades JSON, src/electron/learning-imports.cjs), trained beside the cases.
+async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, python, launcher = null, run, onProgress = () => {}, signal, now = () => new Date(), imported = { examples: [], dropped: 0 } }) {
   if (kind !== 'beta' && kind !== 'candidata') throw new Error('Tipus d’entrenament desconegut.');
   const built = buildTrainingExamples(prepared, preferences.maxTokens);
   const needed = kind === 'beta' ? BETA_MIN_CASES : STABLE_MIN_CASES;
@@ -202,12 +203,14 @@ async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, pyt
   const started = now();
   const folder = `${kind}-${number}-${started.toISOString().replace(/[:.]/g, '-')}`;
   const adapterPath = path.join(modelsRoot, 'adapters', base.id, folder);
-  const iters = itersFor(built.examples.length, preferences);
+  const examples = [...built.examples, ...imported.examples];
+  const iters = itersFor(examples.length, preferences);
   const parameters = { iters, batchSize: 1, numLayers: preferences.numLayers, learningRate: preferences.learningRate, maxTokens: preferences.maxTokens, seed: preferences.seed, gradCheckpoint: true, maskPrompt: true };
   await fs.mkdir(adapterPath, { recursive: true });
   try {
-    await writeTrainingData(path.join(adapterPath, 'data'), built.examples);
-    onProgress({ step: 'train', message: `Entrenant ${kind === 'beta' ? 'la beta' : 'la candidata a estable'} ${number} des de ${base.label} amb ${built.examples.length} ${built.examples.length === 1 ? 'cas' : 'casos'} (${iters} iteracions)…`, progress: 0 });
+    await writeTrainingData(path.join(adapterPath, 'data'), examples);
+    const fromFiles = imported.examples.length ? ` i ${imported.examples.length} de Dades JSON` : '';
+    onProgress({ step: 'train', message: `Entrenant ${kind === 'beta' ? 'la beta' : 'la candidata a estable'} ${number} des de ${base.label} amb ${built.examples.length} ${built.examples.length === 1 ? 'cas' : 'casos'}${fromFiles} (${iters} iteracions)…`, progress: 0 });
     let last = null;
     const args = [...(launcher ? [launcher] : ['-m', 'mlx_lm']), 'lora', '--model', base.directory, '--train', '--data', path.join(adapterPath, 'data'), '--adapter-path', adapterPath,
       '--iters', String(iters), '--batch-size', '1', '--num-layers', String(preferences.numLayers), '--learning-rate', String(preferences.learningRate),
@@ -225,7 +228,7 @@ async function trainAdapter({ kind, base, prepared, preferences, modelsRoot, pyt
     if (signal?.aborted) throw new Error('Entrenament aturat.');
     if (result.code !== 0) throw new Error(`L’entrenament ha fallat (codi ${result.code}): ${String(result.output).slice(-600)}`);
     const manifest = {
-      kind, number, base: { id: base.id, modelId: base.modelId, label: base.label }, cases: built.caseIds.length, examples: built.examples.length, caseIds: built.caseIds,
+      kind, number, base: { id: base.id, modelId: base.modelId, label: base.label }, cases: built.caseIds.length, examples: examples.length, imported: { examples: imported.examples.length, dropped: imported.dropped, files: [...new Set(imported.examples.map((example) => example.file))] }, caseIds: built.caseIds,
       truncated: built.truncated, dropped: built.dropped, skippedTurns: built.skippedTurns, createdAt: started.toISOString(), durationSeconds: Math.round((now() - started) / 1000),
       parameters, finalLoss: last ? last.loss : null,
     };

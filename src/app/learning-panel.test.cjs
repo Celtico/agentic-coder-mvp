@@ -63,8 +63,9 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'App.tsx'), 'utf8');
   const manual = app.slice(app.indexOf('<Accordion.Item value="manual">'), app.indexOf('</Accordion.Item>', app.indexOf('<Accordion.Item value="manual">')));
   assert.match(manual, /rowHeader\('Dades manuals', learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.length \?\? 0, Pencil\)/);
-  // «Crea un cas» is at the top of the «Casos» group, with the dataset's buttons (cel, 17-11-2026).
-  assert.match(app, /rowHeader\('Casos', undefined, ListChecks\)[\s\S]*?data-learning-actions>[\s\S]*?<Plus size=\{14\}\/>Crea un cas[\s\S]*?Mostra les dades<\/Button>[\s\S]*?Descarrega \(\.jsonl\)<\/Button>/);
+  // «Crea un cas» is in Dades manuals; the dataset's buttons at the top of the «Casos» group (cel, 17-11-2026).
+  assert.match(manual, /<Plus size=\{14\}\/>Crea un cas/);
+  assert.match(app, /rowHeader\('Casos', undefined, ListChecks\)[\s\S]*?data-learning-actions>[\s\S]*?Mostra les dades<\/Button>[\s\S]*?Descarrega \(\.jsonl\)<\/Button>/);
   assert.match(manual, /learningCases\?\.cases\.filter\(\(item\) => item\.source === 'manual'\)\.map\(caseRow\)/);
   // The order: Casos desats, Dades manuals, Entrenament; Dades preparades is now the «Dades» block of Entrenament.
   const order = ['cases', 'manual', 'training'].map((value) => app.indexOf(`<Accordion.Item value="${value}">`));
@@ -74,7 +75,7 @@ test('Dades manuals: its own accordion with «Crea un cas» and only the cases w
   const training = app.slice(app.indexOf('<Accordion.Item value="training">'));
   assert.ok(training.indexOf("rowHeader('Dataset'") > -1 && training.indexOf("rowHeader('Dataset'") < training.indexOf("rowHeader('Beta'"), 'Dataset just above Beta');
   // The open sections are remembered, «manual» too.
-  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "training", "models"\]/);
+  assert.match(require('node:fs').readFileSync(require('node:path').join(__dirname, 'view-state.ts'), 'utf8'), /\["cases", "manual", "imports", "training", "models"\]/);
 });
 
 test('a function the running main process does not have yet says «restart the app» instead of nothing', () => {

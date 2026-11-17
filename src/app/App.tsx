@@ -4,7 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview';
 import rehypeSanitize from 'rehype-sanitize';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { EngineBenchmark, EngineBenchmarkEngine, AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
+import type { EngineBenchmark, EngineBenchmarkEngine, LearningImport, AgentPreferences, DictationPreferences, TrainingPreferences, ChatMessage, ChatSession, ChatTurnResult, ManualCase, DatasetView, TurnProgress, ElectronWebviewTag, GitCommit, GitCommitDetails, GitHistory, GitSnapshot, LocalModelOption, ManagedModel, ManagedModels, ProjectFileHistoryVersion, ProjectInfo, TrainingDatasetPreview, TrainingProgress, VerifiedExperience, LearningCase, LearningCaseDetail, BenchmarkList, BenchmarkReport, BenchmarkProject, BenchmarkTask, BenchmarkCurrent } from '../types';
 import {
   Accordion, useChakraContext, Badge, Field, Box, Button as ChakraButton, Center, createFileTreeCollection, Dialog, Flex, FloatingPanel, Grid, Heading, HStack, IconButton as ChakraIconButton, Input, Menu, Portal, Stack,
   Spinner, Progress, Collapsible, Tabs, CloseButton, Text, Textarea, Tooltip, TreeView, NativeSelect, Checkbox, Card, chakra, NumberInput, SegmentGroup, Switch, Image
@@ -305,6 +305,8 @@ export function App(): React.JSX.Element {
   // The chat is a pane like the others: shown by default, it can be hidden from its icon.
   const [chatOpen, setChatOpen] = useState(initialView.panels.chat);
   const [evaluationList, setEvaluationList] = useState<BenchmarkList | null>(null);
+  // Aprenentatge local › Dades JSON: the .jsonl files loaded for training.
+  const [learningImports, setLearningImports] = useState<LearningImport[]>([]);
   // Benchmark de motors (scripts/evaluate-engines.cjs): its runs, newest first.
   const [engineReports, setEngineReports] = useState<EngineBenchmark[]>([]);
   const [evaluationRunning, setEvaluationRunning] = useState(false);
@@ -1290,6 +1292,7 @@ export function App(): React.JSX.Element {
     const [preview, cases] = await Promise.all([window.agentic.learningDatasetPreview(), typeof window.agentic.listLearningCases === 'function' ? window.agentic.listLearningCases().catch(() => null) : null]);
     setDatasetPreview(preview);
     setLearningCases(cases);
+    if (typeof window.agentic.learningImports === 'function') setLearningImports(await window.agentic.learningImports().catch(() => []));
     void refreshLearningVersions();
   }
   async function openCaseDetail(id: string) {
@@ -1974,7 +1977,7 @@ export function App(): React.JSX.Element {
                 </HStack>
               </HStack>;
   // The open sections of Aprenentatge local, remembered per group (each group's accordion saves only its own).
-  const LEARNING_CASE_SECTIONS = ['cases', 'manual'];
+  const LEARNING_CASE_SECTIONS = ['cases', 'manual', 'imports'];
   const LEARNING_MODEL_SECTIONS = ['training', 'models'];
   const keepLearningSections = (group: string[], value: string[]) => updateViewState(localStorage, (state) => { state.learningSections = [...(state.learningSections || []).filter((item) => !group.includes(item)), ...value]; });
   const learningPane = (
@@ -1989,7 +1992,6 @@ export function App(): React.JSX.Element {
         <Accordion.ItemTrigger>{rowHeader('Casos', undefined, ListChecks)}</Accordion.ItemTrigger>
         <Accordion.ItemContent px="0"><Accordion.ItemBody p="0">
           <HStack gap="2" flexWrap="wrap" px="var(--accordion-padding-x)" pb="2" data-learning-actions>
-            <Button size="xs" flex="none" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</Button>
             <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</Button>
             <Button size="xs" flex="none" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</Button>
           </HStack>
@@ -2011,8 +2013,23 @@ export function App(): React.JSX.Element {
           <Accordion.Item value="manual">
             <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
+              <HStack><Button size="xs" flex="none" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</Button></HStack>
               {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
               {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
+            </Stack></Accordion.ItemBody></Accordion.ItemContent>
+          </Accordion.Item>
+          {/* Dades JSON: conversations from .jsonl files (src/electron/learning-imports.cjs), trained beside the cases. */}
+          <Accordion.Item value="imports">
+            <Accordion.ItemTrigger>{rowHeader('Dades JSON', learningImports.reduce((sum, item) => sum + item.examples, 0), FileCode)}</Accordion.ItemTrigger>
+            <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
+              <HStack><Button size="xs" flex="none" colorPalette="agentic" onClick={() => void window.agentic.importLearningData().then(setLearningImports).catch((error) => setLearningStatus(errorText(error)))}><FileText size={14}/>Carrega un JSONL</Button></HStack>
+              <Text fontSize="xs" color="fg.muted">Un fitxer .jsonl amb una conversa per línia: {'{"messages": [{"role": "user", …}, {"role": "assistant", …}]}'}. Les seves converses entren a la beta i a l’estable amb els casos.</Text>
+              {learningImports.length === 0 && <Text fontSize="sm" color="fg.muted">Encara no n’has carregat cap.</Text>}
+              {learningImports.map((item) => <HStack key={item.name} gap="2" borderWidth="1px" borderColor="border" borderRadius="md" px="3" py="1.5">
+                <FileText size={14}/><Text flex="1" minW="0" fontSize="sm" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap" title={item.name}>{item.name}</Text>
+                <Text fontSize="xs" color="fg.muted">{item.examples} {item.examples === 1 ? 'conversa' : 'converses'}{item.skipped ? ` · ${item.skipped} línies no vàlides` : ''}</Text>
+                <IconButton icon={Trash} label={`Treu ${item.name} (va a la paperera)`} onClick={() => void window.agentic.removeLearningImport(item.name).then(setLearningImports).catch((error) => setLearningStatus(errorText(error)))}/>
+              </HStack>)}
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
           </Accordion.Item>
         </Accordion.Root>

@@ -77,7 +77,7 @@ export function loadViewState(storage: Storage): ViewState {
   state.rail = normalizeRailLayout(saved.rail)
   state.appearance = normalizeAppearance(saved.appearance)
   state.paneWidths = normalizePaneWidths(saved.paneWidths)
-  if (Array.isArray(saved.learningSections)) state.learningSections = saved.learningSections.filter((item: unknown): item is string => typeof item === "string" && ["cases", "manual", "training", "models"].includes(item))
+  if (Array.isArray(saved.learningSections)) state.learningSections = saved.learningSections.filter((item: unknown): item is string => typeof item === "string" && ["cases", "manual", "imports", "training", "models"].includes(item))
   if (Array.isArray(saved.evaluationSections)) state.evaluationSections = saved.evaluationSections.filter((item: unknown): item is string => typeof item === "string")
   const history = saved.history || {}
   if (isNumber(history.position?.x) && isNumber(history.position?.y)) state.history.position = { x: history.position.x, y: history.position.y }

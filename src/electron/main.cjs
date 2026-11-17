@@ -1359,6 +1359,21 @@ ipcMain.handle('learning:record-verified-experience', async (_e, value) => {
 function verifiedExperiencesPath() { return path.join(app.getPath('userData'), 'learning', 'verified-experiences.jsonl'); }
 // The saved cases as the learning panel lists and manages them; a deleted case goes to the .deleted file.
 ipcMain.handle('learning:cases-list', () => learningCases.listCases(verifiedExperiencesPath()));
+// Aprenentatge local › Dades JSON (src/electron/learning-imports.cjs): .jsonl files of conversations, kept in the
+// app's data folder; the betas and stable candidates train with them beside the cases.
+const learningImports = require('./learning-imports.cjs');
+const learningImportsDirectory = () => path.join(app.getPath('userData'), 'learning', 'imports');
+ipcMain.handle('learning:imports', () => learningImports.listImports(learningImportsDirectory()));
+ipcMain.handle('learning:import', async () => {
+  const picked = await dialog.showOpenDialog(win, { title: 'Carrega dades d’entrenament', properties: ['openFile'], filters: [{ name: 'Converses (.jsonl)', extensions: ['jsonl'] }] });
+  if (!picked.canceled && picked.filePaths[0]) await learningImports.addImport(learningImportsDirectory(), picked.filePaths[0]);
+  return learningImports.listImports(learningImportsDirectory());
+});
+ipcMain.handle('learning:remove-import', async (_e, name) => {
+  // To the Trash, not deleted: it can be recovered from there.
+  await shell.trashItem(await learningImports.importPath(learningImportsDirectory(), name));
+  return learningImports.listImports(learningImportsDirectory());
+});
 ipcMain.handle('learning:case-detail', (_e, id) => learningCases.readCase(verifiedExperiencesPath(), learningCases.validCaseId(id)));
 ipcMain.handle('learning:case-update', (_e, id, changes) => learningCases.updateCase(verifiedExperiencesPath(), learningCases.validCaseId(id), changes));
 ipcMain.handle('learning:case-exclusions', (_e, id, exclusions) => learningCases.setExclusions(verifiedExperiencesPath(), learningCases.validCaseId(id), exclusions));
@@ -1684,7 +1699,8 @@ async function startVersionRun(kind) {
   trainingRun = { controller, name: kind, base: base.label, baseId: base.id };
   (async () => {
     try {
-      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), ...await trainingCommand(base), onProgress: sendTraining, signal: controller.signal });
+      const imported = await learningImports.importedExamples(learningImportsDirectory(), trainingPreferences.maxTokens, versions.estimateTokens);
+      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), imported, ...await trainingCommand(base), onProgress: sendTraining, signal: controller.signal });
       if (kind === 'beta') {
         sendTraining({ step: 'finished', published: true, message: `Beta ${adapter.number} a punt: ${base.label} beta · ${adapter.cases} ${adapter.cases === 1 ? 'cas' : 'casos'}${adapter.truncated ? ` (${adapter.truncated} retallats)` : ''}. Tria-la al selector per provar-la.` });
         return;
