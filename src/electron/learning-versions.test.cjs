@@ -19,7 +19,11 @@ function caseRecord(n, { system = 'Ets Agentic Coder.\nFitxers:\n' + 'x'.repeat(
 const prepare = (count, options) => prepareTrainingDataset(Array.from({ length: count }, (_, index) => caseRecord(index + 1, options)));
 
 test('the training preferences: prudent defaults for 16 GB, kept in range', () => {
-  assert.deepEqual(versions.defaultTrainingPreferences(), { maxTokens: 4096, numLayers: 8, learningRate: 0.00001, itersPerCase: 20, minIters: 60, maxIters: 600, seed: 7 });
+  assert.deepEqual(versions.defaultTrainingPreferences(32 * 2 ** 30), { maxTokens: 4096, numLayers: 8, learningRate: 0.00001, itersPerCase: 20, minIters: 60, maxIters: 600, seed: 7 });
+  // The example length follows the Mac's memory: what fits a 9B model's training.
+  assert.equal(versions.defaultMaxTokens(16 * 2 ** 30), 1536);
+  assert.equal(versions.defaultMaxTokens(24 * 2 ** 30), 3072);
+  assert.equal(versions.defaultMaxTokens(64 * 2 ** 30), 4096);
   const prefs = versions.normalizeTrainingPreferences({ maxTokens: 99999, numLayers: 2, learningRate: 1, itersPerCase: '30', seed: -4, minIters: 900, maxIters: 100 });
   assert.deepEqual(prefs, { maxTokens: 8192, numLayers: 4, learningRate: 0.00005, itersPerCase: 30, minIters: 100, maxIters: 100, seed: 0 });
   assert.deepEqual(versions.normalizeTrainingPreferences('x'), versions.defaultTrainingPreferences());
@@ -103,7 +107,7 @@ test('a beta is trained from the base with every case, and its manifest says wha
   const calls = [];
   const progress = [];
   let clock = Date.parse('2026-11-14T22:00:00.000Z');
-  const beta = await versions.trainAdapter({ kind: 'beta', base: base(root), prepared: prepare(3), preferences: versions.defaultTrainingPreferences(), modelsRoot: root, python: 'py', launcher: 'mlx-locked.py', run: fakeRun(calls), onProgress: (event) => progress.push(event), now: () => new Date((clock += 1000)) });
+  const beta = await versions.trainAdapter({ kind: 'beta', base: base(root), prepared: prepare(3), preferences: versions.defaultTrainingPreferences(32 * 2 ** 30), modelsRoot: root, python: 'py', launcher: 'mlx-locked.py', run: fakeRun(calls), onProgress: (event) => progress.push(event), now: () => new Date((clock += 1000)) });
   const args = calls[0];
   assert.deepEqual(args.slice(0, 4), ['py', 'mlx-locked.py', 'lora', '--model']);
   assert.equal(args[args.indexOf('--model') + 1], base(root).directory, 'always the original base, never another adapter');

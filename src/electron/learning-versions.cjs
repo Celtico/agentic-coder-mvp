@@ -18,7 +18,7 @@ const STABLE_MIN_CASES = 30;
 /** Under this many cases a beta only checks that the whole circuit works. */
 const FEW_CASES = 10;
 
-/** Preferències › Aprenentatge: prudent values for a 16 GB Mac. */
+/** Preferències › Aprenentatge: prudent values for a 16 GB Mac (maxTokens: defaultMaxTokens, by this Mac's memory). */
 const TRAINING_LIMITS = {
   maxTokens: { min: 512, max: 8192, default: 4096 },
   numLayers: { min: 4, max: 16, default: 8 },
@@ -30,7 +30,17 @@ const TRAINING_LIMITS = {
 };
 const INTEGER_KEYS = ['maxTokens', 'numLayers', 'itersPerCase', 'minIters', 'maxIters', 'seed'];
 
-const defaultTrainingPreferences = () => Object.fromEntries(Object.entries(TRAINING_LIMITS).map(([key, limit]) => [key, limit.default]));
+/**
+ * Tokens per example that fit this Mac when training a 9B model (MiMo, measured 17-11-2026 on 16 GB with the
+ * engine's chunkwise DeltaNet: 1,536 tokens 11.1 GB of the 12.7 the GPU may use; each 1,024 more ≈ 2.5 GB).
+ * A bigger Mac trains longer examples: 24 GB 3,072, 32 GB or more 4,096.
+ */
+function defaultMaxTokens(memoryBytes = require('node:os').totalmem()) {
+  const gb = memoryBytes / 2 ** 30;
+  return gb <= 16 ? 1536 : gb <= 24 ? 3072 : 4096;
+}
+
+const defaultTrainingPreferences = (memoryBytes) => ({ ...Object.fromEntries(Object.entries(TRAINING_LIMITS).map(([key, limit]) => [key, limit.default])), maxTokens: defaultMaxTokens(memoryBytes) });
 
 function normalizeTrainingPreferences(value, base = defaultTrainingPreferences()) {
   const saved = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -283,6 +293,7 @@ async function promoteStable({ candidate, name, base, modelsRoot, python, launch
 }
 
 module.exports = {
+  defaultMaxTokens,
   BETA_MIN_CASES, STABLE_MIN_CASES, FEW_CASES, TRAINING_LIMITS, defaultTrainingPreferences, normalizeTrainingPreferences, itersFor,
   learningButtons, estimateTokens, fitExample, toTrainingExamples, buildTrainingExamples, writeTrainingData, parseTrainingLine,
   listBetas, latestCandidate, betaModels, deleteBeta, trainAdapter, recordComparison, promoteStable,
