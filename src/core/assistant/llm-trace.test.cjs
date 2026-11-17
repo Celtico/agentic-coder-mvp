@@ -147,12 +147,14 @@ test('the logprobs switch: a one-word label that never wraps, the whole text in 
   assert.match(panel, /<Tooltip\.Content maxW="280px">\{LOGPROBS_LABEL\}<\/Tooltip\.Content>/);
 });
 
-test('the toolbar’s buttons: only their icons, their names in a tooltip and as aria-label; Esborra still asks twice', () => {
+test('the toolbar’s buttons: only their icons, their names in a tooltip and as aria-label; Esborra clears with one click', () => {
   const panel = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'llm-log.tsx'), 'utf8');
   assert.match(panel, /<Button aria-label=\{label\} size="xs" variant="ghost" px="2" \{\.\.\.props\}>\{children\}<\/Button>/);
-  for (const label of ['Actualitza', 'Mostra el fitxer al Finder', 'Esborra el log', 'Segur? Torna-hi a fer clic per esborrar el log']) assert.ok(panel.includes(`<ToolButton label="${label}"`), label);
+  for (const label of ['Actualitza', 'Mostra el fitxer al Finder', 'Esborra el log']) assert.ok(panel.includes(`<ToolButton label="${label}"`), label);
+  // «Esborra el log» clears it with one click (cel, 17-11-2026): no second click to confirm.
+  assert.match(panel, /<ToolButton label="Esborra el log" onClick=\{\(\) => \{ void window\.agentic\.clearLlmCalls\(\)/);
+  assert.doesNotMatch(panel, /Torna-hi a fer clic per esborrar el log/);
   assert.doesNotMatch(panel, /<\/(?:RefreshCw|FolderOpen|Trash)[^>]*>|size=\{14\}\/>(?:Actualitza|Fitxer|Esborra)/);
-  assert.match(panel, /setConfirmClear\(true\); setTimeout\(\(\) => setConfirmClear\(false\), 4000\)/);
 });
 
 test('the prompt cache: mlx_lm’s own, in the chat and not in an evaluation, and its reuse in Mètriques', () => {

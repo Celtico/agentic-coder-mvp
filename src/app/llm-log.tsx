@@ -99,7 +99,6 @@ export function LlmLogPane() {
   const [live, setLive] = useState<Live | null>(null)
   const [logprobs, setLogprobs] = useState(false)
   const [error, setError] = useState("")
-  const [confirmClear, setConfirmClear] = useState(false)
   const reload = useCallback(async () => {
     try { setCalls((await window.agentic.listLlmCalls()).calls as LlmCall[]); setError("") } catch (caught) { setError(errorMessage(caught)); setCalls((current) => current ?? []) }
   }, [])
@@ -130,9 +129,8 @@ export function LlmLogPane() {
     </HStack>
     <ToolButton label="Actualitza" onClick={() => void reload()}><RefreshCw size={16}/></ToolButton>
     <ToolButton label="Mostra el fitxer al Finder" onClick={() => void window.agentic.revealLlmCalls()}><FolderOpen size={16}/></ToolButton>
-    {confirmClear
-      ? <ToolButton label="Segur? Torna-hi a fer clic per esborrar el log" colorPalette="red" variant="subtle" onClick={() => { setConfirmClear(false); void window.agentic.clearLlmCalls().then(() => setCalls([])) }}><Trash size={16}/></ToolButton>
-      : <ToolButton label="Esborra el log" onClick={() => { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 4000) }}><Trash size={16}/></ToolButton>}
+    {/* One click (cel, 17-11-2026): the log is only a record of the calls, the next ones fill it again. */}
+    <ToolButton label="Esborra el log" onClick={() => { void window.agentic.clearLlmCalls().then(() => setCalls([])) }}><Trash size={16}/></ToolButton>
   </PaneToolbar>
 
   return <Pane label="Log del model" header={<PaneHeader icon={ScrollText} title="Log del model" subtitle="El que entra i surt del model a cada crida"/>} toolbar={toolbar}>
