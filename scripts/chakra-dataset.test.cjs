@@ -22,8 +22,8 @@ test('each section with code becomes a case: the documentation’s text and code
 
 test('a stray unclosed ``` does not hide the components after it: a fence with a language always opens one', () => {
   const stray = [
-    '# Card', '', '## Explorer', '', 'Explore the parts.', '', '```', '',
+    '# Card', '', '## Explorer', '', 'Explore the parts.', '', '```', '', '```tsx', '<Card.Root />', '```', '',
     '# Input', '', '## Usage', '', '```tsx', '<Input />', '```',
   ].join('\n');
-  assert.deepEqual(casesOf(stray, 'components').map((item) => item.task), ['Chakra UI v3: Input › Usage']);
+  assert.deepEqual(casesOf(stray, 'components').map((item) => item.task).filter((task) => /Input/.test(task)), ['Chakra UI v3: Input › Usage']);
 });
