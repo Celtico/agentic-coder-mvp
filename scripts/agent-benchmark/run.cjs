@@ -158,7 +158,8 @@ function summarize(results) {
  * (src/core/assistant/agent-runtime.cjs), so this measures the same orchestrator the app uses.
  */
 async function runBenchmark({ LocalCodingAgent, engine, taskIds, repeat = 1, timeoutMs = 10 * 60 * 1000, keep = false, onStart = () => {}, onResult = () => {} }) {
-  const selected = taskIds?.length ? allTasks.filter((task) => taskIds.includes(task.id)) : allTasks;
+  // Without a list, the usual evaluation: the tasks of a suite of their own (the twenty of Chakra UI) only when named.
+  const selected = taskIds?.length ? allTasks.filter((task) => taskIds.includes(task.id)) : allTasks.filter((task) => !task.suite);
   const unknown = (taskIds || []).filter((id) => !allTasks.some((task) => task.id === id));
   if (unknown.length) throw new Error(`Tasques desconegudes: ${unknown.join(', ')}`);
   const results = [];

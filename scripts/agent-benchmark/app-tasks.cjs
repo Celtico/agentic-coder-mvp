@@ -54,7 +54,7 @@ async function loadBuiltPage(root) {
   } finally { require('../../src/electron/processes.cjs').stopTree(preview, 'SIGKILL'); }
 }
 
-function appCheck({ chakra }) {
+function appCheck({ chakra, uses = [] }) {
   return async (root) => {
     const reasons = [];
     let pkg;
@@ -73,6 +73,12 @@ function appCheck({ chakra }) {
         for (const [pattern, label] of CHAKRA_V2_PATTERNS) if (pattern.test(text)) v2Usage.push(`${path.relative(root, file)}: ${label}`);
       }
       if (v2Usage.length) reasons.push(`API de v2: ${v2Usage.slice(0, 4).join(', ')}`);
+    }
+    // The components the request asks for, as Chakra UI v3 writes them (e.g. Dialog.Root).
+    if (uses.length) {
+      const sources = (await Promise.all((await sourceFiles(root)).map((file) => fs.readFile(file, 'utf8')))).join('\n');
+      const missing = uses.filter(([pattern]) => !pattern.test(sources)).map(([, label]) => label);
+      if (missing.length) reasons.push(`no fa servir ${missing.join(', ')}`);
     }
     if (typeof pkg.scripts?.build !== 'string') return { pass: false, detail: [...reasons, 'no hi ha script build'].join('; ') };
     if (!fsSync.existsSync(path.join(root, 'node_modules'))) await runCommand('npm', ['install'], root, 600000);
@@ -116,4 +122,34 @@ const appTasks = [
   },
 ];
 
-module.exports = { appTasks, appCheck, CHAKRA_V2_PATTERNS };
+// Chakra UI v3, component by component: twenty requests as a person would make them, each checked like the
+// apps above (build, page without errors, v3 without v2 APIs) and for the v3 components it asks for.
+const chakra = (id, prompt, uses) => ({
+  id: `chakra-${id}`, description: `Chakra UI v3 des d’una carpeta buida: ${uses.map(([, label]) => label).join(', ')}.`,
+  prompt, files: {}, protected: [], allowInstall: true, timeoutMinutes: 20, suite: 'chakra',
+  check: appCheck({ chakra: true, uses }),
+});
+const chakraTasks = [
+  chakra('login', 'Fes una pantalla d’inici de sessió amb Chakra UI: correu, contrasenya i un botó per entrar', [[/Field\.Root/, 'Field'], [/<Input\b|PasswordInput/, 'Input'], [/<Button\b/, 'Button']]),
+  chakra('dialog', 'Fes una pàgina amb Chakra UI amb un botó que obri un diàleg per confirmar que vols esborrar un element', [[/Dialog\.Root/, 'Dialog']]),
+  chakra('menu', 'Amb Chakra UI, fes un botó amb un menú desplegable amb les opcions Editar, Duplicar i Esborrar', [[/Menu\.Root/, 'Menu']]),
+  chakra('tabs', 'Fes una pàgina de compte amb Chakra UI amb tres pestanyes: Perfil, Ajustos i Factures', [[/Tabs\.Root/, 'Tabs']]),
+  chakra('cards', 'Fes una botiga amb Chakra UI: una graella de sis targetes de producte amb imatge, nom, preu i un botó de comprar', [[/Card\.Root/, 'Card'], [/SimpleGrid|<Grid\b/, 'SimpleGrid o Grid']]),
+  chakra('table', 'Fes una taula d’usuaris amb Chakra UI amb nom, correu i rol', [[/Table\.Root/, 'Table']]),
+  chakra('drawer', 'Fes una pàgina amb Chakra UI amb un botó que obri un calaix lateral amb el menú de navegació', [[/Drawer\.Root/, 'Drawer']]),
+  chakra('accordion', 'Fes una secció de preguntes freqüents amb Chakra UI, amb un acordió', [[/Accordion\.Root/, 'Accordion']]),
+  chakra('settings', 'Fes una pantalla d’ajustos amb Chakra UI amb interruptors per a les notificacions i caselles per als temes que t’interessen', [[/Switch\.Root/, 'Switch'], [/Checkbox\.Root/, 'Checkbox']]),
+  chakra('select', 'Fes un formulari d’adreça amb Chakra UI amb un selector de país', [[/Select\.Root|NativeSelect\.Root/, 'Select']]),
+  chakra('toast', 'Fes un formulari amb Chakra UI que en desar mostri una notificació que digui que s’ha desat', [[/createToaster|toaster\./, 'toaster']]),
+  chakra('stats', 'Fes un tauler amb Chakra UI amb tres estadístiques i una barra de progrés de l’objectiu del mes', [[/Stat\.Root/, 'Stat'], [/Progress\.Root/, 'Progress']]),
+  chakra('team', 'Fes una llista dels membres de l’equip amb Chakra UI, amb l’avatar de cadascú i una insígnia amb el seu rol', [[/Avatar\.Root/, 'Avatar'], [/<Badge\b/, 'Badge']]),
+  chakra('pagination', 'Fes una llista de cinquanta articles amb Chakra UI que es mostrin de deu en deu amb paginació', [[/Pagination\.Root/, 'Pagination']]),
+  chakra('steps', 'Fes un assistent de registre en tres passos amb Chakra UI', [[/Steps\.Root/, 'Steps']]),
+  chakra('popover', 'Amb Chakra UI, fes un botó amb una ajuda emergent (tooltip) i un altre que obri un popover amb més informació', [[/Tooltip/, 'Tooltip'], [/Popover\.Root/, 'Popover']]),
+  chakra('alerts', 'Fes una pàgina amb Chakra UI que mostri tres avisos: un d’èxit, un d’error i un d’informació', [[/Alert\.Root/, 'Alert']]),
+  chakra('survey', 'Fes una enquesta amb Chakra UI amb una pregunta d’opció única i un control lliscant del 0 al 10', [[/RadioGroup\.Root/, 'RadioGroup'], [/Slider\.Root/, 'Slider']]),
+  chakra('landing', 'Fes una pàgina d’aterratge amb Chakra UI: capçalera, una secció principal amb un títol gran, tres característiques i un peu de pàgina', [[/<Heading\b/, 'Heading'], [/<Container\b|<Flex\b|<Stack\b|<HStack\b|<VStack\b/, 'Container, Flex o Stack']]),
+  chakra('upload', 'Fes un formulari amb Chakra UI per pujar un fitxer', [[/FileUpload\.Root/, 'FileUpload']]),
+];
+
+module.exports = { appTasks: [...appTasks, ...chakraTasks], chakraTasks, appCheck, CHAKRA_V2_PATTERNS };

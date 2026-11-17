@@ -3,6 +3,7 @@
 //   npm run evaluate:agent                      # every task once with the base model, MiMo 9B (MLX)
 //   npm run evaluate:agent -- --model gemma     # another MLX model: id or alias from src/electron/mlx-models.cjs
 //   npm run evaluate:agent -- --task add-function --repeat 3
+//   npm run evaluate:agent -- --suite chakra   # the twenty Chakra UI v3 tasks (scripts/agent-benchmark/app-tasks.cjs)
 //   npm run evaluate:agent -- --list
 //
 // Each task runs in a new temporary folder with its own files; the result is judged by objective
@@ -25,6 +26,7 @@ function parseArgs(argv) {
     else if (arg === '--repeat') options.repeat = Math.max(1, Number.parseInt(next(), 10) || 1);
     else if (arg === '--timeout') options.timeoutMinutes = Math.max(1, Number(next()) || 10);
     else if (arg === '--out') options.out = path.resolve(next());
+    else if (arg === '--suite') options.suite = next();
     else if (arg === '--keep') options.keep = true;
     else if (arg === '--list') options.list = true;
     else throw new Error(`Opció desconeguda: ${arg}`);
@@ -35,6 +37,13 @@ function parseArgs(argv) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const { tasks } = require('./agent-benchmark/tasks.cjs');
+  if (options.suite) {
+    const { appTasks } = require('./agent-benchmark/app-tasks.cjs');
+    const suite = appTasks.filter((task) => task.suite === options.suite).map((task) => task.id);
+    if (!suite.length) throw new Error(`Grup de tasques desconegut: ${options.suite}`);
+    options.tasks.push(...suite);
+    options.timeoutMinutes = Math.max(options.timeoutMinutes, 20);
+  }
   if (options.list) {
     for (const task of tasks) console.log(`${task.id}\n  ${task.description}\n  «${task.prompt}»`);
     return;

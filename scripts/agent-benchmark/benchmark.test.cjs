@@ -77,7 +77,7 @@ test('the app tasks start empty, may install, and their check spots Chakra v2 co
   const path = require('node:path');
   const { appTasks, appCheck } = require('./app-tasks.cjs');
   const { createSandboxExecutor } = require('./sandbox-tools.cjs');
-  assert.equal(appTasks.length, 3);
+  assert.equal(appTasks.length, 23, 'three apps and twenty Chakra UI v3 tasks');
   for (const task of appTasks) { assert.deepEqual(task.files, {}); assert.equal(task.allowInstall, true); assert.doesNotMatch(task.prompt, /package\.json|vite|npm|\.jsx/i); }
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-bench-app-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -88,6 +88,8 @@ test('the app tasks start empty, may install, and their check spots Chakra v2 co
   const result = await appCheck({ chakra: true })(root);
   assert.equal(result.pass, false);
   assert.match(result.detail, /no la v3/);
+  // A Chakra task also asks for the components the request names, as v3 writes them.
+  assert.match((await appCheck({ chakra: true, uses: [[/Dialog\.Root/, 'Dialog']] })(root)).detail, /no fa servir Dialog/);
   assert.match(result.detail, /extendTheme/);
   assert.match(result.detail, /no hi ha script build/);
   // Without allowInstall the installs answer with an error; a dev server is never started.
