@@ -594,9 +594,14 @@ function explicitLocalInspectionRequest(prompt: string): AgentToolCall | null {
 }
 
 async function explicitProjectStartRequest(prompt: string, projectRoot: string): Promise<AgentToolCall | null> {
-  if (!/^\s*(?:engega|inicia|arrenca|start|run)\b/i.test(prompt)) return null;
-  if (!/\b(?:app|application|project|projecte|proyecto|aplicaci[oó]|notes|web|servidor|server)\b/i.test(prompt)) return null;
-  const namedScript = prompt.match(/\b(?:npm\s+run|script(?:\s+de)?|amb el script|with the script|using)\s+(dev|start|preview)\b/i)?.[1]?.toLowerCase();
+  // Only the command that starts the app («fes una npm run dev», «npm start», «executa pnpm dev»): MiMo, asked
+  // this after building an app, went back to rewriting App.jsx instead of starting it (cel, 17-11-2026).
+  const onlyCommand = /^\s*(?:(?:fes|fer|executa|executar|corre|llança|inicia|arrenca|engega|run|execute|start|launch|haz|ejecuta|lanza|arranca)\s+)?(?:(?:una?|el|la|the|an?)\s+)?(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(dev|start|preview)\s*[.!]?\s*$/i.exec(prompt);
+  if (!onlyCommand) {
+    if (!/^\s*(?:engega|inicia|arrenca|start|run)\b/i.test(prompt)) return null;
+    if (!/\b(?:app|application|project|projecte|proyecto|aplicaci[oó]|notes|web|servidor|server)\b/i.test(prompt)) return null;
+  }
+  const namedScript = onlyCommand?.[1]?.toLowerCase() || prompt.match(/\b(?:npm\s+run|script(?:\s+de)?|amb el script|with the script|using)\s+(dev|start|preview)\b/i)?.[1]?.toLowerCase();
   let scripts: Record<string, unknown> = {};
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8'));

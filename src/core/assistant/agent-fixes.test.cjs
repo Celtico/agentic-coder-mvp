@@ -334,3 +334,18 @@ test('a page that cannot be opened because its server is down: the model is told
   assert.ok(inputs.some((input) => /el servidor de l’app no està en marxa/.test(input)));
   assert.deepEqual(tools, ['inspect_browser', 'start_project']);
 });
+
+test('«fes una npm run dev» starts the app directly, as «engega l’app» does (cel, 17-11-2026)', async (t) => {
+  for (const request of ['fes una npm run dev', 'npm start', 'executa npm run dev', 'fes un npm run preview.']) {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-npm-dev-'));
+    t.after(() => fs.rm(tempRoot, { recursive: true, force: true }));
+    await fs.writeFile(path.join(tempRoot, 'package.json'), JSON.stringify({ scripts: { dev: 'vite', start: 'vite', preview: 'vite preview' } }));
+    const agent = new LocalCodingAgent({ engine: { loadModel: async () => {}, generateResponse: async () => { throw new Error('the model was asked'); }, getModelStatus: () => ({ modelId: 'test-model' }) }, experienceRanker: { rank: async () => [] } });
+    agent.historyDir = path.join(tempRoot, '.history');
+    const calls = [];
+    const answer = await agent.ask(request, tempRoot, async (call) => { calls.push(call); return { started: true, url: 'http://localhost:5173/', pageVerdict: 'La pàgina carrega i mostra contingut.' }; });
+    assert.equal(calls[0]?.name, 'start_project', request);
+    assert.equal(calls[0].arguments.script, /preview/.test(request) ? 'preview' : /start/.test(request) ? 'start' : 'dev', request);
+    assert.match(answer, /localhost:5173/);
+  }
+});
