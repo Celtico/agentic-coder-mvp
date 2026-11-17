@@ -33,6 +33,18 @@ test('packages: a Linux AppImage and deb next to the Mac dmg, with every Python 
   assert.ok(pkg.build.files.includes('src/core/assistant/*.py'), 'mlx_trace.py and mlx_download.py too');
 });
 
+test('the Mac dmg carries the native engine (Node without Python), built before packaging', () => {
+  const pkg = JSON.parse(read('package.json'));
+  assert.equal(pkg.scripts['build:native'], 'npm --prefix native install && npm --prefix native run build');
+  assert.match(pkg.scripts['dist:mac'], /npm run build:native && electron-builder --mac dmg/);
+  // Its tokenizer and chat template come from the app's own dependencies, at the versions the engine was tested with.
+  assert.equal(pkg.dependencies['@huggingface/jinja'], JSON.parse(read('native/package.json')).dependencies['@huggingface/jinja']);
+  assert.equal(pkg.dependencies['@huggingface/tokenizers'], JSON.parse(read('native/package.json')).dependencies['@huggingface/tokenizers']);
+  for (const file of ['src/core/assistant/native-worker.cjs', 'src/core/assistant/native-text.cjs', 'native/index.js', 'native/chat.js', 'native/lora.js', 'native/build/Release/agentic_mlx.node', 'native/build/Release/libmlx.dylib', 'native/build/Release/mlx.metallib', 'scripts/evaluate-engines.cjs']) {
+    assert.ok(pkg.build.files.includes(file), file);
+  }
+});
+
 test('engine per platform: MLX on a Mac as always; on Linux CUDA, its own venv and the models added under models/hf', async (t) => {
   const os = require('node:os');
   const mlxModels = require('./mlx-models.cjs');
