@@ -2,10 +2,10 @@
  * Clicks, form filling and visibility checks carried out inside a page the app itself has open.
  * Electron is already a browser, so none of this needs Playwright or anything installed in the
  * project. Elements are found the way a person would name them: by role, label, placeholder,
- * visible text or test id. No selectors and no script come from the model.
+ * visible text, test id or id (the exact id attribute). No selectors and no script come from the model.
  */
 const ROLES = ['button', 'link', 'checkbox', 'radio', 'textbox', 'heading', 'option'];
-const BY = ['role', 'label', 'placeholder', 'text', 'testId'];
+const BY = ['role', 'label', 'placeholder', 'text', 'testId', 'id'];
 
 function checkedActions(actions = []) {
   if (!Array.isArray(actions) || actions.length > 12) throw new Error('Una inspecció pot incloure com a màxim 12 accions de navegador.');
@@ -41,6 +41,7 @@ async function runInPage(actions) {
     const wanted = norm(target.value);
     let found = [];
     if (target.by === 'testId') found = [...document.querySelectorAll('[data-testid]')].filter((element) => element.getAttribute('data-testid') === target.value);
+    else if (target.by === 'id') found = [...document.querySelectorAll('[id]')].filter((element) => element.id === target.value);
     else if (target.by === 'placeholder') found = [...document.querySelectorAll('[placeholder]')].filter((element) => norm(element.getAttribute('placeholder')).includes(wanted));
     else if (target.by === 'label') {
       found = [...document.querySelectorAll('label')].filter((label) => norm(label.innerText).includes(wanted)).map((label) => label.control || label.querySelector('input,textarea,select')).filter(Boolean);

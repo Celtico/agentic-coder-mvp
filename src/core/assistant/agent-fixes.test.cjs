@@ -254,3 +254,35 @@ test('«arregla-ho» after a proposal asks for the change: an answer that asks a
   });
   assert.ok(inputs.some((input) => /No demanis confirmació|Encara no has aplicat cap canvi al codi|Això és només el pla/.test(input)), 'the question was taken as the answer');
 });
+
+test('the call chosen before the plan is run after it, not thrown away (cel, 17-11-2026)', async (t) => {
+  const written = [];
+  await run(t, {
+    request: 'fes una app de Vite amb React que sumi dos números',
+    responses: [
+      '{"type":"tool_call","name":"write_file","arguments":{"path":"package.json","content":"{}"}}',
+      '{"type":"plan","content":"Crearé package.json, index.html, src/main.jsx i src/App.jsx."}',
+      '{"type":"tool_call","name":"write_file","arguments":{"path":"src/App.jsx","content":"export default () => null"}}',
+      '{"type":"final","content":"Fet."}',
+    ],
+    tool: async (call) => { if (call.name === 'write_file') written.push(call.arguments.path); return { applied: true, path: call.arguments.path }; },
+  });
+  assert.equal(written[0], 'package.json');
+});
+
+test('a repeated call is told once to go on with the next step; the work continues (cel, 17-11-2026)', async (t) => {
+  const written = [];
+  const viteConfig = '{"type":"tool_call","name":"write_file","arguments":{"path":"vite.config.js","content":"export default {}"}}';
+  const { inputs } = await run(t, {
+    request: 'Crea index.html i vite.config.js',
+    responses: [
+      '{"type":"plan","content":"Crearé vite.config.js i index.html."}',
+      viteConfig, viteConfig,
+      '{"type":"tool_call","name":"write_file","arguments":{"path":"index.html","content":"<h1>Hola</h1>"}}',
+      '{"type":"final","content":"He creat els dos fitxers."}',
+    ],
+    tool: async (call) => { if (call.name === 'write_file') written.push(call.arguments.path); return { applied: true, path: call.arguments.path }; },
+  });
+  assert.ok(inputs.some((input) => /ja s’ha fet amb aquests mateixos arguments/.test(input)));
+  assert.deepEqual(written, ['vite.config.js', 'index.html']);
+});

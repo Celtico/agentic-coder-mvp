@@ -37,7 +37,7 @@ export type AgentTrajectoryStep = { name: string; arguments: Record<string, unkn
 export type AgentTrajectory = { prompt: string; model: string; system: string; steps: AgentTrajectoryStep[]; answer: string };
 
 type AgentAction = { type: 'final'; content: string } | { type: 'plan'; content: string } | { type: 'tool_call'; name: string; arguments?: unknown; plan?: string };
-type BrowserTarget = { by: 'role' | 'label' | 'placeholder' | 'text' | 'testId'; value: string; role?: 'button' | 'link' | 'checkbox' | 'radio' | 'textbox' | 'heading' | 'option' };
+type BrowserTarget = { by: 'role' | 'label' | 'placeholder' | 'text' | 'testId' | 'id'; value: string; role?: 'button' | 'link' | 'checkbox' | 'radio' | 'textbox' | 'heading' | 'option' };
 type BrowserAction = { type: 'click' | 'assertVisible'; target: BrowserTarget } | { type: 'fill'; target: BrowserTarget; value: string } | { type: 'assertText'; text: string };
 type ExperienceRanker = { rank(prompt: string, values: EmbeddableExperience[], onStatus?: (message: string) => void): Promise<RankedExperience[]> };
 
@@ -66,7 +66,7 @@ const agentToolDefinitions: InferenceToolDefinition[] = [
     actions: { type: 'array', maxItems: 12, items: { type: 'object', properties: {
       type: { type: 'string', enum: ['click', 'fill', 'assertVisible', 'assertText'] },
       target: { type: 'object', properties: {
-        by: { type: 'string', enum: ['role', 'label', 'placeholder', 'text', 'testId'] },
+        by: { type: 'string', enum: ['role', 'label', 'placeholder', 'text', 'testId', 'id'] },
         value: stringParameter('Accessible name, label, placeholder, visible text, or test id.', 200),
         role: { type: 'string', enum: ['button', 'link', 'checkbox', 'radio', 'textbox', 'heading', 'option'] },
       }, required: ['by', 'value'], additionalProperties: false },
@@ -443,7 +443,8 @@ function validateToolCall(action: Extract<AgentAction, { type: 'tool_call' }>): 
       if (item.type === 'assertText' && typeof item.text === 'string' && item.text.length > 0 && item.text.length <= 1000) { actions.push({ type: 'assertText', text: item.text }); continue; }
       if (!['click', 'fill', 'assertVisible'].includes(String(item.type)) || !item.target || typeof item.target !== 'object' || Array.isArray(item.target)) return null;
       const target = item.target as Record<string, unknown>;
-      if (!['role', 'label', 'placeholder', 'text', 'testId'].includes(String(target.by)) || typeof target.value !== 'string' || !target.value.trim() || target.value.length > 200) return null;
+      // «id»: the element's id attribute, exact (MiMo fills <input id="primer"> by its id; cel, 17-11-2026).
+      if (!['role', 'label', 'placeholder', 'text', 'testId', 'id'].includes(String(target.by)) || typeof target.value !== 'string' || !target.value.trim() || target.value.length > 200) return null;
       if (target.by === 'role' && !['button', 'link', 'checkbox', 'radio', 'textbox', 'heading', 'option'].includes(String(target.role))) return null;
       const safeTarget: BrowserTarget = { by: target.by as BrowserTarget['by'], value: target.value, ...(target.by === 'role' ? { role: target.role as BrowserTarget['role'] } : {}) };
       if (item.type === 'fill') {
@@ -918,6 +919,9 @@ export class LocalCodingAgent {
     let completionNudges = 0;
     const maxCompletionNudges = 4;
     const completedToolCalls = new Map<string, string>();
+    // A call repeated with the same arguments: the first time the model is told to go on with the next step
+    // (it had repeated a write_file in the middle of creating an app); a second time ends the turn as before.
+    let repeatedCallNudged = false;
     // The failed check the agent has just told the model not to repeat; asking for it again right away means it is stuck.
     let nudgedCheck: string | null = null;
     const incompleteAnswer = () => {
@@ -1151,11 +1155,9 @@ export class LocalCodingAgent {
         plan = (plannedText || 'Inspeccionaré el projecte, aplicaré els canvis demanats i comprovaré el resultat.').slice(0, 3000);
         planPublished = true;
         this.onStatus({ type: 'plan', message: plan });
-        messages.push(
-          { role: 'assistant', content: promptText('assistant-plan-published', { plan }) },
-          { role: 'user', content: promptText('nudge-plan-visible') },
-        );
-        continue;
+        // The call the model had already chosen is run now, not thrown away: sent back to «execute the plan»,
+        // MiMo went on to the next file and never wrote the package.json it had chosen first (cel, 17-11-2026).
+        messages.splice(-2, 2);
       }
       messages.push({ role: 'assistant', content: raw });
       // Committing is the user's call. A model that tidies up with a commit nobody asked for is told so,
@@ -1183,6 +1185,12 @@ export class LocalCodingAgent {
         if (missingWork()) {
           answer = incompleteAnswer();
           break;
+        }
+        if (!repeatedCallNudged) {
+          repeatedCallNudged = true;
+          this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
+          messages.push({ role: 'assistant', content: raw }, { role: 'user', content: promptText('nudge-repeated-continue', { tool: tool.name, result: previousResult }) });
+          continue;
         }
         this.onStatus({ type: 'status', message: `No repetiré ${tool.name}; ja s’ha executat amb aquests arguments.` });
         messages.push({ role: 'user', content: promptText('nudge-repeated-call', { tool: tool.name, result: previousResult }) });

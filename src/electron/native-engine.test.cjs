@@ -126,3 +126,14 @@ test('a text parameter that looks like JSON stays text (Python worker, mlx_text)
   assert.strictEqual(result.status, 0, result.stderr);
   assert.deepStrictEqual(JSON.parse(result.stdout.trim().replace(/^<tool_call>|<\/tool_call>$/g, '')).arguments, packageArgs);
 });
+
+test('browser actions find an element by its exact id too (MiMo fills <input id="primer">; cel, 17-11-2026)', () => {
+  const agent = fs.readFileSync(path.join(__dirname, '..', 'core', 'assistant', 'agent.ts'), 'utf8');
+  assert.match(agent, /by: \{ type: 'string', enum: \['role', 'label', 'placeholder', 'text', 'testId', 'id'\] \}/);
+  assert.match(agent, /\['role', 'label', 'placeholder', 'text', 'testId', 'id'\]\.includes\(String\(target\.by\)\)/);
+  const page = require('./page-actions.cjs');
+  const page_src = fs.readFileSync(path.join(__dirname, 'page-actions.cjs'), 'utf8');
+  assert.match(page_src, /const BY = \['role', 'label', 'placeholder', 'text', 'testId', 'id'\];/);
+  assert.match(page_src, /target\.by === 'id'\) found = \[\.\.\.document\.querySelectorAll\('\[id\]'\)\]\.filter\(\(element\) => element\.id === target\.value\)/);
+  assert.ok(page);
+});

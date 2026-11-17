@@ -1635,7 +1635,9 @@ test('a plan followed by its tool call in the same answer runs the call instead 
   const answer = await agent.ask('Crea una pàgina index.html amb un títol', tempRoot, async (tool) => { if (tool.name === 'write_file') { written.push(tool.arguments.path); return { applied: true, path: tool.arguments.path }; } return {}; });
   assert.deepEqual(written, ['index.html']);
   assert.match(answer, /index\.html/);
-  assert.ok(calls <= 3, `the model was asked ${calls} times`);
+  // Plan and call in one answer: the call runs at once. The repeated pair is told once to go on (cel, 17-11-2026),
+  // which costs one more generation than before, then the final answer.
+  assert.ok(calls <= 4, `the model was asked ${calls} times`);
 });
 
 // MiMo sometimes answers with several calls at once, most of them empty («arguments: {}»).
