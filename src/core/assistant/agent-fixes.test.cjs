@@ -304,3 +304,14 @@ test('a page that still fails is not passed on as fixed when nothing changed (ce
   assert.ok(inputs.some((input) => /Encara no està arreglat: l’última comprovació de la pàgina/.test(input)), 'the claim was not sent back');
   assert.match(answer, /Atenció: l’última comprovació de la pàgina encara deia/);
 });
+
+test('the page hint finds the file in any console error, and explains «React is not defined» (cel, 17-11-2026)', () => {
+  const { pageFixHint } = require('./agent-runtime.cjs');
+  const hint = pageFixHint({ page: { consoleErrors: [
+    'Uncaught ReferenceError: React is not defined',
+    'The above error occurred in the <App> component:\n\n    at App (http://localhost:5173/src/App.jsx:3:21)\n',
+  ] } });
+  assert.match(hint, /src\/App\.jsx, línia 3/);
+  assert.match(hint, /@vitejs\/plugin-react/);
+  assert.doesNotMatch(hint, /Hi ha un nom que es fa servir sense haver-lo importat/);
+});

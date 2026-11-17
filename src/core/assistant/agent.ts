@@ -568,13 +568,17 @@ export function pageFixHint(result: unknown): string {
   if (errors.length === 0) return promptText('page-hint-no-error');
   const first = errors[0];
   const hints: string[] = [promptText('page-hint-console-error', { error: first.slice(0, 300) })];
-  const file = /\bat\s+([\w./-]+\.(?:tsx?|jsx?|mjs|css|html)):(\d+)/.exec(first) || /([\w./-]+\.(?:tsx?|jsx?|mjs)):(\d+)/.exec(first);
+  // The file and line can be in a later error than the first («React is not defined», then «The above error
+  // occurred in <App> … at App (…/src/App.jsx:3:21)»): every error is looked at, in order (cel, 17-11-2026).
+  const located = (pattern: RegExp) => errors.map((error) => pattern.exec(error)).find(Boolean) || null;
+  const file = located(/\bat\s+(?:\S+\s+\()?(?:https?:\/\/[^/\s]+\/)?([\w./-]+\.(?:tsx?|jsx?|mjs|css|html)):(\d+)/) || located(/([\w./-]+\.(?:tsx?|jsx?|mjs)):(\d+)/);
   if (file) hints.push(promptText('page-hint-file', { file: file[1], line: file[2] }));
   else hints.push(promptText('page-hint-changed-file'));
   const missingExport = /does not provide an export named '([^']+)'/.exec(first);
   if (missingExport) hints.push(promptText('page-hint-missing-export', { name: missingExport[1] }));
   if (/useContext returned .?undefined|forgot to wrap/i.test(first)) hints.push(promptText('page-hint-provider'));
-  if (/is not defined/.test(first)) hints.push(promptText('page-hint-not-defined'));
+  if (/\bReact is not defined/.test(first)) hints.push(promptText('page-hint-react-not-defined'));
+  else if (/is not defined/.test(first)) hints.push(promptText('page-hint-not-defined'));
   if (/Failed to resolve import|Cannot find module/i.test(first)) hints.push(promptText('page-hint-missing-import'));
   return hints.filter(Boolean).join(' ');
 }
