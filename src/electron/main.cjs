@@ -1408,6 +1408,19 @@ ipcMain.handle('learning:prepare-dataset', async () => {
 // What trains and fuses: mlx_lm on a Mac (with the GPU lock), PEFT on Linux (src/core/assistant/cuda-lora.py,
 // the same command line).
 const trainingLauncher = () => path.join(__dirname, '..', 'core', 'assistant', mlxModels.engineFor() === 'mlx' ? 'mlx-locked.py' : 'cuda-lora.py');
+// Training a beta or a stable candidate: with the native engine (src/core/assistant/native-lora.cjs, the same
+// command line as mlx_lm lora, run by Node) when it runs the base model and Preferències › Agent › Motor is
+// «Automàtic»; otherwise mlx_lm (or PEFT on Linux). Fusing a stable version stays with mlx_lm.
+async function trainingCommand(base) {
+  const native = mlxModels.engineFor() === 'mlx' && !agentPreferences.pythonEngine && await mlxModels.nativeSupported(base.directory);
+  if (!native) return { python: mlxPythonPath(), launcher: trainingLauncher(), run: runStreaming };
+  const nodeExecutable = findNodeExecutable();
+  return {
+    python: nodeExecutable,
+    launcher: path.join(__dirname, '..', 'core', 'assistant', 'native-lora.cjs'),
+    run: (command, args, options = {}) => runStreaming(command, args, { ...options, env: { ...(options.env || {}), ...(nodeExecutable === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}) } }),
+  };
+}
 // Training a version of our own from the verified cases (src/electron/learning-training.cjs), in the
 // background: one run at a time, with progress sent to the window and cancellable.
 let trainingRun = null;
@@ -1671,7 +1684,7 @@ async function startVersionRun(kind) {
   trainingRun = { controller, name: kind, base: base.label, baseId: base.id };
   (async () => {
     try {
-      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), python: mlxPythonPath(), launcher: trainingLauncher(), run: runStreaming, onProgress: sendTraining, signal: controller.signal });
+      const adapter = await versions.trainAdapter({ kind, base, prepared, preferences: trainingPreferences, modelsRoot: projectModelsDirectory(), ...await trainingCommand(base), onProgress: sendTraining, signal: controller.signal });
       if (kind === 'beta') {
         sendTraining({ step: 'finished', published: true, message: `Beta ${adapter.number} a punt: ${base.label} beta · ${adapter.cases} ${adapter.cases === 1 ? 'cas' : 'casos'}${adapter.truncated ? ` (${adapter.truncated} retallats)` : ''}. Tria-la al selector per provar-la.` });
         return;

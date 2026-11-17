@@ -68,6 +68,7 @@
       "src/core/assistant/*.py",
       "src/core/assistant/native-worker.cjs",
       "src/core/assistant/native-text.cjs",
+      "src/core/assistant/native-lora.cjs",
       "native/package.json",
       "native/index.js",
       "native/chat.js",

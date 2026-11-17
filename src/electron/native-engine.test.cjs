@@ -93,3 +93,15 @@ test('Preferències › Agent: «Motor» Automàtic (native where it can) or Pyt
   assert.match(app, />Motor<\/Text>[\s\S]*?value=\{agentPreferences\.values\.pythonEngine \? 'python' : 'auto'\}[\s\S]*?changeAgentPreferences\(\{ pythonEngine: value === 'python' \}\)[\s\S]*?\{ value: 'auto', label: 'Automàtic' \}, \{ value: 'python', label: 'Python' \}/);
   assert.doesNotMatch(app, /'Motor Python'/);
 });
+
+test('LoRA without Python: native-lora.cjs takes the app’s mlx_lm lora command line, and the app reads its lines', () => {
+  const { parseArgs } = require('../core/assistant/native-lora.cjs');
+  const args = parseArgs(['lora', '--model', '/m', '--train', '--data', '/d', '--adapter-path', '/a', '--iters', '30', '--batch-size', '1', '--num-layers', '8', '--learning-rate', '1e-05', '--max-seq-length', '2048', '--grad-checkpoint', '--mask-prompt', '--seed', '0', '--steps-per-report', '5', '--steps-per-eval', '30', '--save-every', '50']);
+  assert.deepStrictEqual(args, { model: '/m', data: '/d', adapterPath: '/a', train: true, iters: 30, batchSize: 1, numLayers: 8, learningRate: 1e-5, maxSeqLength: 2048, gradCheckpoint: true, maskPrompt: true, seed: 0, stepsPerReport: 5, stepsPerEval: 30, saveEvery: 50 });
+  const { parseTrainingLine } = require('./learning-versions.cjs');
+  assert.deepStrictEqual(parseTrainingLine('Iter 5: Train loss 3.136, Learning Rate 1.000e-5, It/sec 0.412, Tokens/sec 141.176, Trained Tokens 65, Peak mem 7.800 GB'), { iteration: 5, loss: 3.136, itPerSec: 0.412, tokensPerSec: 141.176 });
+  // The app trains with it when the native engine runs the base model and the engine is «Automàtic».
+  const main = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  assert.match(main, /const native = mlxModels\.engineFor\(\) === 'mlx' && !agentPreferences\.pythonEngine && await mlxModels\.nativeSupported\(base\.directory\);/);
+  assert.match(main, /\.\.\.await trainingCommand\(base\)/);
+});
