@@ -29,7 +29,10 @@ test('the panel is two groups (Casos, Models) of accordion sections, and the ope
 });
 
 test('the buttons follow the main process’s state: beta, stable, promotion, stop; nothing trains by itself', () => {
-  assert.match(app, /disabled=\{!learningVersions\?\.buttons\.beta\.enabled\}[^>]*onClick=\{\(\) => void startVersion\('beta'\)\}><Brain size=\{15\}\/>Entrena la beta/);
+  assert.match(app, /disabled=\{!learningVersions\?\.buttons\.beta\.enabled \|\| trainingRunning\}[^>]*onClick=\{\(\) => void startVersion\('beta'\)\}><Brain size=\{15\}\/>Entrena la beta/);
+  // «Atura» in the section of the version that is training, beta or stable (cel, 17-11-2026).
+  assert.match(app, /\{trainingKind === 'beta'\n\s*\? <Button[^\n]*cancelTraining\(\)\}><X size=\{15\}\/>Atura/);
+  assert.match(app, /\{trainingKind === 'stable'\n\s*\? <Button[^\n]*cancelTraining\(\)\}><X size=\{15\}\/>Atura/);
   assert.match(app, /disabled=\{!learningVersions\?\.buttons\.stable\.enabled \|\| trainingRunning\}[^>]*onClick=\{\(\) => void startVersion\('stable'\)\}/);
   assert.match(app, /disabled=\{!learningVersions\.buttons\.promote\.enabled \|\| !stableName\.trim\(\)\} onClick=\{\(\) => void promoteStable\(\)\}/);
   assert.match(app, /window\.agentic\.cancelTraining\(\)\}><X size=\{15\}\/>Atura/);

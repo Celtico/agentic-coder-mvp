@@ -443,6 +443,8 @@ export function App(): React.JSX.Element {
   // only from this panel's buttons; the panel shows the steps and what there is.
   const [stableName, setStableName] = useState(() => localStorage.getItem('agentic-training-name') || 'El nostre model');
   const [trainingRunning, setTrainingRunning] = useState(false);
+  // Which version is training («beta» or the stable candidate), so its own section shows «Atura».
+  const [trainingKind, setTrainingKind] = useState<'beta' | 'stable' | null>(null);
   const [trainingLog, setTrainingLog] = useState<TrainingProgress[]>([]);
   const [trainingProgress, setTrainingProgress] = useState<number | null>(null);
   const [learningVersions, setLearningVersions] = useState<Awaited<ReturnType<typeof window.agentic.learningVersions>> | null>(null);
@@ -480,12 +482,12 @@ export function App(): React.JSX.Element {
     try { setLearningVersions(await window.agentic.learningVersions()); } catch { /* the panel keeps what it showed */ }
   }, []);
   useEffect(() => {
-    void window.agentic.trainingStatus().then((value) => setTrainingRunning(value.running)).catch(() => {});
+    void window.agentic.trainingStatus().then((value) => { setTrainingRunning(value.running); setTrainingKind(value.running ? (value.name === 'beta' ? 'beta' : 'stable') : null); }).catch(() => {});
     return window.agentic.onTrainingProgress((event) => {
       setTrainingLog((current) => [...current, event].slice(-200));
       if (typeof event.progress === 'number') setTrainingProgress(event.progress);
       if (event.step === 'finished' || event.step === 'failed') {
-        setTrainingRunning(false); setTrainingProgress(null);
+        setTrainingRunning(false); setTrainingKind(null); setTrainingProgress(null);
         if (event.step === 'failed') setStatus(`Entrenament: ${event.message}`);
         // A new beta or stable version appears in the model selector.
         void window.agentic.listModels().then((available) => setModelOptions(available.models)).catch(() => {});
@@ -498,7 +500,7 @@ export function App(): React.JSX.Element {
     setTrainingLog([]); setTrainingProgress(0);
     try {
       await (kind === 'beta' ? window.agentic.trainBeta() : window.agentic.prepareStable());
-      setTrainingRunning(true);
+      setTrainingRunning(true); setTrainingKind(kind);
       void refreshLearningVersions();
     } catch (error) {
       setTrainingProgress(null);
@@ -2061,9 +2063,9 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemTrigger>{rowHeader('Beta', undefined, FlaskConical)}</Accordion.ItemTrigger>
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
-                  {trainingRunning
+                  {trainingKind === 'beta'
                     ? <Button size="xs" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
-                    : <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
+                    : <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled || trainingRunning} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
                 </HStack>
                 {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
@@ -2082,7 +2084,9 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemTrigger>{rowHeader('Estable', undefined, BadgeCheck)}</Accordion.ItemTrigger>
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
-                  <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
+                  {trainingKind === 'stable'
+                    ? <Button size="xs" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
+                    : <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>}
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
                 </HStack>
                 {learningVersions?.candidate?.comparison && <Box mt="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
