@@ -1997,7 +1997,7 @@ export function App(): React.JSX.Element {
           <Accordion.Item value="manual">
             <Accordion.ItemTrigger>{rowHeader('Dades manuals', learningCases?.cases.filter((item) => item.source === 'manual').length ?? 0, Pencil)}</Accordion.ItemTrigger>
             <Accordion.ItemContent><Accordion.ItemBody pt="0"><Stack gap="1.5">
-              <HStack justify="flex-end"><ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
+              <HStack justify="flex-end"><ChakraButton size="xs" colorPalette="agentic" onClick={() => { setManualCaseErrors({}); setManualCase({ task: '', prompt: '', answer: '', evidence: '' }); }}><Plus size={14}/>Crea un cas</ChakraButton></HStack>
               {learningCases?.cases.filter((item) => item.source === 'manual').map(caseRow)}
               {!learningCases?.cases.some((item) => item.source === 'manual') && <Text fontSize="sm" color="fg.muted">Encara no hi ha cap cas escrit a mà. Compten per a la beta com els altres.</Text>}
             </Stack></Accordion.ItemBody></Accordion.ItemContent>
@@ -2015,8 +2015,8 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   <Text fontSize="sm">{datasetPreview.counts.included} {datasetPreview.counts.included === 1 ? 'cas' : 'casos'} · {datasetPreview.examples ?? datasetPreview.counts.included} exemples ({datasetPreview.counts.input - datasetPreview.counts.included + (datasetPreview.droppedExamples ?? 0)} descartats)</Text>
-                  <ChakraButton size="xs" variant="ghost" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
-                  <ChakraButton size="xs" variant="ghost" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
+                  <ChakraButton size="xs" colorPalette="agentic" onClick={() => void showPreparedData()} disabled={learningBusy || datasetPreview.counts.input === 0}>{learningBusy ? <Spinner size="xs"/> : <Eye size={14}/>}Mostra les dades</ChakraButton>
+                  <ChakraButton size="xs" colorPalette="agentic" onClick={() => void downloadPreparedData()} disabled={datasetPreview.counts.included === 0}><FileText size={14}/>Descarrega (.jsonl)</ChakraButton>
                   {datasetExport && <ChakraButton size="xs" variant="ghost" onClick={() => void window.agentic.revealLearningExport()}><FolderOpen size={14}/>Mostra al Finder</ChakraButton>}
                 </HStack>
                 <Text mt="1" fontSize="xs" color="fg.muted">Es compten els casos que has desat com a verificats. Tot es queda al Mac; es descarten els duplicats i el que sembli una credencial.</Text>
@@ -2047,7 +2047,7 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemTrigger>{rowHeader('Estable', undefined, BadgeCheck)}</Accordion.ItemTrigger>
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
-                  <Button size="sm" flex="none" variant="outline" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
+                  <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
                 </HStack>
                 {learningVersions?.candidate?.comparison && <Box mt="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
@@ -2166,7 +2166,7 @@ export function App(): React.JSX.Element {
         <NativeSelect.Root size="xs" variant="plain" width="auto" flex="none" disabled={evaluationRunning}><NativeSelect.Field aria-label="Rondes" value={String(evaluationRepeat)} onChange={(event) => setEvaluationRepeat(event.target.value === '2' ? 2 : 1)}><option value="1">1 ronda</option><option value="2">2 rondes</option></NativeSelect.Field><NativeSelect.Indicator/></NativeSelect.Root>
         {evaluationRunning
           ? <Button size="xs" flex="none" variant="ghost" onClick={() => void window.agentic.cancelBenchmark()}><X size={15}/>Cancel·la</Button>
-          : <Button size="xs" flex="none" variant="ghost" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
+          : <Button size="xs" flex="none" colorPalette="agentic" disabled={loading || chosenCount === 0} onClick={() => void startEvaluation()}><Play size={15}/>Passa el benchmark · {chosenCount} {chosenCount === 1 ? 'tasca' : 'tasques'}</Button>}
     </HStack>
   );
   const evaluationPane = (
@@ -2197,7 +2197,7 @@ export function App(): React.JSX.Element {
           <Accordion.ItemContent><Accordion.ItemBody pt="0">
             {rowNote('Marca les tasques que vols passar; totes es fan en una carpeta nova.')}
             {evaluationToolbar}
-            <HStack gap="2" mb="2"><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" variant="outline" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
+            <HStack gap="2" mb="2"><Button size="2xs" colorPalette="agentic" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set(evaluationTasks.map((task) => task.id)))}>Totes</Button><Button size="2xs" colorPalette="agentic" disabled={evaluationRunning} onClick={() => setEvaluationChosen(new Set())}>Cap</Button></HStack>
             <Accordion.Root multiple collapsible defaultValue={[]} size="sm" variant="outline">{(['open', 'app', 'reference'] as const).map((kind) => {
               const group = evaluationTasks.filter((task) => task.kind === kind);
               return <Accordion.Item key={kind} value={kind}>
@@ -2308,7 +2308,7 @@ export function App(): React.JSX.Element {
         <Accordion.ItemContent><Accordion.ItemBody pt="0">
           {rowNote('El model triat amb cada motor que el pot fer anar (natiu i Python), un darrere l’altre: càrrega, lectura del prompt, generació, memòria cau i memòria. Mediana de 3 rondes; uns 5 minuts.')}
           <HStack gap="2" mb="2">
-            <Button size="xs" flex="none" variant="ghost" colorPalette="agentic" disabled={loading || evaluationRunning} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>
+            <Button size="xs" flex="none" colorPalette="agentic" disabled={loading || evaluationRunning} onClick={() => void startEngineBenchmark()}><Play size={15}/>Passa el benchmark de motors</Button>
           </HStack>
           {engineReports.length === 0 && <Text fontSize="xs" color="fg.muted">Encara no n’hi ha cap.</Text>}
           {/* One item per run, the newest open: its charts inside; the delete button beside its header. */}

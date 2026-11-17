@@ -234,7 +234,8 @@ test('the secondary bar: ghost actions, plain/subtle fields, the same small heig
     for (const input of bar.match(/<Input\b[^>]*>/g) || []) assert.match(input, /variant="subtle"/, input);
     assert.doesNotMatch(bar, /variant="(?:solid|outline)"/);
   }
-  assert.match(app, /variant="ghost" colorPalette="agentic" disabled=\{loading \|\| chosenCount === 0\}/, 'the benchmark button: ghost, in the accent');
+  // The benchmark's buttons (not in a secondary bar) are solid in the accent, like «Entrena la beta» (cel, 17-11-2026).
+  assert.match(app, /<Button size="xs" flex="none" colorPalette="agentic" disabled=\{loading \|\| chosenCount === 0\}/, 'the benchmark button: solid, in the accent');
 });
 
 test('Converses and Fitxers: their lists scroll inside the pane, and a handle between them sets their widths', () => {
