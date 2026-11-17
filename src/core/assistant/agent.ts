@@ -937,6 +937,9 @@ export class LocalCodingAgent {
     // A call repeated with the same arguments: the first time the model is told to go on with the next step
     // (it had repeated a write_file in the middle of creating an app); a second time ends the turn as before.
     let repeatedCallNudged = false;
+    // A page that cannot be opened because its server is not running: the model is told to start it (once),
+    // instead of the turn ending with «la inspecció ha fallat» (seen with «fes una npm run dev», cel 17-11-2026).
+    let serverDownNudged = false;
     // The failed check the agent has just told the model not to repeat; asking for it again right away means it is stuck.
     let nudgedCheck: string | null = null;
     const incompleteAnswer = () => {
@@ -1305,6 +1308,12 @@ export class LocalCodingAgent {
         failedCheckToRetry = typeof code === 'number' && code !== 0 ? tool : null;
       }
       if (tool.name === 'inspect_browser') {
+        const inspectError = result && typeof result === 'object' ? (result as Record<string, unknown>).error : undefined;
+        if (!serverDownNudged && typeof inspectError === 'string' && /ERR_CONNECTION_REFUSED|ECONNREFUSED|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/i.test(inspectError)) {
+          serverDownNudged = true;
+          messages.push({ role: 'user', content: promptText('nudge-page-not-running', { error: inspectError.slice(0, 300) }) });
+          continue;
+        }
         let browserAnswer = formatBrowserInspection(result);
         // Asked whether a button works, looking is not enough: the app presses each button the page
         // shows (never one that deletes, sends or pays) and says what changed on screen.

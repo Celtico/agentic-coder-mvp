@@ -315,3 +315,22 @@ test('the page hint finds the file in any console error, and explains «React is
   assert.match(hint, /@vitejs\/plugin-react/);
   assert.doesNotMatch(hint, /Hi ha un nom que es fa servir sense haver-lo importat/);
 });
+
+test('a page that cannot be opened because its server is down: the model is told to start it (cel, 17-11-2026)', async (t) => {
+  const tools = [];
+  const { inputs } = await run(t, {
+    request: 'fes una npm run dev',
+    responses: [
+      '{"type":"tool_call","name":"inspect_browser","arguments":{"url":"http://localhost:5173/"}}',
+      '{"type":"tool_call","name":"start_project","arguments":{"script":"dev"}}',
+      '{"type":"final","content":"El servidor és en marxa a http://localhost:5173/."}',
+    ],
+    tool: async (call) => {
+      tools.push(call.name);
+      if (call.name === 'inspect_browser') return { error: 'No s’ha pogut obrir la pàgina: ERR_CONNECTION_REFUSED (-102)' };
+      return { started: true, url: 'http://localhost:5173/', pageVerdict: 'OK: la pàgina es veu bé.' };
+    },
+  });
+  assert.ok(inputs.some((input) => /el servidor de l’app no està en marxa/.test(input)));
+  assert.deepEqual(tools, ['inspect_browser', 'start_project']);
+});
