@@ -227,6 +227,15 @@ test('«fes una npm run dev» asks to run a command, not to change the code: no 
     tool: async () => ({ ok: true, url: 'http://localhost:5173/' }),
   });
   assert.ok(!inputs.some((input) => /Encara no has aplicat cap canvi al codi/.test(input)), 'it was told to write files');
+  // Saying it is starting the server is not starting it: sent back once to do it, with no hint of which tool.
+  assert.ok(inputs.some((input) => /Encara no has fet res del que t’han demanat/.test(input)), 'the announcement was taken as the answer');
+});
+
+test('an answer that says the work is done with no tool run in the turn is sent back once; a plain chat is not (cel, 17-11-2026)', async (t) => {
+  const claimed = await run(t, { request: 'fes una npm run dev', responses: ['El servidor de desenvolupament s’ha iniciat correctament a http://localhost:5173/.', 'El servidor ja és en marxa.'] });
+  assert.equal(claimed.inputs.filter((input) => /Encara no has fet res del que t’han demanat/.test(input)).length, 1);
+  const chat = await run(t, { request: 'què fa aquest projecte?', responses: ['És una app de Vite amb React.'] });
+  assert.ok(!chat.inputs.some((input) => /Encara no has fet res/.test(input)));
 });
 
 test('«arregla-ho» after a proposal asks for the change: an answer that asks again is sent back (cel, 17-11-2026)', async (t) => {

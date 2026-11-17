@@ -1006,6 +1006,13 @@ export class LocalCodingAgent {
     const onlyAPlan = (text: string) => toolsRun === 0 && !changeApplied
       && ((requestedAction && (/^\s*(?:pla\b|plan\b)/i.test(text) || /(?<!\p{L})\p{L}{3,}(?:aré|eré|iré)(?!\p{L})/iu.test(text) || /\bI(?:'ll| will)\b/.test(text))) || planMarkers(text));
     const carryOutPlan = promptText('nudge-carry-out-plan');
+    // An answer that says the work is done (or what happened) while no tool has run in this turn: sent back once
+    // to do it, whatever the work is (a file, a command, a server). Seen with «fes una npm run dev» (cel, 17-11-2026).
+    const nothingDone = promptText('nudge-nothing-done');
+    let nothingDoneNudged = false;
+    // A question («quina ordre he d’executar…?») is answered, not done; a call the model tried counts as doing.
+    const askedAQuestion = /\?\s*$/.test(prompt.trim());
+    let toolCallsTried = 0;
     const planNeverRun = 'He escrit el pla però no he arribat a executar-ne cap pas: no he instal·lat res ni he tocat cap fitxer. Torna-m’ho a demanar, si pot ser dient el primer pas concret (per exemple «instal·la el paquet que necessites»).';
     for (let iteration = 0; iteration < maxIterations + 2; iteration += 1) {
       const modelActivity = iteration === 0
@@ -1026,6 +1033,7 @@ export class LocalCodingAgent {
       // An answer with no call while no tool has run yet in a turn that asks for work: it says it is done
       // without having done anything. Marked in the log, so the evaluation and the history can count it.
       const claimedWithoutTools = claimedDoneWithoutTools({ toolCallsRun, requestedWork: requestedAction || requestedCodeChange, action });
+      if (action?.type === 'tool_call') toolCallsTried += 1;
       await logTurn({ iteration, compact, seconds: Math.round((Date.now() - startedAt) / 1000), promptChars: messages.reduce((n, m) => n + m.content.length, 0), prompt: iteration === 0 ? prompt.slice(0, 500) : undefined, lastInput: messages[messages.length - 1]?.content.slice(0, 600), raw: String(raw).slice(0, 3000), parsed: action ? action.type === 'tool_call' ? `tool_call:${action.name}` : action.type : 'unparsed', ...(claimedWithoutTools ? { claimedDoneWithoutTools: true } : {}) });
       if (!action) {
         const rawProse = withoutToolCalls(raw);
@@ -1042,6 +1050,11 @@ export class LocalCodingAgent {
           if (completionNudges < maxCompletionNudges) { completionNudges += 1; messages.push({ role: 'assistant', content: raw }, { role: 'user', content: carryOutPlan }); continue; }
           answer = planNeverRun;
           break;
+        }
+        if (claimedWithoutTools && !askedAQuestion && toolCallsTried === 0 && !nothingDoneNudged && !missingWork()) {
+          nothingDoneNudged = true;
+          messages.push({ role: 'assistant', content: raw }, { role: 'user', content: nothingDone });
+          continue;
         }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {
@@ -1082,6 +1095,11 @@ export class LocalCodingAgent {
           if (completionNudges < maxCompletionNudges) { completionNudges += 1; messages.push({ role: 'assistant', content: raw }, { role: 'user', content: carryOutPlan }); continue; }
           answer = planNeverRun;
           break;
+        }
+        if (claimedWithoutTools && !askedAQuestion && toolCallsTried === 0 && !nothingDoneNudged && !missingWork()) {
+          nothingDoneNudged = true;
+          messages.push({ role: 'assistant', content: raw }, { role: 'user', content: nothingDone });
+          continue;
         }
         const unmet = missingWork();
         if (unmet && completionNudges < maxCompletionNudges) {

@@ -128,7 +128,8 @@ test('includes recent turns from the active chat when answering a follow-up', as
   let receivedMessages;
   const engine = {
     loadModel: async () => {},
-    generateResponse: async (messages) => { receivedMessages = messages; return '{"type":"final","content":"Continuo amb el canvi que havies demanat."}'; },
+    // The first call: an answer with no tool is sent back once (nudge-nothing-done), so a later call sees more turns.
+    generateResponse: async (messages) => { receivedMessages ??= messages.slice(); return '{"type":"final","content":"Continuo amb el canvi que havies demanat."}'; },
     getModelStatus: () => ({ modelId: 'test-model' }),
   };
   const agent = new LocalCodingAgent({ engine });
