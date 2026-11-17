@@ -577,8 +577,7 @@ export function pageFixHint(result: unknown): string {
   const missingExport = /does not provide an export named '([^']+)'/.exec(first);
   if (missingExport) hints.push(promptText('page-hint-missing-export', { name: missingExport[1] }));
   if (/useContext returned .?undefined|forgot to wrap/i.test(first)) hints.push(promptText('page-hint-provider'));
-  if (/\bReact is not defined/.test(first)) hints.push(promptText('page-hint-react-not-defined'));
-  else if (/is not defined/.test(first)) hints.push(promptText('page-hint-not-defined'));
+  if (/is not defined/.test(first)) hints.push(promptText('page-hint-not-defined'));
   if (/Failed to resolve import|Cannot find module/i.test(first)) hints.push(promptText('page-hint-missing-import'));
   return hints.filter(Boolean).join(' ');
 }

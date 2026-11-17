@@ -1,1 +1,0 @@
-«React is not defined» vol dir que el fitxer de l’error fa servir JSX sense tenir React a l’abast. Amb Vite, el més habitual és que falti vite.config.js amb el plugin de React (import react from '@vitejs/plugin-react'; plugins: [react()]); si no, cal importar React en aquest fitxer.

@@ -305,15 +305,16 @@ test('a page that still fails is not passed on as fixed when nothing changed (ce
   assert.match(answer, /Atenció: l’última comprovació de la pàgina encara deia/);
 });
 
-test('the page hint finds the file in any console error, and explains «React is not defined» (cel, 17-11-2026)', () => {
+// Only where the error is: no explanation of a particular framework's error (no task hints in the app, cel 17-11-2026).
+test('the page hint finds the file in any console error, without explaining a framework error', () => {
   const { pageFixHint } = require('./agent-runtime.cjs');
   const hint = pageFixHint({ page: { consoleErrors: [
     'Uncaught ReferenceError: React is not defined',
     'The above error occurred in the <App> component:\n\n    at App (http://localhost:5173/src/App.jsx:3:21)\n',
   ] } });
   assert.match(hint, /src\/App\.jsx, línia 3/);
-  assert.match(hint, /@vitejs\/plugin-react/);
-  assert.doesNotMatch(hint, /Hi ha un nom que es fa servir sense haver-lo importat/);
+  assert.doesNotMatch(hint, /plugin-react|vite\.config/);
+  assert.match(hint, /Hi ha un nom que es fa servir sense haver-lo importat/);
 });
 
 test('a page that cannot be opened because its server is down: the model is told to start it (cel, 17-11-2026)', async (t) => {
