@@ -293,6 +293,8 @@ for line in sys.stdin:
         ):
             answer += response.text
             finish = response.finish_reason
+            # The text as it comes, for the chat to show while the model writes (as the traced path does).
+            emit({"type": "token", "text": response.text})
             # Stuck repeating the same text: stop here (mlx_text.repeating_tail; checked every 64 new characters).
             if len(answer) - checked >= 64:
                 checked = len(answer)

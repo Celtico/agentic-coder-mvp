@@ -96,7 +96,8 @@ lines.on('line', (line) => {
     // Only models without vision run here (the app keeps the Python worker for those), as mlx_vision.choose_backend says.
     if (imagePaths(request).length) { emit({ type: 'result', error: 'Aquest model no pot veure imatges: tria un model amb visió.' }); return; }
     const trace = Boolean(request.trace);
-    const run = generate(request, messages, tools, trace ? (piece) => emit({ type: 'token', text: piece }) : () => {});
+    // The text as it comes, always: the chat shows it while the model writes (and the Model log when it is open).
+    const run = generate(request, messages, tools, (piece) => emit({ type: 'token', text: piece }));
     const result = text.normalizeToolCalls(text.stripThinking(run.answer, thinkStart, thinkEnd), tools, '<tool_call>', '</tool_call>', parser).trim();
     // «length» when the answer was cut at max_tokens, as mlx-worker.py says, so the agent does not act on half an answer.
     // «repetition» when it was stopped for repeating the same text (mlx_text.repeating_tail).

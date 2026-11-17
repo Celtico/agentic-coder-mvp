@@ -12,7 +12,7 @@ import { LocalExperienceEmbedder, type EmbeddableExperience, type RankedExperien
  * What the agent tells the window while it works: an activity, its plan, the reviewer's finished draft, or
  * its progress (the iteration it is on, 1-based, of the limit in force, and the tool it runs, if any).
  */
-export type AgentStatus = { type: 'status' | 'plan' | 'draft' | 'review'; message: string } | { type: 'progress'; iteration: number; maxIterations: number; tool?: string };
+export type AgentStatus = { type: 'status' | 'plan' | 'draft' | 'review'; message: string } | { type: 'progress'; iteration: number; maxIterations: number; tool?: string } | { type: 'stream'; text: string; reset?: boolean };
 export type AgentToolCall =
   | { name: 'list_files' | 'run_tests' }
   | { name: 'create_git_commit'; arguments: { message: string } }
@@ -663,6 +663,9 @@ export class LocalCodingAgent {
   } = {}) {
     this.onStatus = onStatus;
     this.engine = engine;
+    // The answer's text as the model writes it, for the chat (each new call starts it again).
+    const streaming = engine as InferenceEngine & { onToken?: ((text: string | null) => void) | null };
+    if ('onToken' in streaming) streaming.onToken = (text) => this.onStatus(text === null ? { type: 'stream', text: '', reset: true } : { type: 'stream', text });
     this.historyDir = path.join(os.homedir(), '.agentic-coder', 'memory');
     this.verifiedExperiencesPath = verifiedExperiencesPath;
     this.experienceRanker = experienceRanker;

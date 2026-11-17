@@ -279,6 +279,9 @@ export function App(): React.JSX.Element {
   const [loadingLabel, setLoadingLabel] = useState(PREPARING_MODEL);
   // The iteration the agent is on, of its limit, and its tool (src/app/turn-progress.ts).
   const [turnProgress, setTurnProgress] = useState<TurnProgress | null>(null);
+  // The text the model is writing now (its raw answer, as the Model log shows it), cleared when the turn ends.
+  const [streamText, setStreamText] = useState('');
+  useEffect(() => { if (!loading) setStreamText(''); }, [loading]);
   // The browser and the file editor are independent: each opens beside the other instead of replacing it.
   const [browserOpen, setBrowserOpen] = useState(initialView.panels.browser);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -695,6 +698,11 @@ export function App(): React.JSX.Element {
     // Files added or removed outside the app show up when its window gets the focus back.
     const refreshOnFocus = () => { void window.agentic.currentProject().then((refreshed) => { if (refreshed) setProject(refreshed); }).catch(() => {}); };
     const offStatus = window.agentic.onStatus((s) => {
+      if (s.type === 'stream') {
+        if (s.reset) setStreamText('');
+        else if (s.text) setStreamText((current) => (current + s.text).slice(-6000));
+        return;
+      }
       const progress = progressFromStatus(s);
       if (progress) { setTurnProgress(progress); return; }
       // The reviewer's note comes with the end of the turn (src/electron/active-turn.cjs), not as an activity.
@@ -1793,6 +1801,8 @@ export function App(): React.JSX.Element {
             one only says it is busy (one model on the GPU, one answer at a time). */}
         {loading && inFlightConversationRef.current && inFlightConversationRef.current.sessionId !== activeSessionId && <HStack gap="2" color="fg.muted" px="2" py="1" role="status" data-busy-elsewhere><Mark size={14} busy/><Text fontSize="xs">El model està responent en una altra conversa; quan acabi, podràs escriure aquí.</Text></HStack>}
         {loading && (!inFlightConversationRef.current || inFlightConversationRef.current.sessionId === activeSessionId) && <HStack gap="2.5" color="fg.muted" px="2" py="1" role="status"><Mark size={18} busy/><Text fontSize="xs" lineHeight="short">{loadingLabel}</Text>{turnProgressText(turnProgress) && <Text fontSize="xs" lineHeight="short" color="fg.muted" flex="none" data-turn-progress>{turnProgressText(turnProgress)}</Text>}</HStack>}
+        {/* What the model is writing now, as it comes (the answer replaces it when the turn ends). */}
+        {loading && streamText.trim() && (!inFlightConversationRef.current || inFlightConversationRef.current.sessionId === activeSessionId) && <Box mx="2" mt="1" px="3" py="2" maxH="40vh" {...scrollArea} borderRadius="md" bg="bg.subtle" fontSize="xs" color="fg.muted" whiteSpace="pre-wrap" wordBreak="break-word" aria-live="polite" data-live-answer>{streamText}</Box>}
       </Box>
       <Box flex="none" w="min(850px, calc(100% - 40px))" mx="auto" mb="2.5">
         {browserContext && <Flex align="center" justify="space-between" mb="2" px="2"><Text fontSize="xs" color="agentic.fg">Text d’una pàgina web afegit al context</Text><IconButton icon={X} label="Treu el context web" onClick={() => setBrowserContext('')}/></Flex>}

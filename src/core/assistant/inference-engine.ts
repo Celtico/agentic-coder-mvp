@@ -52,6 +52,8 @@ export class MlxInferenceEngine implements InferenceEngine {
   traceContext: TraceContext = { source: process.env.AGENT_LLM_TRACE_SOURCE || 'xat' };
   private loadSeconds: number | null = null;
   lastFinishReason: string | null = null;
+  /** The text of the answer as it comes (null when a new answer starts), for the chat to show while it is written. */
+  onToken: ((text: string | null) => void) | null = null;
   private traced: { id: string; at: string; started: number; messages: ChatTurn[]; options: GenerationOptions; context: TraceContext } | null = null;
 
   async loadModel(onStatus: (message: string) => void = () => {}): Promise<void> {
@@ -77,7 +79,11 @@ export class MlxInferenceEngine implements InferenceEngine {
         try { message = JSON.parse(line); } catch { return; }
         // An error before «ready» (no runtime, the model already loaded elsewhere…) is the reason it did not load.
         if (message.type === 'result' && typeof message.error === 'string' && this.state === 'loading') { reject(new Error(message.error)); return; }
-        if (message.type === 'token' && this.traced && typeof message.text === 'string') { this.tracer.emit({ type: 'token', id: this.traced.id, text: message.text }); return; }
+        if (message.type === 'token' && typeof message.text === 'string') {
+          if (this.traced) this.tracer.emit({ type: 'token', id: this.traced.id, text: message.text });
+          this.onToken?.(message.text);
+          return;
+        }
         if (message.type === 'ready') { this.loadSeconds = typeof message.loadSeconds === 'number' ? message.loadSeconds : null; this.state = 'ready'; onStatus(`${this.modelId} carregat amb ${this.runtimeName}${message.adapter ? ' (amb adaptador)' : ''}.`); resolve(); return; }
         if (message.type === 'result' && this.pending) {
           const pending = this.pending; this.pending = null;
@@ -116,6 +122,7 @@ export class MlxInferenceEngine implements InferenceEngine {
     if (this.pending) throw new Error(`El runtime ${this.runtimeName} ja està generant una resposta.`);
     // Log del model: only with the panel open; otherwise the request is exactly as it always was.
     const traceFields = this.startTrace(messages, options);
+    this.onToken?.(null);
     return new Promise((resolve, reject) => {
       this.pending = { resolve, reject };
       this.child!.stdin.write(`${JSON.stringify({ messages, tools: options.tools, max_tokens: options.max_new_tokens, temperature: options.do_sample ? options.temperature : 0, ...(options.images?.paths.length ? { images: options.images } : {}), ...traceFields })}\n`, (error) => {

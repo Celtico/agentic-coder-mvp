@@ -49,3 +49,27 @@ test('a worker that cannot load says why, and loading fails with that reason', {
   t.after(() => { process.env.AGENT_MLX_PYTHON = before.python; process.env.AGENT_MLX_MODEL_PATH = before.model; });
   await assert.rejects(new MlxInferenceEngine().loadModel(), /Ja hi ha un altre model carregat/);
 });
+
+test('the answer’s text reaches onToken as it comes, starting again with each call', { timeout: 15000 }, async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentic-fake-stream-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const fake = path.join(dir, 'python');
+  await fs.writeFile(fake, `#!/usr/bin/env node
+console.log(JSON.stringify({ type: 'ready' }));
+require('node:readline').createInterface({ input: process.stdin }).on('line', () => {
+  for (const text of ['Hola', ', ', 'món']) console.log(JSON.stringify({ type: 'token', text }));
+  console.log(JSON.stringify({ type: 'result', text: 'Hola, món' }));
+});
+`, { mode: 0o755 });
+  const before = { python: process.env.AGENT_MLX_PYTHON, model: process.env.AGENT_MLX_MODEL_PATH };
+  process.env.AGENT_MLX_PYTHON = fake;
+  process.env.AGENT_MLX_MODEL_PATH = dir;
+  t.after(() => { process.env.AGENT_MLX_PYTHON = before.python; process.env.AGENT_MLX_MODEL_PATH = before.model; });
+  const engine = new MlxInferenceEngine();
+  const seen = [];
+  engine.onToken = (text) => seen.push(text);
+  await engine.loadModel();
+  assert.equal(await engine.generateResponse([{ role: 'user', content: 'hola' }], { max_new_tokens: 10, temperature: 0, do_sample: false }), 'Hola, món');
+  assert.deepEqual(seen, [null, 'Hola', ', ', 'món']);
+  await engine.unloadModel();
+});

@@ -592,6 +592,8 @@ async function startModelWorker() {
   loadedModels.add(modelWorkerModelId);
   child.on('message', (message) => {
     if (message?.type === 'llm-event') { if (win && !win.isDestroyed()) win.webContents.send('llm:event', message.event); return; }
+    // The answer's text as it comes goes straight to the window (not into the turn's saved status, token by token).
+    if (message?.type === 'status' && message.value?.type === 'stream') { if (win && !win.isDestroyed()) win.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'status') { activeTurns.status(message.value); win?.webContents.send('agent:status', message.value); return; }
     if (message?.type === 'tool-call' && typeof message.id === 'number' && typeof message.toolId === 'number') {
       const toolKey = `${message.id}:${message.toolId}`;
