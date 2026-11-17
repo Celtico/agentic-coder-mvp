@@ -2420,6 +2420,8 @@ export function App(): React.JSX.Element {
                   <Menu.Item value="directory" onClick={() => openCreateProjectEntry(true)}><IconLabel icon={FolderPlus}>Nova carpeta</IconLabel></Menu.Item>
                 </Menu.Content></Menu.Positioner></Portal>
               </Menu.Root>
+                {/* Empties the project to start over (cel, 17-11-2026): it asks first and everything goes to the Trash. */}
+                <IconButton icon={Trash} label="Buida la carpeta (tot a la paperera)" disabled={!project || loading} onClick={() => void clearProject()}/>
               </>}/>
               </>}>
               <Box flex="1" minH="0" {...scrollArea} scrollbarGutter="stable" px="2" pt="1.5" pb="2">
