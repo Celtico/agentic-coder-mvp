@@ -33,6 +33,10 @@ async function main() {
   if (!options.train || !options.model || !options.data) throw new Error('Cal --train, --model i --data (només entrena).');
   if (options.batchSize !== 1) throw new Error('El motor natiu entrena amb lots d’1 exemple (--batch-size 1).');
   // Only one model on the GPU at a time (the same lock as the workers, src/core/assistant/mlx_lock.py).
+  // Smaller Metal command buffers: a long training step otherwise holds the GPU long enough for macOS to
+  // abort it («Impacting Interactivity») while the screen needs it. Read by MLX when it starts.
+  process.env.MLX_MAX_OPS_PER_BUFFER ??= '10';
+  process.env.MLX_MAX_MB_PER_BUFFER ??= '200';
   const { addon } = require('@celticopetit/mlx-node');
   const lockFile = process.env.AGENT_MLX_LOCK || path.join(os.homedir(), '.agentic-coder', 'mlx.lock');
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
@@ -72,6 +76,10 @@ async function main() {
     adapterPath: options.adapterPath, iters: options.iters, learningRate: options.learningRate, numLayers: options.numLayers,
     maxSeqLength: options.maxSeqLength, maskPrompt: options.maskPrompt, gradCheckpoint: options.gradCheckpoint, seed: options.seed,
     stepsPerReport: options.stepsPerReport, saveEvery: options.saveEvery,
+    // Qwen 3.5's Gated DeltaNet recurrence step by step keeps a 2 MB state per token for the backward
+    // pass, which does not fit long examples on a 16 GB Mac; in chunks of 64 positions (the chunkwise
+    // form) it keeps one per chunk. AGENT_DELTA_CHUNK=0 goes back to the step-by-step loop.
+    deltaChunk: Number(process.env.AGENT_DELTA_CHUNK ?? 64),
     onReport: (report) => {
       const seconds = (Date.now() - lastReport) / 1000;
       lastReport = Date.now();
