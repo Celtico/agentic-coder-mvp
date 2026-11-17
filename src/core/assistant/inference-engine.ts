@@ -191,7 +191,7 @@ export class CudaInferenceEngine extends MlxInferenceEngine {
 }
 
 /**
- * A Mac without Python: the same engine with native-worker.cjs (the native MLX engine in native/, run by this
+ * A Mac without Python: the same engine with native-worker.cjs (the native MLX engine of @celticopetit/mlx-node, run by this
  * Node or Electron binary as Node), the same JSON protocol, tool-call reading and Log del model. Chosen with
  * AGENT_MODEL_RUNTIME=native, for the models it supports (src/electron/mlx-models.cjs, runtimeFor).
  */

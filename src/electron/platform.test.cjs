@@ -33,14 +33,16 @@ test('packages: a Linux AppImage and deb next to the Mac dmg, with every Python 
   assert.ok(pkg.build.files.includes('src/core/assistant/*.py'), 'mlx_trace.py and mlx_download.py too');
 });
 
-test('the Mac dmg carries the native engine (Node without Python), built before packaging', () => {
+test('the Mac dmg carries the native engine (Node without Python) from npm, installed only on a Mac', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.equal(pkg.scripts['build:native'], 'npm --prefix native install && npm --prefix native run build');
-  assert.match(pkg.scripts['dist:mac'], /npm run build:native && electron-builder --mac dmg/);
-  // Its tokenizer and chat template come from the app's own dependencies, at the versions the engine was tested with.
-  assert.equal(pkg.dependencies['@huggingface/jinja'], JSON.parse(read('native/package.json')).dependencies['@huggingface/jinja']);
-  assert.equal(pkg.dependencies['@huggingface/tokenizers'], JSON.parse(read('native/package.json')).dependencies['@huggingface/tokenizers']);
-  for (const file of ['src/core/assistant/native-worker.cjs', 'src/core/assistant/native-text.cjs', 'native/index.js', 'native/chat.js', 'native/lora.js', 'native/build/Release/agentic_mlx.node', 'native/build/Release/libmlx.dylib', 'native/build/Release/libjaccl.dylib', 'native/build/Release/mlx.metallib', 'scripts/evaluate-engines.cjs']) {
+  // @celticopetit/mlx-node (the engine, prebuilt) and @celticopetit/node-mlx-lm (chat and LoRA), at the versions
+  // tested with the app. Optional: they install only on Apple Silicon, so npm install works on Linux and Windows.
+  assert.equal(pkg.optionalDependencies['@celticopetit/mlx-node'], '0.1.0');
+  assert.equal(pkg.optionalDependencies['@celticopetit/node-mlx-lm'], '0.1.0');
+  assert.doesNotMatch(pkg.scripts['dist:mac'], /build:native/, 'nothing to compile before packaging');
+  // Without asar, node_modules (with the addon, libmlx, libjaccl and mlx.metallib next to it) go into the app as files.
+  assert.equal(pkg.build.asar, false);
+  for (const file of ['src/core/assistant/native-worker.cjs', 'src/core/assistant/native-text.cjs', 'src/core/assistant/native-lora.cjs', 'scripts/evaluate-engines.cjs']) {
     assert.ok(pkg.build.files.includes(file), file);
   }
 });

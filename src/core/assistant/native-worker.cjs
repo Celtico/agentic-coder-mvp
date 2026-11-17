@@ -1,5 +1,5 @@
 // The model on a Mac without Python: the same job and the same JSON protocol as mlx-worker.py (one request
-// per line on stdin; «ready», «token» and «result» on stdout), with the native MLX engine (native/). Run by
+// per line on stdin; «ready», «token» and «result» on stdout), with the native MLX engine (@celticopetit/mlx-node, through @celticopetit/node-mlx-lm). Run by
 // NativeInferenceEngine in a process of its own, so a GPU failure does not take the app with it.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -7,7 +7,6 @@ const path = require('node:path');
 const readline = require('node:readline');
 const text = require('./native-text.cjs');
 
-const nativeDir = path.join(__dirname, '..', '..', '..', 'native');
 const emit = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
 const modelDir = process.argv[2];
 
@@ -17,7 +16,7 @@ try {
   // Only one model on the GPU on this Mac at a time (the same lock as mlx_lock.py); kept until this process ends.
   const lockFile = process.env.AGENT_MLX_LOCK || path.join(os.homedir(), '.agentic-coder', 'mlx.lock');
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
-  const { addon } = require(path.join(nativeDir, 'index.js'));
+  const { addon } = require('@celticopetit/mlx-node');
   addon.lock(lockFile, process.env.AGENT_MLX_LOCK_LABEL || 'model MLX', Number(process.env.AGENT_MLX_LOCK_TIMEOUT || 30));
 } catch (error) {
   emit({ type: 'result', error: error.message });
@@ -26,7 +25,7 @@ try {
 const adapterPath = process.env.AGENT_MLX_ADAPTER_PATH || null;
 try {
   const started = performance.now();
-  const { ChatModel } = require(path.join(nativeDir, 'chat.js'));
+  const { ChatModel } = require('@celticopetit/node-mlx-lm');
   chat = new ChatModel(modelDir);
   // An optional LoRA adapter goes on top of the base weights, which are never modified.
   if (adapterPath) chat.model.loadAdapters(adapterPath);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // LoRA training without Python: the `lora` command of `python -m mlx_lm` (the arguments the app gives it,
-// src/electron/learning-versions.cjs) with the native engine (native/lora.js). It prints the same lines as
+// src/electron/learning-versions.cjs) with the native engine (trainLora of @celticopetit/node-mlx-lm). It prints the same lines as
 // mlx_lm («Iter 5: Train loss 1.234, Learning Rate 1e-05, It/sec 0.4, Tokens/sec 380.5, …», «Iter 20: Val
 // loss …») and writes the same adapters.safetensors and adapter_config.json, which both engines load.
 //
@@ -11,7 +11,6 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const nativeDir = path.join(__dirname, '..', '..', '..', 'native');
 
 /** The mlx_lm lora arguments this launcher understands (others are ignored, as mlx_lm's defaults). */
 function parseArgs(argv) {
@@ -34,13 +33,12 @@ async function main() {
   if (!options.train || !options.model || !options.data) throw new Error('Cal --train, --model i --data (només entrena).');
   if (options.batchSize !== 1) throw new Error('El motor natiu entrena amb lots d’1 exemple (--batch-size 1).');
   // Only one model on the GPU at a time (the same lock as the workers, src/core/assistant/mlx_lock.py).
-  const { addon } = require(path.join(nativeDir, 'index.js'));
+  const { addon } = require('@celticopetit/mlx-node');
   const lockFile = process.env.AGENT_MLX_LOCK || path.join(os.homedir(), '.agentic-coder', 'mlx.lock');
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
   addon.lock(lockFile, process.env.AGENT_MLX_LOCK_LABEL || 'un entrenament', Number(process.env.AGENT_MLX_LOCK_TIMEOUT || 30));
 
-  const { ChatModel } = require(path.join(nativeDir, 'chat.js'));
-  const { trainLora, tokenizeExample, padExample } = require(path.join(nativeDir, 'lora.js'));
+  const { ChatModel, trainLora, tokenizeExample, padExample } = require('@celticopetit/node-mlx-lm');
   const train = readJsonl(path.join(options.data, 'train.jsonl'));
   const valid = readJsonl(path.join(options.data, 'valid.jsonl'));
   if (!train.length) throw new Error(`No hi ha exemples a ${path.join(options.data, 'train.jsonl')}.`);

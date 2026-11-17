@@ -15,7 +15,7 @@ function modelFolder(config, weights = ['model.layers.0.mlp.gate_proj.weight']) 
   fs.writeFileSync(path.join(dir, 'model.safetensors.index.json'), JSON.stringify({ weight_map: Object.fromEntries(weights.map((name) => [name, 'model.safetensors'])) }));
   return dir;
 }
-const addon = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'addon-')), 'agentic_mlx.node');
+const addon = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'addon-')), 'mlx_node.node');
 fs.writeFileSync(addon, '');
 const mlx = { runtime: 'mlx' };
 

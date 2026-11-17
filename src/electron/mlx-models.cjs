@@ -115,13 +115,15 @@ async function findModel(modelsRoot, idOrAlias, platform = process.platform) {
   return (await listModels(modelsRoot, platform)).find((model) => model.id === idOrAlias || model.aliases.includes(idOrAlias)) || null;
 }
 
-// The native engine (native/, Node without Python) runs Qwen 3.5 text models such as MiMo. It is built
-// for a Mac; its addon is native/build/Release/agentic_mlx.node.
-const nativeAddon = path.join(__dirname, '..', '..', 'native', 'build', 'Release', 'agentic_mlx.node');
+// The native engine (@celticopetit/mlx-node, Node without Python) runs Qwen 3.5 text models such as MiMo.
+// It installs only on a Mac (an optional dependency); its addon is build/Release/mlx_node.node in the package.
+const nativeAddon = (() => {
+  try { return path.join(path.dirname(require.resolve('@celticopetit/mlx-node/package.json')), 'build', 'Release', 'mlx_node.node'); } catch { return null; }
+})();
 
 /** Whether the native engine can run the weights in `directory`: a Qwen 3.5 text model (dense, no vision tower), read from its config.json. */
 async function nativeSupported(directory, addon = nativeAddon) {
-  if (!directory) return false;
+  if (!directory || !addon) return false;
   try {
     await fs.access(addon);
     const config = JSON.parse(await fs.readFile(path.join(directory, 'config.json'), 'utf8'));
