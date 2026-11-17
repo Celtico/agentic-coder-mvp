@@ -2045,8 +2045,8 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
                   {trainingRunning
-                    ? <Button size="sm" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
-                    : <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
+                    ? <Button size="xs" flex="none" variant="outline" onClick={() => void window.agentic.cancelTraining()}><X size={15}/>Atura</Button>
+                    : <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.beta.enabled} title={learningVersions?.buttons.beta.reason || undefined} onClick={() => void startVersion('beta')}><Brain size={15}/>Entrena la beta</Button>}
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">El xat s’atura i el seu model es descarrega mentre entrena; després tria la beta al selector.</Text>
                 </HStack>
                 {learningVersions?.buttons.beta.fewCases && <Box mt="2"><Notice tone="warning">Amb menys de {learningVersions.fewCases} casos, la beta només serveix per comprovar que tot el circuit funciona.</Notice></Box>}
@@ -2065,7 +2065,7 @@ export function App(): React.JSX.Element {
                 <Accordion.ItemTrigger>{rowHeader('Estable', undefined, BadgeCheck)}</Accordion.ItemTrigger>
                 <Accordion.ItemContent><Accordion.ItemBody>
                 <HStack gap="2" flexWrap="wrap">
-                  <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
+                  <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions?.buttons.stable.enabled || trainingRunning} title={learningVersions?.buttons.stable.reason || undefined} onClick={() => void startVersion('stable')}><Brain size={15}/>Prepara l’estable</Button>
                   <Text flex="1" minW="40" fontSize="xs" color="fg.muted">{learningVersions?.buttons.stable.reason || 'Entrena des de l’original i passa el benchmark amb el base i amb la candidata.'}</Text>
                 </HStack>
                 {learningVersions?.candidate?.comparison && <Box mt="2" px="2.5" py="2" borderWidth="1px" borderColor="border" borderRadius="md">
@@ -2078,7 +2078,7 @@ export function App(): React.JSX.Element {
                     ? <Text mt="2" fontSize="xs" color="agentic.fg">Promocionada: {learningVersions.candidate.promoted.label}</Text>
                     : <HStack mt="2" gap="2" flexWrap="wrap">
                       <Input size="sm" flex="1" minW="40" maxLength={60} value={stableName} onChange={(event) => setStableName(event.target.value)} placeholder="Nom del model" aria-label="Nom de la versió estable"/>
-                      <Button size="sm" flex="none" colorPalette="agentic" disabled={!learningVersions.buttons.promote.enabled || !stableName.trim()} onClick={() => void promoteStable()}><Check size={15}/>Promociona a estable</Button>
+                      <Button size="xs" flex="none" colorPalette="agentic" disabled={!learningVersions.buttons.promote.enabled || !stableName.trim()} onClick={() => void promoteStable()}><Check size={15}/>Promociona a estable</Button>
                     </HStack>}
                 </Box>}
                 </Accordion.ItemBody></Accordion.ItemContent>
