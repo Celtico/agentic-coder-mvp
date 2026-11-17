@@ -4,7 +4,9 @@
 // ({"task", "prompt", "answer", "evidence"}). Nothing is invented: the answer is the documentation's own
 // text and code for that section; only the question is written, in Catalan, from its titles.
 //
-//   node scripts/chakra-dataset.cjs [folder with llms-components.txt, llms-styling.txt, llms-theming.txt]
+//   node scripts/chakra-dataset.cjs [folder with llms-components.txt, llms-styling.txt, llms-theming.txt
+//                                    and llms-full.txt, for what only the full one has: installation, the
+//                                    frameworks (Vite, Next.js…), the CLI, the migration to v3 and the charts]
 //   → <folder>/chakra-v3.jsonl
 const fs = require('node:fs');
 const path = require('node:path');
@@ -48,17 +50,31 @@ function casesOf(text, kind) {
     const where = [title, section, example].filter(Boolean).join(' › ');
     const prompt = kind === 'components'
       ? (example ? `Com faig «${example}» amb el component ${title} de Chakra UI v3?` : `Com faig servir ${title} a Chakra UI v3 (${section})?`)
-      : `Com funciona «${example || section}» de ${title} a Chakra UI v3?`;
+      : kind === 'full'
+        ? `${title} amb Chakra UI v3: com es fa «${example || section}»?`
+        : `Com funciona «${example || section}» de ${title} a Chakra UI v3?`;
     cases.push({ task: `Chakra UI v3: ${where}`, prompt, answer, evidence: `Documentació oficial de Chakra UI v3 per a LLMs (chakra-ui.com/llms-${kind}.txt): ${where}.` });
   }
   return cases;
 }
+
+// Pages of the full documentation about the project itself, not about using it.
+const NOT_USAGE = /^(Contributing to Chakra UI|Figma|LLMs\.txt Documentation|MCP Server|AI Skills)$/;
 
 function build(folder) {
   const all = [];
   for (const kind of ['components', 'styling', 'theming']) {
     const file = path.join(folder, `llms-${kind}.txt`);
     if (fs.existsSync(file)) all.push(...casesOf(fs.readFileSync(file, 'utf8'), kind));
+  }
+  // From the full documentation, only the pages the three files do not have (installation, frameworks, CLI, charts…).
+  const full = path.join(folder, 'llms-full.txt');
+  if (fs.existsSync(full)) {
+    const covered = new Set(all.map((item) => item.task.replace(/^Chakra UI v3: /, '').split(' › ')[0]));
+    all.push(...casesOf(fs.readFileSync(full, 'utf8'), 'full').filter((item) => {
+      const page = item.task.replace(/^Chakra UI v3: /, '').split(' › ')[0];
+      return !covered.has(page) && !NOT_USAGE.test(page);
+    }));
   }
   // The same question twice (two files documenting the same section) once.
   const seen = new Set();
