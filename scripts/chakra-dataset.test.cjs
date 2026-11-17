@@ -19,3 +19,11 @@ test('each section with code becomes a case: the documentation’s text and code
   // Dades JSON reads them as cases written with «Crea un cas».
   assert.deepEqual(readExample(JSON.stringify(cases[1])).messages.map((message) => message.role), ['user', 'assistant']);
 });
+
+test('a stray unclosed ``` does not hide the components after it: a fence with a language always opens one', () => {
+  const stray = [
+    '# Card', '', '## Explorer', '', 'Explore the parts.', '', '```', '',
+    '# Input', '', '## Usage', '', '```tsx', '<Input />', '```',
+  ].join('\n');
+  assert.deepEqual(casesOf(stray, 'components').map((item) => item.task), ['Chakra UI v3: Input › Usage']);
+});

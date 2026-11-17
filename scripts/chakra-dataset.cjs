@@ -23,7 +23,9 @@ function sections(text) {
   let fenced = false;
   const close = () => { if (current) found.push({ ...current, text: current.lines.join('\n').trim() }); current = null; };
   for (const line of text.split('\n')) {
-    if (/^```/.test(line)) fenced = !fenced;
+    // A fence with a language (```tsx) always opens one: the docs have a stray unclosed ``` (Card › Explorer),
+    // and counting alone would leave every heading after it inside a «fence» (Code to Scroll Area were lost).
+    if (/^```/.test(line)) fenced = line.slice(3).trim() ? true : !fenced;
     const heading = !fenced && /^(#{1,3}) (.+)$/.exec(line);
     if (heading) {
       const level = heading[1].length;
