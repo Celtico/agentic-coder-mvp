@@ -55,7 +55,7 @@ def normalize_tool_calls(text, tools, start, end, parser):
         body, found_end, rest = after.partition(end) if end else (after, "", "")
         out += before
         try:
-            for call in _tool_call_objects(body):
+            for call in _tool_call_objects(body, tools):
                 out += "<tool_call>" + json.dumps({"name": call["name"], "arguments": _arguments(call)}, ensure_ascii=False) + "</tool_call>"
             continue
         except Exception:
@@ -79,8 +79,14 @@ def _arguments(call):
     return {}
 
 
-def _tool_call_objects(body):
-    """A tool call written as JSON, also after a «call:» prefix (Gemma 4 sometimes mixes both forms)."""
+# Parameter types that stay text (mlx_lm qwen3_coder.py).
+_STRING_TYPES = {"string", "str", "text", "varchar", "char", "enum"}
+
+
+def _tool_call_objects(body, tools=None):
+    """A tool call written as JSON, also after a «call:» prefix (Gemma 4 sometimes mixes both forms). In the
+    <parameter=key> form a value is read with the tool's own type when the tool is known: a text parameter
+    stays text even if it looks like JSON (write_file of a package.json, cel 17-11-2026)."""
     text = body.strip()
     if text.startswith("call:"):
         text = text[len("call:"):].strip()
@@ -96,7 +102,12 @@ def _tool_call_objects(body):
         return [{"name": xml.group(1), "arguments": {}}]
     if xml and "<parameter=" in xml.group(2):
         arguments = {}
+        tool = next((item for item in (tools or []) if (item or {}).get("function", {}).get("name") == xml.group(1)), None)
+        types = ((tool or {}).get("function", {}).get("parameters") or {}).get("properties") or {}
         for key, value in re.findall(r"<parameter=([\w.-]+)>\n?(.*?)\n?</parameter>", xml.group(2), re.DOTALL):
+            if str((types.get(key) or {}).get("type", "")).strip().lower() in _STRING_TYPES:
+                arguments[key] = value
+                continue
             try:
                 arguments[key] = json.loads(value) if value.strip()[:1] in "[{" else value
             except ValueError:

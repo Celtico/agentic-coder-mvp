@@ -105,3 +105,24 @@ test('LoRA without Python: native-lora.cjs takes the app’s mlx_lm lora command
   assert.match(main, /const native = mlxModels\.engineFor\(\) === 'mlx' && !agentPreferences\.pythonEngine && await mlxModels\.nativeSupported\(base\.directory\);/);
   assert.match(main, /\.\.\.await trainingCommand\(base\)/);
 });
+
+// write_file of a package.json (cel, 17-11-2026): the model wrote <parameter=content>{"name": …}</parameter>
+// and the value was read as an object, so the call was invalid and the model repeated it until the limit.
+const writeTools = [{ type: 'function', function: { name: 'write_file', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } } } }];
+const packageCall = '<tool_call><function=write_file><parameter=path>package.json</parameter><parameter=content>{"name": "sumador", "private": true}</parameter></function></tool_call>';
+const packageArgs = { path: 'package.json', content: '{"name": "sumador", "private": true}' };
+
+test('a text parameter that looks like JSON stays text (Node worker)', () => {
+  const call = JSON.parse(text.normalizeToolCalls(packageCall, writeTools).replace(/^<tool_call>|<\/tool_call>$/g, ''));
+  assert.deepStrictEqual(call.arguments, packageArgs);
+  // Without the tool's types (an unknown tool), JSON values are still read as JSON, as before.
+  const loose = JSON.parse(text.normalizeToolCalls(packageCall, []).replace(/^<tool_call>|<\/tool_call>$/g, ''));
+  assert.deepStrictEqual(loose.arguments.content, { name: 'sumador', private: true });
+});
+
+test('a text parameter that looks like JSON stays text (Python worker, mlx_text)', { skip: spawnSync('python3', ['--version']).status !== 0 && 'no python3' }, () => {
+  const dir = path.join(__dirname, '..', 'core', 'assistant');
+  const result = spawnSync('python3', ['-I', '-c', `import sys, json; sys.path.insert(0, ${JSON.stringify(dir)})\nimport mlx_text\nraw, tools = json.load(sys.stdin)\nprint(mlx_text.normalize_tool_calls(raw, tools, '<tool_call>', '</tool_call>', None))`], { input: JSON.stringify([packageCall, writeTools]), encoding: 'utf8' });
+  assert.strictEqual(result.status, 0, result.stderr);
+  assert.deepStrictEqual(JSON.parse(result.stdout.trim().replace(/^<tool_call>|<\/tool_call>$/g, '')).arguments, packageArgs);
+});

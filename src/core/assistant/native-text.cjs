@@ -40,13 +40,20 @@ function stripThinking(text, start, end) {
   }
 }
 
+// Parameter types that stay text (mlx_lm qwen3_coder.py).
+const STRING_TYPES = new Set(['string', 'str', 'text', 'varchar', 'char', 'enum']);
+
 const argumentsOf = (call) => {
   for (const key of ['arguments', 'parameters', 'parameter']) if (call[key] && typeof call[key] === 'object' && !Array.isArray(call[key])) return call[key];
   return {};
 };
 
-/** A tool call written as JSON (also after «call:», or inside <function=name>…), as mlx_text._tool_call_objects. */
-function toolCallObjects(body) {
+/**
+ * A tool call written as JSON (also after «call:», or inside <function=name>…), as mlx_text._tool_call_objects.
+ * In the <parameter=key> form a value is read with the tool's own type when the tool is known: a text
+ * parameter stays text even if it looks like JSON (write_file of a package.json, cel 17-11-2026).
+ */
+function toolCallObjects(body, tools = null) {
   let text = body.trim();
   if (text.startsWith('call:')) text = text.slice(5).trim();
   const tagged = /^<function=([\w.-]+)>\s*(\{[\s\S]*\})\s*(?:<\/function>)?$/.exec(text);
@@ -55,7 +62,9 @@ function toolCallObjects(body) {
   if (xml && !xml[2].trim()) return [{ name: xml[1], arguments: {} }];
   if (xml && xml[2].includes('<parameter=')) {
     const args = {};
+    const types = (tools || []).find((tool) => tool?.function?.name === xml[1])?.function?.parameters?.properties || {};
     for (const [, key, value] of xml[2].matchAll(/<parameter=([\w.-]+)>\n?([\s\S]*?)\n?<\/parameter>/g)) {
+      if (STRING_TYPES.has(String(types[key]?.type || '').trim().toLowerCase())) { args[key] = value; continue; }
       try { args[key] = '[{'.includes(value.trim().slice(0, 1)) && value.trim() ? JSON.parse(value) : value; } catch { args[key] = value; }
     }
     return [{ name: xml[1], arguments: args }];
@@ -68,7 +77,6 @@ function toolCallObjects(body) {
 
 // mlx_lm/tool_parsers/qwen3_coder.py: <function=name><parameter=key>value</parameter>…</function>, values
 // converted with the tool's parameter types.
-const STRING_TYPES = new Set(['string', 'str', 'text', 'varchar', 'char', 'enum']);
 const BOOL_TYPES = new Set(['boolean', 'bool', 'binary']);
 const OBJ_TYPES = new Set(['object', 'array', 'arr']);
 
@@ -129,7 +137,7 @@ function normalizeToolCalls(text, tools, start = '<tool_call>', end = '</tool_ca
     const found = close >= 0 ? end : '';
     rest = close >= 0 ? after.slice(close + end.length) : '';
     try {
-      for (const call of toolCallObjects(body)) out += `<tool_call>${pyJson({ name: call.name, arguments: argumentsOf(call) })}</tool_call>`;
+      for (const call of toolCallObjects(body, tools)) out += `<tool_call>${pyJson({ name: call.name, arguments: argumentsOf(call) })}</tool_call>`;
       continue;
     } catch { /* not JSON */ }
     try {
