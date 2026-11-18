@@ -37,8 +37,8 @@ test('the Mac dmg carries the native engine (Node without Python) from npm, inst
   const pkg = JSON.parse(read('package.json'));
   // @celticopetit/mlx-node (the engine, prebuilt) and @celticopetit/node-mlx-lm (chat and LoRA), at the versions
   // tested with the app. Optional: they install only on Apple Silicon, so npm install works on Linux and Windows.
-  assert.equal(pkg.optionalDependencies['@celticopetit/mlx-node'], '0.1.0');
-  assert.equal(pkg.optionalDependencies['@celticopetit/node-mlx-lm'], '0.1.0');
+  assert.equal(pkg.optionalDependencies['@celticopetit/mlx-node'], '0.1.4');
+  assert.equal(pkg.optionalDependencies['@celticopetit/node-mlx-lm'], '0.1.1');
   assert.doesNotMatch(pkg.scripts['dist:mac'], /build:native/, 'nothing to compile before packaging');
   // Without asar, node_modules (with the addon, libmlx, libjaccl and mlx.metallib next to it) go into the app as files.
   assert.equal(pkg.build.asar, false);

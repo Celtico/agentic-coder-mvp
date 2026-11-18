@@ -119,7 +119,7 @@
     }
   },
   "optionalDependencies": {
-    "@celticopetit/mlx-node": "0.1.0",
-    "@celticopetit/node-mlx-lm": "0.1.0"
+    "@celticopetit/mlx-node": "0.1.4",
+    "@celticopetit/node-mlx-lm": "0.1.1"
   }
 }
